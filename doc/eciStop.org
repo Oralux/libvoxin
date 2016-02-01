@@ -1,0 +1,33 @@
+#+begin_src plantuml :file eciStop.png
+title libvoxin: nominal eciStop call
+skinparam monochrome true
+actor client
+participant api
+participant stop_mutex
+participant stop_required
+legend
+eciStop locally informs that speech must be stopped using a simple variable (stop_required).
+This variable can be read by the running command to anticipate a stop.
+The order is sent to voxind when the previous command is finished (api_mutex locked).
+end legend
+
+ client -> api : eciStop
+ activate client
+ api -> stop_mutex : lock
+ api -> stop_required : stop_required = true
+ api -> api_mutex : lock
+ activate api
+ api -> stop_required : stop_required = false
+ api -> voxind : eciStop
+ api <-- voxind : result eciStop
+ api -> api_mutex : unlock
+ deactivate api
+ api -> stop_mutex : unlock
+ client <-- api : result eciStop
+ deactivate client
+
+#+end_src
+
+#+RESULTS:
+[[file:eciStop.png]]
+

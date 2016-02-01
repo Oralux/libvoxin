@@ -1,0 +1,47 @@
+#+begin_src plantuml :file eciSynchronize+eciStop.png
+title nominal eciSynchronize + eciStop 
+skinparam monochrome true
+legend
+In a multithreaded environment, if eciStop occurs during eciSynchronize, the stop request is processed by the internal libvoxin callback.
+end legend
+
+actor client1
+actor client2
+participant api1
+participant api2
+participant api_mutex
+participant stop_mutex
+participant stop_required
+participant voxind
+ client1 -> api1 : eciSynchronize
+ activate client1
+ api1 -> api_mutex : lock
+ api1 -> voxind: eciSynchronize
+ voxind -> api1: callback #1
+ client2 -> api2: eciStop
+ activate client2
+ api2 -> stop_mutex : lock
+ api2 -> stop_required : stop_required = true
+ api2 -> api_mutex : lock
+ activate api2
+ api1 -> client1 : callback #1
+ client1 --> api1 : result cb #1
+ api1 --> voxind : Abort speech
+note left
+if stop_required == true, 
+ then return "Abort speech"
+else return result cb #1
+end note
+ voxind --> api1 : result eciSynchronize
+ api1 -> api_mutex : unlock
+ deactivate api2
+ api2 -> stop_required : stop_required = false
+ api1 --> client1 : result eciSynchronize
+ deactivate client1
+ api2 --> voxind : eciStop
+ voxind --> api2 : result eciStop
+ api2 -> stop_mutex : unlock
+ api2 --> client2 : result eciStop
+ deactivate client2
+#+end_src
+

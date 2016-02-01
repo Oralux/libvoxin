@@ -1,0 +1,18 @@
+#+begin_src plantuml :file eciSpeaking.png
+title nominal eciSpeaking call
+skinparam monochrome true
+actor client 
+ client -> api : eciSpeaking
+ activate client
+ api -> api_mutex : lock
+ api -> voxind : eciSpeaking
+ voxind -> api : callback #1
+ api -> client : callback #1
+ client --> api : result cb #1
+ api --> voxind : result cb #1
+ voxind --> api : result eciSpeaking
+ api -> api_mutex : unlock
+ api --> client : result eciSpeaking
+ deactivate client
+#+end_src
+

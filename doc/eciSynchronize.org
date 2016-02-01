@@ -1,0 +1,23 @@
+#+begin_src plantuml :file eciSynchronize.png
+title nominal eciSynchronize call
+skinparam monochrome true
+actor client 
+ client -> api : eciSynchronize
+ activate client
+ api -> api_mutex : lock
+ api -> voxind : eciSynchronize
+ voxind -> api : callback #1
+ api -> client : callback #1
+ client --> api : result cb #1
+ api --> voxind : result cb #1
+ |||
+ voxind -> api : callback #n
+ api -> client : callback #n
+ client --> api : result cb #n
+ api --> voxind : result cb #n
+ voxind --> api : result eciSynchronize
+ api -> api_mutex : unlock
+ api --> client : result eciSynchronize
+ deactivate client
+#+end_src
+
