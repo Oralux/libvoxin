@@ -29,7 +29,13 @@ static int child(struct libvoxin_t *this)
   
   pipe_dup2(this->pipe_command, PIPE_SOCKET_CHILD, PIPE_COMMAND_FILENO);
   
-  if (execlp(VOXIND_CMD, VOXIND_CMD, NULL) == -1) {
+  if (execlp(VOXIND_CMD_ARG0,
+	     VOXIND_CMD_ARG0,
+	     VOXIND_CMD_ARG1,
+	     VOXIND_CMD_ARG2,
+	     VOXIND_CMD_ARG3,
+	     VOXIND_CMD_ARG4,
+	     NULL) == -1) {
     res = errno;
   }
 

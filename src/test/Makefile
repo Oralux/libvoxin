@@ -10,7 +10,7 @@ CFLAGS += -I../api
 STRIP ?= strip --strip-unneeded
 CC ?= gcc
 LIBDIR ?= ../../build/rfs/usr/lib/x86_64-linux-gnu
-INSTALL_DIR ?= .
+INSTALL_DIR ?= ../../build/rfs/usr/bin
 
 client1: $(BIN1)
 	$(CC) -o $(@) $(^) $(LDFLAGS) -L$(LIBDIR) -lvoxin
