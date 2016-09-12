@@ -4,11 +4,12 @@ LDFLAGS = -m32
 CC ?= gcc
 STRIP ?= strip --strip-unneeded
 LIBDIR ?= ../../build/rfs/usr/lib/i386-linux-gnu
+LIBDIR2 ?= /opt/IBM/ibmtts/lib
 
 INSTALL_DIR ?= .
 
 voxind: $(BIN)
-	$(CC) -o $(@) $(^) $(LDFLAGS) -L$(LIBDIR) -lcommon /opt/IBM/ibmtts/lib/libibmeci.so
+	$(CC) -o $(@) $(^) $(LDFLAGS) -L$(LIBDIR) -lcommon -Wl,-rpath=$(LIBDIR2) $(LIBDIR2)/libibmeci.so
 	$(STRIP) $(@)
 
 all: voxind
