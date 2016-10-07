@@ -43,6 +43,7 @@ static const char *msg[] = {
   "cb_string_index_reply",
   "cb_audio_index_reply",
   "cb_synthesis_break",  
+  "exit",  
   "max",
 };
 

@@ -97,8 +97,8 @@ int pipe_restore(struct pipe_t **px, int fd)
   if (res)
     goto exit0;
 
-  (*px)->sv[PIPE_SOCKET_CHILD] = fd;
-  (*px)->ind = PIPE_SOCKET_CHILD;
+  (*px)->sv[PIPE_SOCKET_CHILD_INDEX] = fd;
+  (*px)->ind = PIPE_SOCKET_CHILD_INDEX;
 
  exit0:
   if (res) {
@@ -116,7 +116,7 @@ int pipe_delete(struct pipe_t **px)
 }
 
 
-int pipe_read(struct pipe_t *p, void *buf, size_t *len)
+int pipe_read(struct pipe_t *p, void *buf, ssize_t *len)
 {
   int res = 0;
   
@@ -146,7 +146,7 @@ int pipe_read(struct pipe_t *p, void *buf, size_t *len)
   return res;
 }
 
-int pipe_write(struct pipe_t *p, void *buf, size_t *len)
+int pipe_write(struct pipe_t *p, void *buf, ssize_t *len)
 {
   int res = 0;
   

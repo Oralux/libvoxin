@@ -5,6 +5,10 @@
 #include <errno.h>
 #include <sys/prctl.h>
 #include <signal.h>
+#include <sys/time.h>
+#include <sys/resource.h>
+#include <sys/types.h>
+#include <dirent.h>
 #include "libvoxin.h"
 #include "conf.h"
 #include "msg.h"
@@ -19,15 +23,81 @@ struct libvoxin_t {
   uint32_t stop_required;
 };
 
+// fdwalk function from glib (GPLv2):
+// https://git.gnome.org/browse/glib/tree/glib/gspawn.c?h=2.50.0#n1027
+static int fdwalk (int (*cb)(void *data, int fd), void *data)
+{
+  int open_max;
+  int fd;
+  int res = 0;  
+  struct rlimit rl;
+  DIR *d;
+
+  if ((d = opendir("/proc/self/fd"))) {
+      struct dirent *de;
+
+      while ((de = readdir(d))) {
+          long int l;
+          char *e = NULL;
+
+          if (de->d_name[0] == '.')
+              continue;
+            
+          errno = 0;
+          l = strtol(de->d_name, &e, 10);
+          if (errno != 0 || !e || *e)
+              continue;
+
+          fd = (int) l;
+
+          if ((long int) fd != l)
+              continue;
+
+          if (fd == dirfd(d))
+              continue;
+
+          if ((res = cb (data, fd)) != 0)
+              break;
+        }
+      
+      closedir(d);
+      return res;
+  }
+
+  /* If /proc is not mounted or not accessible we fall back to the old
+   * rlimit trick */
+  
+  if (getrlimit(RLIMIT_NOFILE, &rl) == 0 && rl.rlim_max != RLIM_INFINITY)
+      open_max = rl.rlim_max;
+  else
+      open_max = sysconf (_SC_OPEN_MAX);
+
+  for (fd = 0; fd < open_max; fd++)
+      if ((res = cb (data, fd)) != 0)
+          break;
+
+  return res;
+}
+
+
+static int close_cb(void *data, int fd) {
+  int res = 0;
+  if ((fd != (int)data) && (close(fd) == -1))
+    res = errno;
+  return res;
+}
+
+
 static int child(struct libvoxin_t *this)
 {
   int res = 0;
 
   ENTER();
+  
+  pipe_dup2(this->pipe_command, PIPE_SOCKET_CHILD_INDEX, PIPE_COMMAND_FILENO);
 
   DebugFileFinish();
-  
-  pipe_dup2(this->pipe_command, PIPE_SOCKET_CHILD, PIPE_COMMAND_FILENO);
+  fdwalk (close_cb, (void*)PIPE_COMMAND_FILENO);
   
   if (execlp(VOXIND_CMD_ARG0,
 	     VOXIND_CMD_ARG0,
@@ -39,11 +109,9 @@ static int child(struct libvoxin_t *this)
     res = errno;
   }
 
- exit0:
   LEAVE();
   return res;
 }
-
 
 static int daemon_start(struct libvoxin_t *this)
 {
@@ -68,13 +136,14 @@ static int daemon_start(struct libvoxin_t *this)
     }
     pipe_close(this->pipe_command, PIPE_SOCKET_PARENT);
     exit(child(this));
+    
     break;
   case -1:
     res = errno;
     break;
   default:
     this->child = child_pid;
-    pipe_close(this->pipe_command, PIPE_SOCKET_CHILD);
+    pipe_close(this->pipe_command, PIPE_SOCKET_CHILD_INDEX);
     break;
   }
 
