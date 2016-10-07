@@ -8,7 +8,22 @@ fi
 
 function usage()
 {
-	echo "build.sh [libvoxin|voxind|all [debug]]"
+	echo "build.sh [libvoxin|voxind|all [rfs32] [debug]]"
+}
+
+function check_arg()
+{
+    case "$1" in
+	"debug")	    
+	    export DBG_FLAGS="-ggdb -DDEBUG"
+	    export STRIP=test
+	    ;;
+	"rfs32")	    
+	    RFS32=-DWITH_RFS_32
+	    ;;
+	*)
+	    ;;
+    esac
 }
 
 if [ -z "$RFS" ]; then
@@ -16,7 +31,7 @@ if [ -z "$RFS" ]; then
 fi
 
 
-unset LIBVOXIN VOXIND TEST CC CFLAGS DBG_FLAGS STRIP
+unset LIBVOXIN VOXIND TEST CC CFLAGS DBG_FLAGS STRIP RFS32
 if [ "$#" -ge "1" ]; then
 	case "$1" in
 		-h|--help) usage; exit 0;;
@@ -25,25 +40,17 @@ if [ "$#" -ge "1" ]; then
 		*) LIBVOXIN=1; VOXIND=1; TEST=1;;
 	esac
 
-	if [ "$2" = "debug" ]; then
-		export DBG_FLAGS="-ggdb -DDEBUG"
-		export STRIP=test
-	fi
+	check_arg $2
+	check_arg $3
 else
 	LIBVOXIN=1
 	VOXIND=1	
 	TEST=1
 fi
 
-
 BASE=$PWD
-# if [ "$ARCH" = "i386" ]; then
-# 	LIB32=$RFS/usr/lib/i386-linux-gnu
-# 	LIB64=none
-# else
 LIB32=$RFS/usr/lib/i386-linux-gnu
 LIB64=$RFS/usr/lib/x86_64-linux-gnu
-#fi
 BINDIR=$RFS/usr/bin
 
 rm -rf $RFS
@@ -62,7 +69,7 @@ fi
 if [ "$ARCH" != "i386" ]; then
 	install -d -m 755 $LIB64
 	make clean
-	CFLAGS="$DBG_FLAGS" make all
+	CFLAGS="$DBG_FLAGS $RFS32" make all
 	INSTALL_DIR=$LIB64 make install
 fi
 
@@ -73,7 +80,7 @@ if [ -n "$LIBVOXIN" ]; then
 		LDFLAGS=-m32
 		LIB=$LIB32
 	else
-		CFLAGS="$DBG_FLAGS"
+		CFLAGS="$DBG_FLAGS $RFS32"
 		LDFLAGS=
 		LIB=$LIB64
 	fi
@@ -99,7 +106,7 @@ if [ "$ARCH" = "i386" ]; then
 	LDFLAGS=-m32
 	LIB=$LIB32
 else
-	CFLAGS="$DBG_FLAGS"
+	CFLAGS="$DBG_FLAGS $RFS32"
 	LDFLAGS=
 	LIB=$LIB64
 fi
