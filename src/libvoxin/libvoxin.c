@@ -23,6 +23,22 @@ struct libvoxin_t {
   uint32_t stop_required;
 };
 
+static void my_exit(struct libvoxin_t *this)
+{
+  struct msg_t msg;
+  size_t l = sizeof(struct msg_t);
+  int res;
+  
+  memset(&msg, 0, MIN_MSG_SIZE);
+  msg.id = MSG_EXIT;
+  
+  dbg("send exit msg");
+  res = pipe_write(this->pipe_command, &msg, &l);
+  if (res) {
+    dbg("write error (%d)", res);
+  }
+}
+
 // fdwalk function from glib (GPLv2):
 // https://git.gnome.org/browse/glib/tree/glib/gspawn.c?h=2.50.0#n1027
 static int fdwalk (int (*cb)(void *data, int fd), void *data)
@@ -98,7 +114,7 @@ static int child(struct libvoxin_t *this)
 
   DebugFileFinish();
   fdwalk (close_cb, (void*)PIPE_COMMAND_FILENO);
-  
+
   if (execlp(VOXIND_CMD_ARG0,
 	     VOXIND_CMD_ARG0,
 	     VOXIND_CMD_ARG1,
@@ -109,6 +125,8 @@ static int child(struct libvoxin_t *this)
     res = errno;
   }
 
+  my_exit(this);
+  
   LEAVE();
   return res;
 }
@@ -274,6 +292,12 @@ int libvoxin_call_eci(libvoxin_handle_t i, struct msg_t *msg)
     if (!msg_string(msg->func)
 	|| (effective_msg_length < MSG_HEADER_LENGTH + msg->effective_data_length)) {
       res = EIO;
+    } else if (msg->id == MSG_EXIT) {
+      dbg("recv msg exit");
+      // if the child process exits then libvoxin currently exits too.
+      sleep(1);
+      exit(1);
+      //      res = ECHILD;
     } else {
       dbg("recv msg '%s', length=%d, res=0x%x (#%d)", msg_string(msg->func), msg->effective_data_length, msg->res, msg->count);
     }

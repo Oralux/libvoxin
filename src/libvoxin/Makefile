@@ -3,7 +3,7 @@ MIN=1
 REV=1
 
 BIN := api.o libvoxin.o
-CFLAGS += $(DEBUG) -fPIC -I../api -I../common
+CFLAGS += $(DEBUG) -fPIC -I../api -I../common -Wno-pointer-to-int-cast 
 CC ?= gcc
 LIBDIR ?= ../../build/rfs/usr/lib/x86_64-linux-gnu
 INSTALL_DIR ?= .

@@ -1,9 +1,10 @@
+#define _GNU_SOURCE
 #include <stdlib.h>
-//#include <stdio.h>
 #include <errno.h>
 #include <unistd.h>
 #include <sys/stat.h>
 #include <string.h>
+#include <signal.h>
 #include "msg.h"
 #include "pipe.h"
 #include "debug.h"
@@ -28,6 +29,31 @@ struct engine_t {
   size_t cb_msg_length;
 };
 
+static void my_exit()
+{
+  struct msg_t msg;
+  size_t l = sizeof(struct msg_t);
+  int res;
+
+  ENTER();
+
+  memset(&msg, 0, MIN_MSG_SIZE);
+  msg.id = MSG_EXIT;
+
+  dbg("send exit msg");
+  res = pipe_write(my_voxind->pipe_command, &msg, &l);
+  if (res) {
+    err("LEAVE, write error (%d)", res);
+  }
+
+  LEAVE();
+}
+
+static void sighandler(int sig) {
+  err("signal=%s (%d)", strsignal(sig), sig);
+  my_exit();
+}
+
 static enum ECICallbackReturn my_callback(ECIHand hEngine, enum ECIMessage Msg, long lParam, void *pData)
 {
   size_t effective_msg_length = 0;
@@ -35,7 +61,7 @@ static enum ECICallbackReturn my_callback(ECIHand hEngine, enum ECIMessage Msg, 
   int res;
   uint32_t func_sav;
   struct engine_t *engine = (struct engine_t*)pData;
-  
+
   ENTER();
 
   if (!engine || !engine->cb_msg) {
@@ -365,8 +391,10 @@ static int unserialize(struct msg_t *msg, size_t *msg_length)
 int main(int argc, char **argv)
 {
   int res;
+  int i;
   struct voxind_t *v;
-
+  struct sigaction act;
+  
 #ifdef DEBUG
   {
     struct stat buf;
@@ -379,6 +407,14 @@ int main(int argc, char **argv)
   ENTER();
   BUILD_ASSERT(PIPE_MAX_BLOCK > MIN_MSG_SIZE);
 
+  memset(&act, 0, sizeof(act));
+  sigemptyset(&act.sa_mask);
+  act.sa_flags = 0;
+  act.sa_handler = sighandler;
+  for (i = 1; i < NSIG; i++) {
+    sigaction(i, &act, NULL);
+  }
+  
   my_voxind = calloc(1, sizeof(struct voxind_t));
   if (!my_voxind) {
     res = errno;
@@ -396,9 +432,12 @@ int main(int argc, char **argv)
   if (res)
     goto exit0;
 
+  atexit(my_exit);
+  
   do {
     size_t msg_length = my_voxind->msg_length;
-    res = pipe_read(my_voxind->pipe_command, my_voxind->msg, &msg_length);
+    if(pipe_read(my_voxind->pipe_command, my_voxind->msg, &msg_length))
+      goto exit0;
     if (unserialize(my_voxind->msg, &msg_length))
       goto exit0;
     pipe_write(my_voxind->pipe_command, my_voxind->msg, &msg_length);    
