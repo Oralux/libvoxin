@@ -8,7 +8,7 @@
 #define VOXIND_CMD_ARG3 "/opt/voxin/usr/lib"
 #define VOXIND_CMD_ARG4 "/opt/voxin/usr/bin/voxind"
 #else
-#define VOXIND_CMD_ARG0 "/home/disk7/gcasse/VOXIN/LIBVOXIN/libvoxin/build/rfs/usr/bin/voxind"
+#define VOXIND_CMD_ARG0 "/usr/bin/voxind"
 #define VOXIND_CMD_ARG1 NULL
 #define VOXIND_CMD_ARG2 NULL
 #define VOXIND_CMD_ARG3 NULL
