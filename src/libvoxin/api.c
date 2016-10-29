@@ -12,6 +12,9 @@
 
 #define ENGINE_ID 0x020A0005
 #define IS_ENGINE(e) (e && (e->id == ENGINE_ID) && e->handle && e->api)
+#define NB_PARAMS (eciNumParams+1)
+#define NB_VOICES (eciNumVoiceParams+ECI_USER_DEFINED_VOICES)
+#define NB_VOICE_PARAMS (eciNumVoiceParams+1)
 
 struct engine_t {
   uint32_t id; // structure identifier
@@ -19,9 +22,15 @@ struct engine_t {
   uint32_t handle; // eci handle
   void *cb; // user callback
   void *data_cb; // user data callback
-  int16_t *samples; // user samples buffer
-  uint32_t nb_samples; // current number of samples in the user sample buffer
+  int16_t *samples; // user samples buffer; from eciSetOutputBuffer
+  uint32_t nb_samples; // current number of samples in the user sample buffer; from eciSetOutputBuffer
   uint32_t stop_required;
+  const char* output_filename; // from eciSetOutputFilename
+  uint32_t* param[NB_PARAMS]; // if NULL: default value, otherwise pointer to priv_param; from eciSetParam
+  uint32_t* voice_param[NB_VOICES][NB_VOICE_PARAMS]; // if NULL: default value, otherwise pointer to priv_voice_param; from eciSetVoiceParam
+  //TODO  char* voice_name[NB_VOICES][ECI_VOICE_NAME_LENGTH+2]; // from eciSetVoiceName
+  uint32_t priv_param[NB_PARAMS];
+  uint32_t priv_voice_param[NB_VOICES][NB_VOICE_PARAMS];
 };
 
 #define ALLOCATED_MSG_LENGTH PIPE_MAX_BLOCK
@@ -30,6 +39,8 @@ struct api_t {
   libvoxin_handle_t my_instance; // communication channel with voxind. my_api is fully created when my_instance is non NULL 
   pthread_mutex_t stop_mutex; // to process only one stop command
   pthread_mutex_t api_mutex; // to process exclusively any other command
+  uint32_t* default_param[NB_PARAMS]; // if NULL: default value, otherwise pointer to priv_default_param; from eciSetDefaultParam
+  uint32_t priv_default_param[NB_PARAMS];
   struct msg_t *msg; // message for voxind
 };
 
@@ -109,7 +120,6 @@ static int msg_set_header(struct msg_t *msg, uint32_t func, uint32_t engine_hand
   msg->engine = engine_handle;
   return 0;  
 }
-
 
 static int msg_copy_data(struct msg_t *msg, const char *text)
 {
@@ -222,9 +232,11 @@ int process_func1(struct api_t* api, struct msg_t *header, const char* data,
   api->msg->allocated_data_length = ALLOCATED_MSG_LENGTH;
 
   res = libvoxin_call_eci(api->my_instance, api->msg);
-
+  
  exit0:
-  if (res) {
+  if (res == ECHILD) {
+    exit(1);
+  } else if (res) {    
 	  api_unlock(api);
   } else {
 	if (eci_res)
@@ -238,6 +250,24 @@ int process_func1(struct api_t* api, struct msg_t *header, const char* data,
   return res;
 }
   
+static int engine_init(uint32_t handle, struct api_t *api, struct engine_t *engine)
+{
+  int res = 0;
+  
+  ENTER();
+  
+  if (engine && api) {
+    engine->id = ENGINE_ID;
+    engine->handle = handle;
+    engine->api = api;
+  } else {
+    err("LEAVE, args error");
+    res = EINVAL;
+  }
+
+  LEAVE();
+  return res;  
+}
 
 static struct engine_t *engine_create(uint32_t handle, struct api_t *api)
 {
@@ -246,13 +276,11 @@ static struct engine_t *engine_create(uint32_t handle, struct api_t *api)
   
   ENTER();
 
-  engine = calloc(1, sizeof(*engine));
-  if (engine) {
-	engine->id = ENGINE_ID;
-	engine->handle = handle;
-	engine->api = api;
+  engine = calloc(1, sizeof(*engine));  
+  if (!engine) {
+    err("mem error (%d)", errno);
   } else {
-	err("mem error (%d)", errno);
+    engine_init(handle, api, engine);
   }
 
   LEAVE();
@@ -350,7 +378,10 @@ Boolean eciSetOutputFilename(ECIHand hEngine, const void *pFilename)
   }
 
   msg_set_header(&header, MSG_SET_OUTPUT_FILENAME, engine->handle);
-  process_func1(engine->api, &header, pFilename, &eci_res, true, true);
+  if (!process_func1(engine->api, &header, pFilename, &eci_res, true, true)
+      && (eci_res == ECITrue))
+    engine->output_filename = pFilename;
+    
   return eci_res;
 }
 
@@ -439,13 +470,13 @@ static Boolean synchronize(struct engine_t *engine, enum msg_type type)
     }
 
     dbg("res user callback=%d", m->res);
-	if (engine->stop_required) {
-	  m->res = eciDataAbort;
-	  dbg("stop required");
-	}
-
+    if (engine->stop_required) {
+      m->res = eciDataAbort;
+      dbg("stop required");
+    }
+    
     m->id = MSG_TO_ECI_ID;
-	m->allocated_data_length = ALLOCATED_MSG_LENGTH;
+    m->allocated_data_length = ALLOCATED_MSG_LENGTH;
     res = libvoxin_call_eci(api->my_instance, m);
     if (res)
       goto exit0;
@@ -672,7 +703,12 @@ int eciSetParam(ECIHand hEngine, enum ECIParam Param, int iValue)
   msg_set_header(&header, MSG_SET_PARAM, engine->handle);
   header.args.sp.Param = Param;
   header.args.sp.iValue = iValue;
-  process_func1(engine->api, &header, NULL, &eci_res, true, true);
+  if (!process_func1(engine->api, &header, NULL, &eci_res, true, true)) {  
+    if ((eci_res == ECITrue) && (Param < NB_PARAMS)) {
+      engine->priv_param[Param] = iValue;
+      engine->param[Param] = &engine->priv_param[Param];
+    }
+  }
   return eci_res;
 }
 
@@ -687,7 +723,12 @@ int eciSetDefaultParam(enum ECIParam parameter, int value)
   msg_set_header(&header, MSG_SET_DEFAULT_PARAM, 0);
   header.args.sp.Param = parameter;
   header.args.sp.iValue = value;
-  process_func1(api, &header, NULL, &eci_res, true, true);
+  if (!process_func1(api, &header, NULL, &eci_res, true, true)) {  
+    if ((eci_res == ECITrue) && (parameter < NB_PARAMS)) {
+      api->priv_default_param[parameter] = value;
+      api->default_param[parameter] = &api->priv_default_param[parameter];
+    }
+  }
   return eci_res;
 }
 
@@ -804,7 +845,13 @@ Boolean eciReset(ECIHand hEngine)
     return ECIFalse;
   }
   msg_set_header(&header, MSG_RESET, engine->handle);
-  process_func1(engine->api, &header, NULL, &eci_res, true, true);
+
+  if (!process_func1(engine->api, &header, NULL, &eci_res, true, true)) {
+    if (eci_res == ECITrue) {
+	memset(engine->param, 0, sizeof(engine->param));
+    }
+  }
+
   return eci_res;
 }
 
@@ -872,7 +919,14 @@ int eciSetVoiceParam(ECIHand hEngine, int iVoice, enum ECIVoiceParam Param, int 
   header.args.svp.iVoice = iVoice;
   header.args.svp.Param = Param;
   header.args.svp.iValue = iValue;
-  process_func1(engine->api, &header, NULL, &eci_res, true, true);
+
+  if (!process_func1(engine->api, &header, NULL, &eci_res, true, true)) {  
+    if ((eci_res == ECITrue) && (iVoice < NB_VOICES) && (Param < NB_VOICE_PARAMS)){
+      engine->priv_voice_param[iVoice][Param] = iValue;
+      engine->voice_param[iVoice][Param] = &engine->priv_voice_param[iVoice][Param];
+    }
+  }
+
   return eci_res;
 }
 
@@ -931,8 +985,15 @@ Boolean eciCopyVoice(ECIHand hEngine, int iVoiceFrom, int iVoiceTo)
     
   msg_set_header(&header, MSG_COPY_VOICE, engine->handle);
   header.args.cv.iVoiceFrom = iVoiceFrom;
-  header.args.cv.iVoiceTo = iVoiceTo;
-  process_func1(engine->api, &header, NULL, &eci_res, true, true);
+  header.args.cv.iVoiceTo = iVoiceTo;  
+
+  if (!process_func1(engine->api, &header, NULL, &eci_res, true, true)) {  
+    if ((eci_res == ECITrue) && (iVoiceFrom < NB_VOICES) && (iVoiceTo < NB_VOICES)){
+      memcpy(&engine->priv_voice_param[iVoiceTo], &engine->priv_voice_param[iVoiceFrom], sizeof(engine->priv_voice_param[iVoiceTo]));
+      memcpy(&engine->voice_param[iVoiceTo], &engine->priv_voice_param[iVoiceFrom], sizeof(engine->voice_param[iVoiceTo]));
+    }
+  }
+  
   return eci_res;  
 }
 

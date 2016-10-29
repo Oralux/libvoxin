@@ -170,20 +170,6 @@ static int daemon_start(struct libvoxin_t *this)
 }
 
 
-static int daemon_stop(struct libvoxin_t *this)
-{  
-  ENTER();
-  if (!this)
-    return EINVAL;
-
-  if (!this->child) { // TODO
-  }
-  
-  LEAVE();
-  return 0;
-}
-
-
 int libvoxin_create(libvoxin_handle_t *i)
 {
   static int once = 0;
@@ -212,10 +198,26 @@ int libvoxin_create(libvoxin_handle_t *i)
   
  exit0:
   if (res) {
-	daemon_stop(this);
     pipe_delete(&this->pipe_command);
   }
 
+  LEAVE();
+  return res;  
+}
+
+
+int libvoxin_recreate(libvoxin_handle_t i)
+{
+  int res = 0;
+  struct libvoxin_t *p = (struct libvoxin_t *)i;
+
+  ENTER();
+
+  if (!p)
+    return EINVAL;
+
+  res = daemon_start(p);
+  
   LEAVE();
   return res;  
 }
@@ -240,12 +242,9 @@ int libvoxin_delete(libvoxin_handle_t *i)
   if (once)
     return 0;
 
-  res = daemon_stop(this);
-  if (!res) {
-    res = pipe_delete(&this->pipe_command);
-    if (res)    
-      goto exit0;
-  }
+  res = pipe_delete(&this->pipe_command);
+  if (res)    
+    goto exit0;
 
   if (!res) {
     memset(this, 0, sizeof(*this));
@@ -294,10 +293,8 @@ int libvoxin_call_eci(libvoxin_handle_t i, struct msg_t *msg)
       res = EIO;
     } else if (msg->id == MSG_EXIT) {
       dbg("recv msg exit");
-      // if the child process exits then libvoxin currently exits too.
-      sleep(1);
-      exit(1);
-      //      res = ECHILD;
+      p->child = 0;
+      res = ECHILD;
     } else {
       dbg("recv msg '%s', length=%d, res=0x%x (#%d)", msg_string(msg->func), msg->effective_data_length, msg->res, msg->count);
     }

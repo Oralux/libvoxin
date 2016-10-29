@@ -9,7 +9,7 @@ LIBDIR2 ?= /opt/IBM/ibmtts/lib
 INSTALL_DIR ?= .
 
 voxind: $(BIN)
-	$(CC) -o $(@) $(^) $(LDFLAGS) -L$(LIBDIR) -lcommon $(LIBDIR2)/libibmeci.so
+	$(CC) -o $(@) $(^) -ggdb $(LDFLAGS) -L$(LIBDIR) -lcommon $(LIBDIR2)/libibmeci.so
 	$(STRIP) $(@)
 
 all: voxind
