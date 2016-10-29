@@ -12,6 +12,6 @@ rm /tmp/test_libvoxin.dbg
 rm /tmp/libvoxin.log*
 echo 2 > /tmp/libvoxin.ok
 cd ../../build/rfs/usr/bin
-ln -sf client$TEST_NUMBER client
+ln -sf test$TEST_NUMBER client
 export LD_LIBRARY_PATH=../lib/x86_64-linux-gnu
 gdb ./client

@@ -1,6 +1,7 @@
 /*
-  Main dictionary
+  recover from voxind crash
  */
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -22,15 +23,9 @@
 static short my_samples[MAX_SAMPLES];
 
 
-const char *quote = "ibmtts "
-  "WHO "
-  "AWSA "
-  "jeb@notreal.org ";
-  /* "ECSU " */
-  /* "UConn " */
-  /* "WYSIWYG " */
-  /* "Win32 " */
-  /* "486DX "; */
+const char* quote = "Checking various words known to cause "
+  " crash in English: caesure"
+  " or crash in German: dagegen or daneben";
 
 
 
@@ -45,9 +40,8 @@ enum ECICallbackReturn my_client_callback(ECIHand hEngine, enum ECIMessage Msg, 
   return eciDataProcessed;
 }
 
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
-  int res = 0;
   uint8_t *buf;
   size_t len;
 
@@ -71,18 +65,9 @@ int main(int argc, char **argv)
 
   if (eciSetOutputBuffer(handle, MAX_SAMPLES, my_samples) == ECIFalse)
     return __LINE__;
+  
+  //eciSetOutputFilename(handle, PATHNAME_RAW_DATA);
 
-  ECIDictHand hDic1 = eciNewDict(handle);
-  if (!hDic1)
-    return __LINE__;
-  
-  if (eciLoadDict(handle, hDic1, eciMainDict, "main1.dct") != DictNoError)
-    return __LINE__;
-  
-  if (eciSetDict(handle, hDic1) != DictNoError)
-    return __LINE__;
-
-  
   if (eciAddText(handle, quote) == ECIFalse)
     return __LINE__;
 
@@ -91,19 +76,6 @@ int main(int argc, char **argv)
 
   if (eciSynchronize(handle) == ECIFalse)
     return __LINE__;
-
-  if (eciDeleteDict(handle, hDic1) != NULL)
-    return __LINE__;
-    
-  
-  /* if (eciAddText(handle, quote) == ECIFalse) */
-  /*   return __LINE__; */
-  
-  /* if (eciSynthesize(handle) == ECIFalse) */
-  /*   return __LINE__; */
-
-  /* if (eciSynchronize(handle) == ECIFalse) */
-  /*   return __LINE__; */
 
   if (eciDelete(handle) != NULL)
     return __LINE__;

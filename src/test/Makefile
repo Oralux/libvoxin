@@ -1,40 +1,10 @@
-BIN1 = test1.o
-BIN2 = test2.o
-BIN3 = test3.o
-BIN4 = test4.o
-BIN5 = test5.o
-BIN6 = test6.o
-TARGET = client1 client2 client3 client4 client5 client6
+TARGET = test1 test2 test3 test4 test5 test6 test7
 DOC = main1.dct
 CFLAGS += -I../api
-STRIP ?= strip --strip-unneeded
-CC ?= gcc
 LIBDIR ?= ../../build/rfs/usr/lib/x86_64-linux-gnu
 INSTALL_DIR ?= ../../build/rfs/usr/bin
-
-client1: $(BIN1)
-	$(CC) -o $(@) $(^) $(LDFLAGS) -L$(LIBDIR) -lvoxin
-	$(STRIP) $(@)
-
-client2: $(BIN2)
-	$(CC) -o $(@) $(^) $(LDFLAGS) -L$(LIBDIR) -lvoxin
-	$(STRIP) $(@)
-
-client3: $(BIN3)
-	$(CC) -o $(@) $(^) $(LDFLAGS) -L$(LIBDIR) -lvoxin
-	$(STRIP) $(@)
-
-client4: $(BIN4)
-	$(CC) -o $(@) $(^) $(LDFLAGS) -L$(LIBDIR) -lvoxin
-	$(STRIP) $(@)
-
-client5: $(BIN5)
-	$(CC) -o $(@) $(^) $(LDFLAGS) -L$(LIBDIR) -lvoxin
-	$(STRIP) $(@)
-
-client6: $(BIN6)
-	$(CC) -o $(@) $(^) $(LDFLAGS) -L$(LIBDIR) -lvoxin
-	$(STRIP) $(@)
+LDFLAGS += -L $(LIBDIR)
+LDLIBS = -lvoxin
 
 all: $(TARGET)
 
