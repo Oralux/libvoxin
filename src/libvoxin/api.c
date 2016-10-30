@@ -198,11 +198,10 @@ static int api_unlock(struct api_t *api)
 }
 
 // Notes:
-// The caller must lock the mutex if with_lock is set to false. 
 // If the returned value is not 0, the mutex is unlocked whichever the value of
 // with_unlock.
 int process_func1(struct api_t* api, struct msg_t *header, const char* data,
-		  int *eci_res, bool with_unlock, bool with_lock)
+		  int *eci_res, bool with_unlock)
 {
   int res = EINVAL;  
   uint32_t c;
@@ -212,12 +211,6 @@ int process_func1(struct api_t* api, struct msg_t *header, const char* data,
   if (!api || !header) {
     err("LEAVE, args error");
     return res;
-  }
-
-  if (with_lock) {
-	res = api_lock(api);
-	if (res)
-	  return res;
   }
 
   c = api->msg->count;
@@ -312,13 +305,13 @@ ECIHand eciNew(void)
   struct engine_t *engine = NULL;
   struct msg_t header;
   struct api_t *api = &my_api;
- 
+  
   ENTER();
 
   if (msg_set_header(&header, MSG_NEW, 0))
 	return NULL;
 
-  if (!process_func1(api, &header, NULL, &eci_res, false, true)) {
+  if (!api_lock(api) && !process_func1(api, &header, NULL, &eci_res, false)) {
 	if (eci_res != 0) {
 	  engine = engine_create(eci_res, api);
 	}
@@ -350,7 +343,7 @@ Boolean eciSetOutputBuffer(ECIHand hEngine, int iSize, short *psBuffer)
   
   header.args.sob.nb_samples = iSize;
 
-  if (!process_func1(engine->api, &header, NULL, &eci_res, false, true)) {  
+  if (!api_lock(engine->api) && !process_func1(engine->api, &header, NULL, &eci_res, false)) {  
 	if (eci_res == ECITrue) {
 	  engine->samples = psBuffer;
 	  engine->nb_samples = iSize;
@@ -378,7 +371,7 @@ Boolean eciSetOutputFilename(ECIHand hEngine, const void *pFilename)
   }
 
   msg_set_header(&header, MSG_SET_OUTPUT_FILENAME, engine->handle);
-  if (!process_func1(engine->api, &header, pFilename, &eci_res, true, true)
+  if (!api_lock(engine->api) && !process_func1(engine->api, &header, pFilename, &eci_res, true)
       && (eci_res == ECITrue))
     engine->output_filename = pFilename;
     
@@ -399,7 +392,8 @@ Boolean eciAddText(ECIHand hEngine, ECIInputText pText)
   }
 
   msg_set_header(&header, MSG_ADD_TEXT, engine->handle);
-  process_func1(engine->api, &header, pText, &eci_res, true, true);
+  if (!api_lock(engine->api))
+    process_func1(engine->api, &header, pText, &eci_res, true);
   return eci_res;
 }
 
@@ -417,7 +411,8 @@ Boolean eciSynthesize(ECIHand hEngine)
   }
 
   msg_set_header(&header, MSG_SYNTHESIZE, engine->handle);
-  process_func1(engine->api, &header, NULL, &eci_res, true, true);
+  if (!api_lock(engine->api))
+    process_func1(engine->api, &header, NULL, &eci_res, true);
   return eci_res;
 }
 
@@ -519,7 +514,6 @@ ECIHand eciDelete(ECIHand hEngine)
   ECIHand eci_res = hEngine;
   struct api_t *api;
   struct msg_t header;
-  int res;
     
   ENTER();
 
@@ -529,11 +523,11 @@ ECIHand eciDelete(ECIHand hEngine)
   }
 
   api = engine->api;
-  if (api_lock(api))
+  if (api_lock(engine->api))
 	return eci_res;
 
   msg_set_header(&header, MSG_DELETE, engine->handle);
-  if (!process_func1(engine->api, &header, NULL, (int*)&eci_res, false, false)) {
+  if (!process_func1(engine->api, &header, NULL, (int*)&eci_res, false)) {
 	if (eci_res == NULL_ECI_HAND) {
 	  eci_res = engine_delete(engine);
 	}
@@ -560,10 +554,10 @@ void eciRegisterCallback(ECIHand hEngine, ECICallback Callback, void *pData)
   msg_set_header(&header, MSG_REGISTER_CALLBACK, engine->handle);
   header.args.rc.Callback = !!Callback;
 
-  if (!process_func1(engine->api, &header, NULL, NULL, 0, 1)) {
+  if (!api_lock(engine->api) && !process_func1(engine->api, &header, NULL, NULL, false)) {
     engine->cb = (void*)Callback;
     engine->data_cb = pData;
-	api_unlock(engine->api);
+    api_unlock(engine->api);
   }  
 
   LEAVE();
@@ -616,7 +610,8 @@ Boolean eciStop(ECIHand hEngine)
   engine->stop_required = 1;
 
   msg_set_header(&header, MSG_STOP, engine->handle);
-  process_func1(engine->api, &header, NULL, &eci_res, true, true);
+  if (!api_lock(engine->api))
+    process_func1(engine->api, &header, NULL, &eci_res, true);
 
   engine->stop_required = 0;
   res = pthread_mutex_unlock(&api->stop_mutex);
@@ -642,7 +637,7 @@ int eciGetAvailableLanguages(enum ECILanguageDialect *aLanguages, int *nLanguage
   }
 
   msg_set_header(&header, MSG_GET_AVAILABLE_LANGUAGES, 0);
-  if (!process_func1(api, &header, NULL, &eci_res, false, true)) {
+  if (!api_lock(api) && !process_func1(api, &header, NULL, &eci_res, false)) {
     struct msg_get_available_languages_t *lang = (struct msg_get_available_languages_t *)api->msg->data;
     msg("nb lang=%d", lang->nb);
     if (lang->nb <= MSG_LANG_INFO_MAX) {
@@ -674,7 +669,7 @@ ECIHand eciNewEx(enum ECILanguageDialect Value)
 
   header.args.ne.Value = Value;
 
-  if (!process_func1(api, &header, NULL, &eci_res, false, true)) {
+  if (!api_lock(api) && !process_func1(api, &header, NULL, &eci_res, false)) {
 	if (eci_res != 0) {
 	  engine = engine_create(eci_res, api);
 	}
@@ -703,7 +698,7 @@ int eciSetParam(ECIHand hEngine, enum ECIParam Param, int iValue)
   msg_set_header(&header, MSG_SET_PARAM, engine->handle);
   header.args.sp.Param = Param;
   header.args.sp.iValue = iValue;
-  if (!process_func1(engine->api, &header, NULL, &eci_res, true, true)) {  
+  if (!api_lock(engine->api) && !process_func1(engine->api, &header, NULL, &eci_res, true)) {  
     if ((eci_res == ECITrue) && (Param < NB_PARAMS)) {
       engine->priv_param[Param] = iValue;
       engine->param[Param] = &engine->priv_param[Param];
@@ -723,7 +718,7 @@ int eciSetDefaultParam(enum ECIParam parameter, int value)
   msg_set_header(&header, MSG_SET_DEFAULT_PARAM, 0);
   header.args.sp.Param = parameter;
   header.args.sp.iValue = value;
-  if (!process_func1(api, &header, NULL, &eci_res, true, true)) {  
+  if (!api_lock(api) && !process_func1(api, &header, NULL, &eci_res, true)) {  
     if ((eci_res == ECITrue) && (parameter < NB_PARAMS)) {
       api->priv_default_param[parameter] = value;
       api->default_param[parameter] = &api->priv_default_param[parameter];
@@ -738,7 +733,6 @@ int eciGetParam(ECIHand hEngine, enum ECIParam Param)
   struct engine_t *engine = (struct engine_t *)hEngine;
   struct msg_t header;
   struct api_t *api;
-  int res = 0;  
    
   ENTER();
 
@@ -751,7 +745,8 @@ int eciGetParam(ECIHand hEngine, enum ECIParam Param)
 
   msg_set_header(&header, MSG_GET_PARAM, engine->handle);
   header.args.gp.Param = Param;
-  process_func1(engine->api, &header, NULL, &eci_res, true, true);
+  if (!api_lock(engine->api))
+    process_func1(engine->api, &header, NULL, &eci_res, true);
   return eci_res;  
 }
 
@@ -764,7 +759,8 @@ int eciGetDefaultParam(enum ECIParam parameter)
   ENTER();
 
   msg_set_header(&header, MSG_GET_DEFAULT_PARAM, 0);
-  process_func1(api, &header, NULL, &eci_res, true, true);
+  if (!api_lock(api))
+    process_func1(api, &header, NULL, &eci_res, true);
 
   LEAVE();  
   return eci_res;  
@@ -793,7 +789,7 @@ void eciErrorMessage(ECIHand hEngine, void *buffer)
 
   api = engine->api;
   msg_set_header(&header, MSG_ERROR_MESSAGE, engine->handle);
-  if (!process_func1(engine->api, &header, NULL, NULL, false, true)) {
+  if (!api_lock(engine->api) && !process_func1(engine->api, &header, NULL, NULL, false)) {
     memccpy(buffer, api->msg->data, 0, MSG_ERROR_MESSAGE);
     msg("msg=%s", (char*)buffer);
 	api_unlock(engine->api);	
@@ -816,7 +812,8 @@ int eciProgStatus(ECIHand hEngine)
   }
 
   msg_set_header(&header, MSG_PROG_STATUS, engine->handle);
-  process_func1(engine->api, &header, NULL, &eci_res, true, true);
+  if (!api_lock(engine->api))
+    process_func1(engine->api, &header, NULL, &eci_res, true);
   return eci_res;
 }
   
@@ -831,7 +828,8 @@ void eciClearErrors(ECIHand hEngine)
     return;
   }
   msg_set_header(&header, MSG_CLEAR_ERRORS, engine->handle);
-  process_func1(engine->api, &header, NULL, NULL, true, true);  
+  if (!api_lock(engine->api))
+    process_func1(engine->api, &header, NULL, NULL, true);  
 }
 
 Boolean eciReset(ECIHand hEngine)
@@ -846,7 +844,7 @@ Boolean eciReset(ECIHand hEngine)
   }
   msg_set_header(&header, MSG_RESET, engine->handle);
 
-  if (!process_func1(engine->api, &header, NULL, &eci_res, true, true)) {
+  if (!api_lock(engine->api) && !process_func1(engine->api, &header, NULL, &eci_res, true)) {
     if (eci_res == ECITrue) {
 	memset(engine->param, 0, sizeof(engine->param));
     }
@@ -871,7 +869,7 @@ void eciVersion(char *pBuffer)
   *(char*)pBuffer=0;
 
   msg_set_header(&header, MSG_VERSION, 0);
-  if (!process_func1(api, &header, NULL, NULL, false, true)) {
+  if (!api_lock(api) && !process_func1(api, &header, NULL, NULL, false)) {
     memccpy(pBuffer, api->msg->data, 0, MAX_VERSION);
     msg("version=%s", (char*)pBuffer);
 	api_unlock(api);	
@@ -897,7 +895,8 @@ int eciGetVoiceParam(ECIHand hEngine, int iVoice, enum ECIVoiceParam Param)
   msg_set_header(&header, MSG_GET_VOICE_PARAM, engine->handle);
   header.args.gvp.iVoice = iVoice;
   header.args.gvp.Param = Param;
-  process_func1(engine->api, &header, NULL, &eci_res, true, true);
+  if (!api_lock(engine->api))
+    process_func1(engine->api, &header, NULL, &eci_res, true);
   return eci_res;
 }
 
@@ -920,7 +919,7 @@ int eciSetVoiceParam(ECIHand hEngine, int iVoice, enum ECIVoiceParam Param, int 
   header.args.svp.Param = Param;
   header.args.svp.iValue = iValue;
 
-  if (!process_func1(engine->api, &header, NULL, &eci_res, true, true)) {  
+  if (!api_lock(engine->api) && !process_func1(engine->api, &header, NULL, &eci_res, true)) {  
     if ((eci_res == ECITrue) && (iVoice < NB_VOICES) && (Param < NB_VOICE_PARAMS)){
       engine->priv_voice_param[iVoice][Param] = iValue;
       engine->voice_param[iVoice][Param] = &engine->priv_voice_param[iVoice][Param];
@@ -946,7 +945,8 @@ Boolean eciPause(ECIHand hEngine, Boolean On)
 
   msg_set_header(&header, MSG_PAUSE, engine->handle);
   header.args.p.On = On;
-  process_func1(engine->api, &header, NULL, &eci_res, true, true);
+  if (!api_lock(engine->api))
+    process_func1(engine->api, &header, NULL, &eci_res, true);
   return eci_res;  
 }
 
@@ -966,7 +966,8 @@ Boolean eciInsertIndex(ECIHand hEngine, int iIndex)
     
   msg_set_header(&header, MSG_INSERT_INDEX, engine->handle);
   header.args.ii.iIndex = iIndex;
-  process_func1(engine->api, &header, NULL, &eci_res, true, true);
+  if (!api_lock(engine->api))
+    process_func1(engine->api, &header, NULL, &eci_res, true);
   return eci_res;  
 }
 
@@ -987,7 +988,7 @@ Boolean eciCopyVoice(ECIHand hEngine, int iVoiceFrom, int iVoiceTo)
   header.args.cv.iVoiceFrom = iVoiceFrom;
   header.args.cv.iVoiceTo = iVoiceTo;  
 
-  if (!process_func1(engine->api, &header, NULL, &eci_res, true, true)) {  
+  if (!api_lock(engine->api) && !process_func1(engine->api, &header, NULL, &eci_res, true)) {  
     if ((eci_res == ECITrue) && (iVoiceFrom < NB_VOICES) && (iVoiceTo < NB_VOICES)){
       memcpy(&engine->priv_voice_param[iVoiceTo], &engine->priv_voice_param[iVoiceFrom], sizeof(engine->priv_voice_param[iVoiceTo]));
       memcpy(&engine->voice_param[iVoiceTo], &engine->priv_voice_param[iVoiceFrom], sizeof(engine->voice_param[iVoiceTo]));
@@ -1003,13 +1004,15 @@ ECIDictHand eciNewDict(ECIHand hEngine)
   ECIDictHand eci_res = NULL_DICT_HAND;
   struct engine_t *engine = (struct engine_t *)hEngine;
   struct msg_t header;
+
   ENTER();
   if (!IS_ENGINE(engine)) {
     err("LEAVE, args error");
     return NULL_DICT_HAND;
   }
   msg_set_header(&header, MSG_NEW_DICT, engine->handle);
-  process_func1(engine->api, &header, NULL, (int*)&eci_res, true, true);
+  if (!api_lock(engine->api))
+    process_func1(engine->api, &header, NULL, (int*)&eci_res, true);
   return eci_res;
 }
 
@@ -1018,13 +1021,15 @@ ECIDictHand eciGetDict(ECIHand hEngine)
   ECIDictHand eci_res = NULL_DICT_HAND;
   struct engine_t *engine = (struct engine_t *)hEngine;
   struct msg_t header;
+
   ENTER();
   if (!IS_ENGINE(engine)) {
     err("LEAVE, args error");
     return NULL_DICT_HAND;
   }
   msg_set_header(&header, MSG_GET_DICT, engine->handle);
-  process_func1(engine->api, &header, NULL, (int*)&eci_res, true, true);
+  if (!api_lock(engine->api))
+    process_func1(engine->api, &header, NULL, (int*)&eci_res, true);
   return eci_res;
 }
 
@@ -1043,7 +1048,8 @@ enum ECIDictError eciSetDict(ECIHand hEngine, ECIDictHand hDict)
 
   msg_set_header(&header, MSG_SET_DICT, engine->handle);
   header.args.sd.hDict = (char*)hDict - (char*)NULL;
-  process_func1(engine->api, &header, NULL, (int*)&eci_res, true, true);
+  if (!api_lock(engine->api))
+    process_func1(engine->api, &header, NULL, (int*)&eci_res, true);
   return eci_res;  
 }  
 
@@ -1062,7 +1068,8 @@ ECIDictHand eciDeleteDict(ECIHand hEngine, ECIDictHand hDict)
     
   msg_set_header(&header, MSG_DELETE_DICT, engine->handle);
   header.args.dd.hDict = (char*)hDict - (char*)NULL;
-  process_func1(engine->api, &header, NULL, (int*)&eci_res, true, true);
+  if (!api_lock(engine->api))
+    process_func1(engine->api, &header, NULL, (int*)&eci_res, true);
   return eci_res;  
 }
 
@@ -1089,7 +1096,8 @@ enum ECIDictError eciLoadDict(ECIHand hEngine, ECIDictHand hDict, enum ECIDictVo
   header.args.ld.hDict = (char*)hDict - (char*)NULL;
   header.args.ld.DictVol = DictVol;
 
-  process_func1(engine->api, &header, pFilename, (int*)&eci_res, true, true);
+  if (!api_lock(engine->api))
+    process_func1(engine->api, &header, pFilename, (int*)&eci_res, true);
   return eci_res;
 }
 
@@ -1099,13 +1107,15 @@ Boolean eciClearInput(ECIHand hEngine)
   Boolean eci_res = ECIFalse;
   struct engine_t *engine = (struct engine_t *)hEngine;
   struct msg_t header;
+
   ENTER();
   if (!IS_ENGINE(engine)) {
     err("LEAVE, args error");
     return ECIFalse;
   }
   msg_set_header(&header, MSG_CLEAR_INPUT, engine->handle);
-  process_func1(engine->api, &header, NULL, &eci_res, true, true);
+  if (!api_lock(engine->api))
+    process_func1(engine->api, &header, NULL, &eci_res, true);
   return eci_res;
 }
 
@@ -1116,7 +1126,7 @@ Boolean ECIFNDECLARE eciSetOutputDevice(ECIHand hEngine, int iDevNum)
   struct engine_t *engine = (struct engine_t *)hEngine;
   struct api_t *api;
   struct msg_t header;
-   
+  
   ENTER();
 
   if (!IS_ENGINE(engine)) {
@@ -1126,7 +1136,8 @@ Boolean ECIFNDECLARE eciSetOutputDevice(ECIHand hEngine, int iDevNum)
 
   msg_set_header(&header, MSG_SET_OUTPUT_DEVICE, engine->handle);
   header.args.sod.iDevNum = iDevNum;
-  process_func1(engine->api, &header, NULL, &eci_res, true, true);
+  if (!api_lock(engine->api))
+    process_func1(engine->api, &header, NULL, &eci_res, true);
   return eci_res;
 }
 
