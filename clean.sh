@@ -1,4 +1,4 @@
-#!/bin/bash -evx
+#!/bin/bash -e
 
 if [ -z "$RFS" ]; then
 	RFS=$PWD/build/rfs
@@ -9,10 +9,7 @@ LIB32=$RFS/usr/lib/i386-linux-gnu
 LIB64=$RFS/usr/lib/x86_64-linux-gnu
 BINDIR=$RFS/usr/bin
 
-rm -rf $PWD/build
-# mkdir -p $LIB32
-# mkdir -p $LIB64
-# mkdir -p $BINDIR
+rm -rf build
 
 # libcommon
 echo "Entering common"
