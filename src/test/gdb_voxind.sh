@@ -11,8 +11,9 @@ TEST_NUMBER=$1
 touch /tmp/test_voxind
 ./run.sh $TEST_NUMBER &
 
-set -v
-# cd ../../build/rfs/usr/bin
-# export LD_LIBRARY_PATH=../lib/x86_64-linux-gnu
-# sudo gdb -p $(pidof voxind)
-# rm /tmp/test_voxind
+echo "type:
+pushd ../../build/rfs/usr/bin
+export LD_LIBRARY_PATH=../lib/x86_64-linux-gnu
+sudo gdb -p \$(pidof voxind)
+rm /tmp/test_voxind
+"

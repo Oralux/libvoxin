@@ -162,6 +162,7 @@ static int daemon_start(struct libvoxin_t *this)
   default:
     this->child = child_pid;
     pipe_close(this->pipe_command, PIPE_SOCKET_CHILD_INDEX);
+    msg("child pid=%d", child_pid);
     break;
   }
 
@@ -172,13 +173,12 @@ static int daemon_start(struct libvoxin_t *this)
 
 int libvoxin_create(libvoxin_handle_t *i)
 {
-  static int once = 0;
   int res = 0;
   struct libvoxin_t *this = NULL;
 
   ENTER();
 
-  if (!i || once)
+  if (!i)
     return EINVAL;
 
   this = calloc(1, sizeof(struct libvoxin_t));
@@ -191,10 +191,8 @@ int libvoxin_create(libvoxin_handle_t *i)
 
   this->id = LIBVOXIN_ID;
   res = daemon_start(this);
-  if (!res) {
-	once = 1;
-	*i = this;
-  }
+  if (!res)
+    *i = this;
   
  exit0:
   if (res) {
@@ -206,26 +204,8 @@ int libvoxin_create(libvoxin_handle_t *i)
 }
 
 
-int libvoxin_recreate(libvoxin_handle_t i)
-{
-  int res = 0;
-  struct libvoxin_t *p = (struct libvoxin_t *)i;
-
-  ENTER();
-
-  if (!p)
-    return EINVAL;
-
-  res = daemon_start(p);
-  
-  LEAVE();
-  return res;  
-}
-
-
 int libvoxin_delete(libvoxin_handle_t *i)
 {
-  static int once = 0;
   int res = 0;
   struct libvoxin_t *this = NULL;
   
@@ -239,9 +219,6 @@ int libvoxin_delete(libvoxin_handle_t *i)
   
   this = (struct libvoxin_t*)*i;
   
-  if (once)
-    return 0;
-
   res = pipe_delete(&this->pipe_command);
   if (res)    
     goto exit0;
@@ -258,7 +235,7 @@ int libvoxin_delete(libvoxin_handle_t *i)
 }
 
 
-int libvoxin_call_eci(libvoxin_handle_t i, struct msg_t *msg)
+int libvoxin_call_tts(libvoxin_handle_t i, struct msg_t *msg)
 {
   int res;
   struct libvoxin_t *p = (struct libvoxin_t *)i;

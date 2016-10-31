@@ -99,9 +99,9 @@ void DebugFileInit()
     goto exit0;
   
   if (fstat(fileno(myDebugFile), &buf) || buf.st_mode & 0077) {
-	err("mode=%o", buf.st_mode);
-	fclose(myDebugFile);
-	myDebugFile = NULL;
+    err("mode=%o", buf.st_mode);
+    fclose(myDebugFile);
+    myDebugFile = NULL;
     goto exit0;
   }
   

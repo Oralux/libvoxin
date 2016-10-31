@@ -10,8 +10,8 @@
 #include "debug.h"
 #include "eci.h"
 
-#define VOXIND_ID 0x05000A01 
-#define ENGINE_ID 0x15000A01 
+#define VOXIND_ID 0x05000A01
+#define ENGINE_ID 0x15000A01
 
 struct voxind_t {
   uint32_t id;
@@ -68,7 +68,7 @@ static enum ECICallbackReturn my_callback(ECIHand hEngine, enum ECIMessage Msg, 
     err("LEAVE, args error");
     return eciDataAbort;
   }
-  
+
   if ((Msg < eciWaveformBuffer) || (Msg > eciSynthesisBreak)) {
     err("LEAVE, unknown eci message (%d)", Msg);
     return eciDataAbort;
@@ -81,7 +81,7 @@ static enum ECICallbackReturn my_callback(ECIHand hEngine, enum ECIMessage Msg, 
     err("LEAVE, samples size error (%d > %d)", effective_msg_length, allocated_msg_length);
     return eciDataAbort;
   }
-  
+
   engine->cb_msg->func = MSG_CB_WAVEFORM_BUFFER + Msg - eciWaveformBuffer;
   if (!msg_string(engine->cb_msg->func)) {
     err("LEAVE, unknown function (%d)", engine->cb_msg->func);
@@ -89,7 +89,7 @@ static enum ECICallbackReturn my_callback(ECIHand hEngine, enum ECIMessage Msg, 
   }
   engine->cb_msg->id = MSG_TO_APP_ID;
   ++engine->cb_msg->count;
-    
+
   engine->cb_msg->res = 0;
   engine->cb_msg->effective_data_length = 2*lParam;
   dbg("send cb msg '%s', length=%d, engine=%p (#%d)",msg_string(engine->cb_msg->func),
@@ -104,14 +104,14 @@ static enum ECICallbackReturn my_callback(ECIHand hEngine, enum ECIMessage Msg, 
   func_sav = engine->cb_msg->func;
   res = pipe_read(my_voxind->pipe_command, engine->cb_msg, &effective_msg_length);
   if (res) {
-    err("LEAVE, read error (%d)",res);  
+    err("LEAVE, read error (%d)",res);
     return eciDataAbort;
   }
 
   if (engine->cb_msg->func != func_sav) {
     err("LEAVE, received func error (%d, expected=%d)", engine->cb_msg->func, func_sav);
     return eciDataAbort;
-  }  
+  }
 
   dbg("recv msg '%s', length=%d, res=%d (#%d)", msg_string(engine->cb_msg->func),
       engine->cb_msg->effective_data_length, engine->cb_msg->res, engine->cb_msg->count);
@@ -126,7 +126,7 @@ static void set_output_buffer(struct voxind_t *v, struct engine_t *engine, struc
   size_t len = 0;
   size_t data_len = 0;
   int res;
-  
+
   ENTER();
 
   if (!v || !msg) {
@@ -135,7 +135,7 @@ static void set_output_buffer(struct voxind_t *v, struct engine_t *engine, struc
   }
 
   msg->effective_data_length = 0;
-  
+
   data_len = 2*msg->args.sob.nb_samples;
   len = MSG_HEADER_LENGTH + data_len;
   if (len > PIPE_MAX_BLOCK) {
@@ -155,12 +155,13 @@ static void set_output_buffer(struct voxind_t *v, struct engine_t *engine, struc
   }
 
   engine->cb_msg_length = len;
-  dbg("create cb msg, data=%p, effective_data_length=%d", engine->cb_msg->data, data_len);
-  msg->res = (uint32_t)eciSetOutputBuffer(engine->handle, msg->args.sob.nb_samples, (short*)engine->cb_msg->data);  
+  dbg("eciSetOutputBuffer: data=%p, length=%d", engine->cb_msg->data, data_len);  
+  msg->res = (uint32_t)eciSetOutputBuffer(engine->handle, msg->args.sob.nb_samples, (short*)engine->cb_msg->data);
 }
 
 static int check_engine(struct engine_t *engine)
-{  
+{
+  ENTER();
   return (engine && (engine->id == ENGINE_ID) && engine->handle);
 }
 
@@ -178,26 +179,27 @@ static int unserialize(struct msg_t *msg, size_t *msg_length)
   }
 
   engine = (struct engine_t*)msg->engine;
+
   if ((*msg_length < MIN_MSG_SIZE)
       || (msg->id != MSG_TO_ECI_ID)
       || !msg_string(msg->func)
       || (*msg_length < MSG_HEADER_LENGTH + msg->effective_data_length)
       || (engine && !check_engine(engine))) {
-    msg("recv erroneous msg"); 
+    msg("recv erroneous msg");
     memset(msg, 0, MIN_MSG_SIZE);
     msg->id = MSG_TO_APP_ID;
     msg->func = MSG_UNDEFINED;
     *msg_length = MIN_MSG_SIZE;
     msg->res = ECIFalse;
-    dbg("send msg '%s', length=%d, res=0x%x (#%d)", msg_string(msg->func), msg->effective_data_length, msg->res, msg->count);    
+    dbg("send msg '%s', length=%d, res=0x%x (#%d)", msg_string(msg->func), msg->effective_data_length, msg->res, msg->count);
     LEAVE();
     return 0;
   }
 
-  dbg("recv msg '%s', length=%d, engine=%p (#%d)", msg_string(msg->func), msg->effective_data_length, engine, msg->count); 
-  
+  dbg("recv msg '%s', length=%d, engine=%p (#%d)", msg_string(msg->func), msg->effective_data_length, engine, msg->count);
+
   msg->id = MSG_TO_APP_ID;
-  msg->effective_data_length = 0; 
+  msg->effective_data_length = 0;
 
   switch(msg->func) {
   case MSG_ADD_TEXT:
@@ -206,28 +208,34 @@ static int unserialize(struct msg_t *msg, size_t *msg_length)
       msg->res = ECIFalse;
     } else {
       dbg("text=%s", (char*)msg->data);
+      dbg("eciAddText: handle=%p, data=%s", engine->handle, msg->data);
       msg->res = (uint32_t)eciAddText(engine->handle, msg->data);
     }
     break;
 
   case MSG_CLEAR_ERRORS:
+    dbg("eciClearErrors: handle=%p", engine->handle);
     eciClearErrors(engine->handle);
     break;
 
   case MSG_CLEAR_INPUT:
+    dbg("eciClearInput: handle=%p", engine->handle);
     eciClearInput(engine->handle);
     break;
 
   case MSG_COPY_VOICE:
+    dbg("eciCopyVoice: handle=%p, from %d to %d", engine->handle, msg->args.cv.iVoiceFrom, msg->args.cv.iVoiceTo);
     msg->res = (uint32_t)eciCopyVoice(engine->handle, msg->args.cv.iVoiceFrom, msg->args.cv.iVoiceTo);
     break;
 
   case MSG_DELETE_DICT:
+    dbg("eciDeleteDict: handle=%p, dict=%p", engine->handle, (char*)NULL + msg->args.dd.hDict);
     msg->res = (uint32_t)eciDeleteDict(engine->handle, (char*)NULL + msg->args.dd.hDict);
     break;
 
   case MSG_ERROR_MESSAGE:
     BUILD_ASSERT(MSG_HEADER_LENGTH + MAX_ERROR_MESSAGE <= PIPE_MAX_BLOCK);
+    dbg("eciErrorMessage: handle=%p", engine->handle);
     eciErrorMessage(engine->handle, msg->data);
     msg->effective_data_length = MAX_ERROR_MESSAGE;
     msg("error=%s", (char*)msg->data);
@@ -237,6 +245,7 @@ static int unserialize(struct msg_t *msg, size_t *msg_length)
     struct msg_get_available_languages_t *lang = (struct msg_get_available_languages_t *)msg->data;
     BUILD_ASSERT(MSG_HEADER_LENGTH + sizeof(struct msg_get_available_languages_t) <= PIPE_MAX_BLOCK);
     lang->nb = sizeof(lang->languages)/sizeof(lang->languages[0]);
+    dbg("eciGetAvailableLanguages");
     msg->res = eciGetAvailableLanguages(lang->languages, &lang->nb);
     msg->effective_data_length = sizeof(struct msg_get_available_languages_t);
     dbg("nb lang=%d, msg->res=%d", lang->nb, msg->res);
@@ -244,37 +253,49 @@ static int unserialize(struct msg_t *msg, size_t *msg_length)
     break;
 
   case MSG_GET_DEFAULT_PARAM:
+    dbg("eciGetDefaultParam: handle=%p", engine->handle);
     msg->res = (uint32_t)eciGetDefaultParam(msg->args.gp.Param);
     break;
 
   case MSG_GET_DICT:
+    dbg("eciGetDict: handle=%p", engine->handle);
     msg->res = (uint32_t)eciGetDict(engine->handle);
     break;
 
   case MSG_GET_PARAM:
+    dbg("eciGetParam: handle=%p, param=%d", engine->handle, msg->args.gp.Param);
     msg->res = (uint32_t)eciGetParam(engine->handle, msg->args.gp.Param);
     break;
 
   case MSG_GET_VOICE_PARAM:
-    msg->res = (uint32_t)eciGetVoiceParam(engine->handle, msg->args.gvp.iVoice, msg->args.gvp.Param);
+    dbg("eciGetVoiceParam: handle=%p, voice=%d, param=%d", engine->handle,
+	msg->args.gvp.iVoice, msg->args.gp.Param);
+    msg->res = (uint32_t)eciGetVoiceParam(engine->handle, msg->args.gvp.iVoice,
+					  msg->args.gvp.Param);
     break;
 
   case MSG_INSERT_INDEX:
+    dbg("eciInsertIndex: handle=%p", engine->handle);
     msg->res = (uint32_t)eciInsertIndex(engine->handle, msg->args.ii.iIndex);
     break;
 
   case MSG_LOAD_DICT:
-    dbg("hDict=%p, DictVol=0x%x, filename=%s", (char*)NULL + msg->args.ld.hDict, msg->args.ld.DictVol, msg->data);
+    dbg("eciLoadDict: handle=%p, hDict=%p, DictVol=0x%x, filename=%s",
+	engine->handle,
+	(char*)NULL + msg->args.ld.hDict,
+	msg->args.ld.DictVol, msg->data);
     msg->res = eciLoadDict(engine->handle, (char*)NULL + msg->args.ld.hDict, msg->args.ld.DictVol, msg->data);
     break;
 
-  case MSG_NEW: {
+  case MSG_NEW: {    
+    dbg("eciNew");
     ECIHand h = eciNew();
     if (h) {
       engine = calloc(1, sizeof(struct engine_t));
       if (engine) {
 	engine->id = ENGINE_ID;
 	engine->handle = h;
+	dbg("MSG_NEW: engine=%p, handle=%p", engine, h);
       }
     }
     msg->res = (uint32_t)engine;
@@ -282,10 +303,12 @@ static int unserialize(struct msg_t *msg, size_t *msg_length)
     break;
 
   case MSG_NEW_DICT:
+    dbg("eciNewDict: handle=%p", engine->handle);
     msg->res = (uint32_t)eciNewDict(engine->handle);
     break;
 
   case MSG_NEW_EX: {
+    dbg("eciNewEx: value=%d", msg->args.ne.Value);
     ECIHand h = eciNewEx(msg->args.ne.Value);
     if (h) {
       engine = calloc(1, sizeof(struct engine_t));
@@ -297,45 +320,53 @@ static int unserialize(struct msg_t *msg, size_t *msg_length)
     msg->res = (uint32_t)engine;
   }
     break;
-    
+
   case MSG_PAUSE:
+    dbg("eciPause: handle=%p", engine->handle);
     msg->res = (uint32_t)eciPause(engine->handle, msg->args.p.On);
     break;
 
   case MSG_PROG_STATUS:
+    dbg("eciProgStatus: handle=%p", engine->handle);
     msg->res = eciProgStatus(engine->handle);
     break;
-    
+
   case MSG_REGISTER_CALLBACK: {
     ECICallback cb = NULL;
     if (msg->args.rc.Callback)
       cb = my_callback;
-    dbg("engine=%p, handle=%p, cb=%p", engine, engine->handle, cb);
+    dbg("eciRegisterCallback, engine=%p, handle=%p, cb=%p", engine, engine->handle, cb);
     eciRegisterCallback(engine->handle, cb, engine);
   }
     break;
-    
+
   case MSG_RESET:
+    dbg("eciReset: handle=%p", engine->handle);
     eciReset(engine->handle);
     break;
-    
+
   case MSG_SET_DEFAULT_PARAM:
+    dbg("eciSetDefaultParam: handle=%p, p=%d, v=%d", engine->handle, msg->args.sp.Param, msg->args.sp.iValue);
     msg->res = (uint32_t)eciSetDefaultParam(msg->args.sp.Param, msg->args.sp.iValue);
     break;
 
   case MSG_SET_DICT:
+    dbg("eciSetDict: handle=%p, d=%p", engine->handle, (char*)NULL + msg->args.sd.hDict);
     msg->res = (uint32_t)eciSetDict(engine->handle, (char*)NULL + msg->args.sd.hDict);
     break;
 
   case MSG_SET_OUTPUT_DEVICE:
+    dbg("eciSetOutputDevice: handle=%p, dev=%d", engine->handle, msg->args.sod.iDevNum);
     msg->res = (uint32_t)eciSetOutputDevice(engine->handle, msg->args.sod.iDevNum);
     break;
 
   case MSG_SET_PARAM:
+    dbg("eciSetParam: handle=%p, p=%d, v=%d", engine->handle, msg->args.sp.Param, msg->args.sp.iValue);
     msg->res = (uint32_t)eciSetParam(engine->handle, msg->args.sp.Param, msg->args.sp.iValue);
     break;
 
   case MSG_SET_VOICE_PARAM:
+    dbg("eciSetVoiceParam: handle=%p, p=%d, v=%d", engine->handle, msg->args.svp.iVoice, msg->args.svp.iValue);
     msg->res = (uint32_t)eciSetVoiceParam(engine->handle, msg->args.svp.iVoice, msg->args.svp.Param, msg->args.svp.iValue);
     break;
 
@@ -344,41 +375,47 @@ static int unserialize(struct msg_t *msg, size_t *msg_length)
     break;
 
   case MSG_SET_OUTPUT_FILENAME:
+    dbg("eciSetOutputFilename: handle=%p, d=%s", engine->handle, msg->data);
     msg->res = (uint32_t)eciSetOutputFilename(engine->handle, msg->data);
     break;
 
   case MSG_SYNTHESIZE:
+    dbg("eciSynthesize: handle=%p", engine->handle);
     msg->res = (uint32_t)eciSynthesize(engine->handle);
     break;
 
   case MSG_SYNCHRONIZE:
+    dbg("eciSynchronize: handle=%p", engine->handle);
     msg->res = (uint32_t)eciSynchronize(engine->handle);
     break;
 
   case MSG_SPEAKING:
+    dbg("eciSpeaking: handle=%p", engine->handle);
     msg->res = (uint32_t)eciSpeaking(engine->handle);
     break;
 
   case MSG_STOP:
+    dbg("eciStop: handle=%p", engine->handle);
     msg->res = (uint32_t)eciStop(engine->handle);
     break;
 
   case MSG_VERSION:
     BUILD_ASSERT(MSG_HEADER_LENGTH + MAX_VERSION <= PIPE_MAX_BLOCK);
+    dbg("eciVersion");
     eciVersion(msg->data);
     msg->effective_data_length = MAX_VERSION;
     dbg("version=%s", msg->data);
     break;
-    
+
   default:
     msg->res = ECIFalse;
     break;
   }
 
   *msg_length = MSG_HEADER_LENGTH + msg->effective_data_length;
-  
+
  exit0:
-  dbg("send msg '%s', length=%d, res=0x%x (#%d)", msg_string(msg->func), msg->effective_data_length, msg->res, msg->count);    
+  dbg("send msg '%s', length=%d, res=0x%x (#%d)", msg_string(msg->func), msg->effective_data_length, msg->res, msg->count);
   LEAVE();
   return 0;
 }
@@ -394,7 +431,7 @@ int main(int argc, char **argv)
   int i;
   struct voxind_t *v;
   struct sigaction act;
-  
+
 #ifdef DEBUG
   {
     struct stat buf;
@@ -414,7 +451,7 @@ int main(int argc, char **argv)
   for (i = 1; i < NSIG; i++) {
     sigaction(i, &act, NULL);
   }
-  
+
   my_voxind = calloc(1, sizeof(struct voxind_t));
   if (!my_voxind) {
     res = errno;
@@ -427,20 +464,20 @@ int main(int argc, char **argv)
     goto exit0;
   }
   my_voxind->msg_length = PIPE_MAX_BLOCK;
-  
+
   res = pipe_restore(&my_voxind->pipe_command, PIPE_COMMAND_FILENO);
   if (res)
     goto exit0;
 
   atexit(my_exit);
-  
+
   do {
     size_t msg_length = my_voxind->msg_length;
     if(pipe_read(my_voxind->pipe_command, my_voxind->msg, &msg_length))
       goto exit0;
     if (unserialize(my_voxind->msg, &msg_length))
       goto exit0;
-    pipe_write(my_voxind->pipe_command, my_voxind->msg, &msg_length);    
+    pipe_write(my_voxind->pipe_command, my_voxind->msg, &msg_length);
   } while (1);
 
  exit0:
