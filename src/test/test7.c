@@ -1,11 +1,12 @@
 /*
-  recover from voxind crash
+  recover from crash
  */
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <unistd.h>
+#include <iconv.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -21,28 +22,23 @@
 //#define MAX_SAMPLES 20000
 #define MAX_SAMPLES 1024
 static short my_samples[MAX_SAMPLES];
+#define CRASH_SAVER "|"
 
-#define CRASH_SAVER '|'
+#define INDEX_FR 4
+
 static const char* quote[] = {
-  /* "Checking various words known to cause", */
-  /* " crash in English:", */
-  /* " 1. cae|sure", */
-  /* " 2. vim-common-6.4.007-|4", */
-  /* " 3. wed|hesday", */
-  " crash in French:",
-  " 1. 10 000EUR",
-  /* " 2. 10000 €", */
-  /* " 3. 10000 £", */
-  /* " 4. 10000 $", */
-  " crash in German:",
-  /* " 1. dagegen", */
-  /* " 2. daneben", */
+  "0. Crash in English: ",
+  "1. WHO", // main1.dct
+  "2. cae" CRASH_SAVER "sure ",
+  "3. WHO", // main1.dct
+  "4. Crash en Français: ",
+  "5. RAS", // main1-fr.dct
+  "6. 10 000" CRASH_SAVER "EUR ",
+  "7. RAS", // main1-fr.dct
 };
 
 #define NB_OF_QUOTES (sizeof(quote)/sizeof(quote[0]))
 
-
-const char *test_dictionary = "test dictionary: WHO ";
 
 enum ECICallbackReturn my_client_callback(ECIHand hEngine, enum ECIMessage Msg, long lParam, void *pData)
 {
@@ -61,7 +57,7 @@ int main(int argc, char** argv)
   size_t len;
   int i;
   char** q = malloc(sizeof(quote));
-  
+
   {
     struct stat buf;
     while (!stat(TEST_DBG, &buf)) {
@@ -69,10 +65,10 @@ int main(int argc, char** argv)
     }
   }
 
-  for (i=0; i<NB_OF_QUOTES; i++) {    
+  for (i=0; i<NB_OF_QUOTES; i++) {
     q[i] = strdup(quote[i]);
   }
-  
+
   ECIHand handle = eciNew();
   if (!handle)
     return __LINE__;
@@ -86,28 +82,25 @@ int main(int argc, char** argv)
   if (eciSetOutputBuffer(handle, MAX_SAMPLES, my_samples) == ECIFalse)
     return __LINE__;
 
-  eciSetParam(handle, eciLanguageDialect, eciStandardFrench);
-  if (eciSetVoiceParam(handle, 0, eciSpeed, 80) < 0)
+  if (eciSetVoiceParam(handle, 0, eciSpeed, 70) < 0)
     return __LINE__;
-
-
+  
   ECIDictHand hDic1 = eciNewDict(handle);
   if (!hDic1)
     return __LINE__;
-  
+
   if (eciLoadDict(handle, hDic1, eciMainDict, "main1.dct") != DictNoError)
     return __LINE__;
-  
+
   if (eciSetDict(handle, hDic1) != DictNoError)
     return __LINE__;
 
-  
   for (i=0; i<NB_OF_QUOTES; i++) {
-    char*s = q[i];
+    char *s = q[i];
     int lq = strlen(s);
     int j, k;
     for (j=0,k=0; j<lq; j++) {
-      if (s[j] == CRASH_SAVER)
+      if (s[j] == *CRASH_SAVER)
 	continue;
       else {
 	s[k] = s[j];
@@ -117,37 +110,48 @@ int main(int argc, char** argv)
     s[k] = 0;
   }
 
-  // check dictionary before crash
-  eciAddText(handle, test_dictionary);
+  {
+    iconv_t cd = iconv_open("ISO8859-1", "UTF8");
+    for (i=INDEX_FR; i<NB_OF_QUOTES; i++) {
+      size_t utf8_size = strlen(q[i]);
+      size_t iso8859_1_size = 2*strlen(q[i]);
+      char *iso8859_1_buf = calloc(1, iso8859_1_size);
+      char *s = q[i];
+      char *d = iso8859_1_buf;
+      iconv(cd, &s, &utf8_size, &d, &iso8859_1_size);
+      free(q[i]);
+      q[i] = iso8859_1_buf;
+    }
+  }
 
   for (i=0; i<NB_OF_QUOTES; i++) {
-    eciAddText(handle, q[i]);    
+    if (i==INDEX_FR) {
+      int res;
+      ECIDictHand hDic1;
+
+      eciSetParam(handle, eciLanguageDialect, eciStandardFrench);
+
+      hDic1 = eciNewDict(handle);
+      if (!hDic1)
+	return __LINE__;
+
+      res = eciLoadDict(handle, hDic1, eciMainDict, "main1-fr.dct");
+      if (res != DictNoError)
+	return __LINE__;
+
+      if (eciSetDict(handle, hDic1) != DictNoError)
+	return __LINE__;
+
+    }
+
+    eciAddText(handle, q[i]);
     eciSynthesize(handle);
     eciSynchronize(handle);
   }
 
-  // check dictionary after crash
-  eciAddText(handle, test_dictionary);
-  eciSynthesize(handle);
-  eciSynchronize(handle);
-
-  
-  /* //  close(creat("/tmp/test_voxind",O_RDWR)); */
-  
-  /* eciAddText(handle, q[1]);     */
-  /* eciSynthesize(handle); */
-  /* eciSynchronize(handle); // crash */
-  
-  /* eciAddText(handle, q[2]);     */
-  /* eciSynthesize(handle); */
-  /* eciSynchronize(handle); // crash */
-
-  /* if (eciSynchronize(handle) == ECIFalse) */
-  /*   return __LINE__; */
-
   if (eciDelete(handle) != NULL)
     return __LINE__;
-  
+
  exit0:
   return 0;
 }

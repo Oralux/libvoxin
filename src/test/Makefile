@@ -1,5 +1,5 @@
 TARGET = test1 test2 test3 test4 test5 test6 test7
-DOC = main1.dct
+DOC = *.dct
 CFLAGS += -I../api
 LIBDIR ?= ../../build/rfs/usr/lib/x86_64-linux-gnu
 INSTALL_DIR ?= ../../build/rfs/usr/bin

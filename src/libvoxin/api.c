@@ -55,6 +55,25 @@ struct engine_t {
   //TODO  char* voice_name[NB_VOICES][ECI_VOICE_NAME_LENGTH+2]; // from eciSetVoiceName
 };
 
+struct dictionary_t {
+  uint32_t id; // structure identifier
+  struct timeval birth;
+  struct engine_t *engine; // parent engine
+  uint32_t handle; // eci handle
+
+
+
+  // from eciSetOutputFilename
+  const char* output_filename;
+  // from eciSetParam
+  uint32_t* param[NB_PARAMS]; // if NULL: default, else pointer to priv_param
+  uint32_t priv_param[NB_PARAMS];
+  // from eciSetVoiceParam
+  uint32_t* voice_param[NB_VOICES][NB_VOICE_PARAMS]; // if NULL: default, else pointer to priv_voice_param
+  uint32_t priv_voice_param[NB_VOICES][NB_VOICE_PARAMS];
+  //TODO  char* voice_name[NB_VOICES][ECI_VOICE_NAME_LENGTH+2]; // from eciSetVoiceName
+};
+
 #define ALLOCATED_MSG_LENGTH PIPE_MAX_BLOCK
 
 struct api_t {
