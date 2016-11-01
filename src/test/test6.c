@@ -82,6 +82,9 @@ int main(int argc, char **argv)
   if (eciSetDict(handle, hDic1) != DictNoError)
     return __LINE__;
 
+  hDic1 = eciGetDict(handle);
+  if (!hDic1)
+    return __LINE__;
   
   if (eciAddText(handle, quote) == ECIFalse)
     return __LINE__;
