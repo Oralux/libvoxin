@@ -33,6 +33,7 @@ static const char* quote[] = {
   "3. WHO", // main1.dct
   "4. Crash en Français: ",
   "5. RAS", // main1-fr.dct
+  "3. wilhelmina", // main1.dct
   "6. 10 000" CRASH_SAVER "EUR ",
   "7. RAS", // main1-fr.dct
 };
@@ -127,21 +128,27 @@ int main(int argc, char** argv)
   for (i=0; i<NB_OF_QUOTES; i++) {
     if (i==INDEX_FR) {
       int res;
-      ECIDictHand hDic1;
+      ECIDictHand hDic2;
 
-      eciSetParam(handle, eciLanguageDialect, eciStandardFrench);
+      //      eciSetParam(handle, eciLanguageDialect, eciStandardFrench);
 
-      hDic1 = eciNewDict(handle);
-      if (!hDic1)
+      hDic2 = eciNewDict(handle);
+      if (!hDic2)
 	return __LINE__;
 
-      res = eciLoadDict(handle, hDic1, eciMainDict, "main1-fr.dct");
+      res = eciLoadDict(handle, hDic2, eciMainDict, "main1-fr.dct");
       if (res != DictNoError)
 	return __LINE__;
 
-      if (eciSetDict(handle, hDic1) != DictNoError)
+      if (eciSetDict(handle, hDic2) != DictNoError)
 	return __LINE__;
 
+
+      if (eciLoadDict(handle, hDic2, eciRootDict, "root1.dct") != DictNoError)
+      	return __LINE__;
+
+
+      
     }
 
     eciAddText(handle, q[i]);

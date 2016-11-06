@@ -63,7 +63,8 @@ const uint32_t lang_id[] = {
   eciHongKongCantoneseUCS,
 };
 #define NB_LANG (sizeof(lang_id)/sizeof(lang_id[0]))
-#define NB_DICT 4
+#define NB_DICT_SET 4 // Currently only 4 dictionary sets are managed for each language
+#define NB_DICT_VOLUME 4
 
 
 struct engine_t {
@@ -86,7 +87,7 @@ struct engine_t {
   // from eciSetVoiceParam
   uint32_t* voice_param[NB_VOICES][NB_VOICE_PARAMS]; // if NULL: default, else pointer to priv_voice_param
   uint32_t priv_voice_param[NB_VOICES][NB_VOICE_PARAMS];
-  struct dictionary_t *dict[NB_LANG][NB_DICT];
+  struct dictionary_t *dictionary_set[NB_LANG][NB_DICT_SET];
   //TODO  char* voice_name[NB_VOICES][ECI_VOICE_NAME_LENGTH+2]; // from eciSetVoiceName
 };
 
@@ -96,12 +97,11 @@ struct dictionary_t {
   // from eciNewDict
   struct engine_t *engine; // parent engine
   uint32_t handle; // eci dict handle
-  enum ECILanguageDialect lang;
+  uint32_t lang; // lang_id index
   // from eciLoadDict
-  char* filename;
-  enum ECIDictVolume volume;
+  char *filename[NB_DICT_VOLUME];
   // from eciSetDict
-  bool is_set; // 1 if eciSetDict applied, 0 otherwise
+  bool is_set;
 };
 
 #define ALLOCATED_MSG_LENGTH PIPE_MAX_BLOCK
@@ -1307,26 +1307,13 @@ ECIDictHand eciNewDict(ECIHand hEngine)
   if (api_lock(engine->api))
     return NULL_DICT_HAND;
 
-  msg_set_header(&header, MSG_NEW_DICT, engine->handle);
-  if (engine_send_command(engine, &header, NULL, &res) || !res)
-    goto exit0;
-
-  d = calloc(1, sizeof(*d));
-  d->handle = res;
-
-  if (api_set_birth(engine->api, &d->birth))
-    goto exit0;
-
   msg_set_header(&header, MSG_GET_PARAM, engine->handle);
   header.args.gp.Param = eciLanguageDialect;
   if (engine_send_command(engine, &header, NULL, &res) || !res)
     goto exit0;
 
-  d->lang = res;
-  d->id = DICTIONARY_ID;
-
   for (i=0; i<NB_LANG; i++) {
-    if (lang_id[i] == d->lang) {
+    if (lang_id[i] == res) {
       break;
     }
   }
@@ -1334,28 +1321,35 @@ ECIDictHand eciNewDict(ECIHand hEngine)
     err("unknown language!");
     goto exit0;
   }
+  
+  for (j=0; j<NB_DICT_SET; j++) {
+    if (!engine->dictionary_set[i][j]) {
+      dbg("empty slot found: engine->dictionary_set[%d][%d]", i, j);
+      msg_set_header(&header, MSG_NEW_DICT, engine->handle);
+      if (engine_send_command(engine, &header, NULL, &res) || !res)
+	goto exit0;
 
-  for (j=0; j<NB_DICT; j++) {
-    if (!engine->dict[i][j]) {
-      engine->dict[i][j] = d;
+      d = calloc(1, sizeof(*d));
+      d->lang = i;
+      d->handle = res;
       d->engine = engine;
-      dbg("empty slot found: engine->dict[%d][%d]=%p", i, j, d);
+      api_set_birth(engine->api, &d->birth);
+      d->id = DICTIONARY_ID;
+      
+      engine->dictionary_set[i][j] = d;
       break;
     }
   }
 
-  if (!d->engine) {
-    msg("no empty slot: engine->dict[%d] for %p", i, d);
+  if (j >= NB_DICT_SET) {
+    msg("no empty slot");
     goto exit0;
   }
 
-  eci_res = (ECIDictHand)d;
+  eci_res = (ECIDictHand)engine->dictionary_set[i][j];
 
  exit0:
     api_unlock(engine->api);
-    if ((eci_res == NULL_DICT_HAND) && d)
-      free(d);
-
     return eci_res;
 }
 
@@ -1381,10 +1375,10 @@ ECIDictHand eciGetDict(ECIHand hEngine)
     goto exit0;
 
   for (i=0; i<NB_LANG; i++) {
-    for (j=0; j<NB_DICT; j++) {
-      if (engine->dict[i][j] && (engine->dict[i][j]->handle == res)) {
-	eci_res = engine->dict[i][j];
-	dbg("slot found: engine->dict[%d][%d]=%p", i, j, eci_res);
+    for (j=0; j<NB_DICT_SET; j++) {
+      if (engine->dictionary_set[i][j] && (engine->dictionary_set[i][j]->handle == res)) {
+	eci_res = engine->dictionary_set[i][j];
+	dbg("slot found: engine->dictionary_set[%d][%d]=%p", i, j, eci_res);
 	break;
       }
     }
@@ -1401,7 +1395,8 @@ enum ECIDictError eciSetDict(ECIHand hEngine, ECIDictHand hDict)
   struct engine_t *engine = (struct engine_t *)hEngine;
   struct msg_t header;
   struct dictionary_t *d = (struct dictionary_t *)hDict;
-
+  int i,j;
+  
   ENTER();
 
   if (!IS_ENGINE(engine) || !IS_DICTIONARY(d)) {
@@ -1420,6 +1415,13 @@ enum ECIDictError eciSetDict(ECIHand hEngine, ECIDictHand hDict)
     goto exit0;
 
   d->is_set = true;
+
+  i = d->lang;
+  for (j=0; j<NB_DICT_SET; j++) {
+    if (engine->dictionary_set[i][j] && (engine->dictionary_set[i][j] != d)) {
+      engine->dictionary_set[i][j]->is_set = false;
+    }
+  }
 
  exit0:
   api_unlock(engine->api);
@@ -1449,18 +1451,18 @@ ECIDictHand eciDeleteDict(ECIHand hEngine, ECIDictHand hDict)
   if (engine_send_command(engine, &header, NULL, (int*)&eci_res) || eci_res)
     goto exit0;
 
-  for (i=0; i<NB_LANG; i++) {
-    for (j=0; j<NB_DICT; j++) {
-      if (engine->dict[i][j] && (engine->dict[i][j]->handle == d->handle)) {
-	engine->dict[i][j] = 0;
-	dbg("slot found: engine->dict[%d][%d]=%x", i, j, 0);
-	break;
-      }
+  i = d->lang;
+  for (j=0; j<NB_DICT_SET; j++) {
+    if (engine->dictionary_set[i][j] && (engine->dictionary_set[i][j] == d)) {
+      engine->dictionary_set[i][j] = NULL;
+      dbg("slot found: engine->dictionary_set[%d][%d]", i, j);
+      break;
     }
   }
 
   d->id = 0;
-  free(d->filename);
+  for (i=0; i<NB_DICT_VOLUME;i++)
+    free(d->filename[i]);
   free(d);
 
  exit0:
@@ -1497,19 +1499,14 @@ enum ECIDictError eciLoadDict(ECIHand hEngine, ECIDictHand hDict,
   if (api_lock(engine->api))
     return eci_res;
 
-  if (engine_send_command(engine, &header, pFilename, (int*)&eci_res))
+  if (engine_send_command(engine, &header, pFilename, (int*)&eci_res) || eci_res)
     goto exit0;
 
-  for (i=0; i<NB_LANG; i++) {
-    for (j=0; j<NB_DICT; j++) {
-      if (engine->dict[i][j] && (engine->dict[i][j]->handle == d->handle)) {
-	engine->dict[i][j]->filename = strdup(pFilename);
-	dbg("slot found: engine->dict[%d][%d]=%p", i, j, d);
-	break;
-      }
-    }
+  if (DictVol<NB_DICT_VOLUME) {
+    free(d->filename[DictVol]);
+    d->filename[DictVol] = strdup(pFilename);
   }
-
+    
  exit0:
   api_unlock(engine->api);
   return eci_res;
