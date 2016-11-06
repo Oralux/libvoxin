@@ -519,10 +519,59 @@ static int engine_restore(struct engine_t *engine)
     }
   }
 
-  // TODO restore dictionaries
-  
-  // TODO set expected default language
-  
+  for (i=0; i<NB_LANG; i++) {
+    bool lang_is_set = false;
+    for (j=0; j<NB_DICT_SET; j++) {
+      int k;
+      if (engine->dictionary_set[i][j]) {
+  	struct dictionary_t *d = engine->dictionary_set[i][j];
+
+  	if (!lang_is_set) {
+  	  msg_set_header(&header, MSG_SET_PARAM, engine->handle);
+  	  header.args.sp.Param = eciLanguageDialect;
+  	  header.args.sp.iValue = lang_id[d->lang];
+  	  if (api_send_command(engine->api, &header, NULL, &eci_res) || !eci_res)
+  	    goto exit0;
+  	  lang_is_set = true;
+  	}
+
+  	msg_set_header(&header, MSG_NEW_DICT, engine->handle);
+  	if (api_send_command(engine->api, &header, NULL, &eci_res) || !eci_res)
+  	  goto exit0;
+
+  	d->handle = eci_res;
+  	api_set_birth(engine->api, &d->birth);
+  	dbg("dictionary renewed: engine->dictionary_set[%d][%d]=%p", i, j, d);
+
+	for (k=0; k<NB_DICT_VOLUME; k++) {
+	  if (d->filename[k]) {
+	    msg_set_header(&header, MSG_LOAD_DICT, engine->handle);
+	    header.args.ld.hDict = d->handle;
+	    header.args.ld.DictVol = k;
+	    if (api_send_command(engine->api, &header, d->filename[k], (int*)&eci_res) || eci_res)
+	      goto exit0;
+	  }
+	}
+
+	if (d->is_set) {
+	  eci_res = DictInternalError;
+	  msg_set_header(&header, MSG_SET_DICT, engine->handle);
+	  header.args.sd.hDict = d->handle;
+	  if (api_send_command(engine->api, &header, NULL, (int*)&eci_res) || eci_res)
+	    goto exit0;
+	}
+      }
+    }
+  }
+
+  if (engine->param[eciLanguageDialect]) {
+    msg_set_header(&header, MSG_SET_PARAM, engine->handle);
+    header.args.sp.Param = eciLanguageDialect;
+    header.args.sp.iValue = *engine->param[eciLanguageDialect];
+    if (api_send_command(engine->api, &header, NULL, &eci_res))
+      goto exit0;
+  }
+
   // TODO filter
   // TODO engine->output_filename = pFilename;
 
@@ -1321,7 +1370,7 @@ ECIDictHand eciNewDict(ECIHand hEngine)
     err("unknown language!");
     goto exit0;
   }
-  
+
   for (j=0; j<NB_DICT_SET; j++) {
     if (!engine->dictionary_set[i][j]) {
       dbg("empty slot found: engine->dictionary_set[%d][%d]", i, j);
@@ -1335,7 +1384,7 @@ ECIDictHand eciNewDict(ECIHand hEngine)
       d->engine = engine;
       api_set_birth(engine->api, &d->birth);
       d->id = DICTIONARY_ID;
-      
+
       engine->dictionary_set[i][j] = d;
       break;
     }
@@ -1396,7 +1445,7 @@ enum ECIDictError eciSetDict(ECIHand hEngine, ECIDictHand hDict)
   struct msg_t header;
   struct dictionary_t *d = (struct dictionary_t *)hDict;
   int i,j;
-  
+
   ENTER();
 
   if (!IS_ENGINE(engine) || !IS_DICTIONARY(d)) {
@@ -1506,7 +1555,7 @@ enum ECIDictError eciLoadDict(ECIHand hEngine, ECIDictHand hDict,
     free(d->filename[DictVol]);
     d->filename[DictVol] = strdup(pFilename);
   }
-    
+
  exit0:
   api_unlock(engine->api);
   return eci_res;

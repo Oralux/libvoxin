@@ -1,5 +1,5 @@
 /*
-  recover from crash
+  recover from crash (one engine)
  */
 
 #include <stdlib.h>
@@ -24,18 +24,21 @@
 static short my_samples[MAX_SAMPLES];
 #define CRASH_SAVER "|"
 
-#define INDEX_FR 4
+#define INDEX_FR 5
+#define INDEX_EN 9
 
 static const char* quote[] = {
   "0. Crash in English: ",
   "1. WHO", // main1.dct
   "2. cae" CRASH_SAVER "sure ",
-  "3. WHO", // main1.dct
-  "4. Crash en Français: ",
-  "5. RAS", // main1-fr.dct
-  "3. wilhelmina", // main1.dct
-  "6. 10 000" CRASH_SAVER "EUR ",
-  "7. RAS", // main1-fr.dct
+  "3. wilhelmina", // root1.dct
+  "4. WHO", // main1.dct
+  "5. Crash en Français: ",
+  "6. RAS", // main1-fr.dct
+  "7. 10 000" CRASH_SAVER "EUR ",
+  "8. RAS", // main1-fr.dct
+  "9. Crash in English: ",
+  "10. WHO", // main1.dct
 };
 
 #define NB_OF_QUOTES (sizeof(quote)/sizeof(quote[0]))
@@ -93,6 +96,9 @@ int main(int argc, char** argv)
   if (eciLoadDict(handle, hDic1, eciMainDict, "main1.dct") != DictNoError)
     return __LINE__;
 
+  if (eciLoadDict(handle, hDic1, eciRootDict, "root1.dct") != DictNoError)
+    return __LINE__;
+  
   if (eciSetDict(handle, hDic1) != DictNoError)
     return __LINE__;
 
@@ -113,7 +119,7 @@ int main(int argc, char** argv)
 
   {
     iconv_t cd = iconv_open("ISO8859-1", "UTF8");
-    for (i=INDEX_FR; i<NB_OF_QUOTES; i++) {
+    for (i=INDEX_FR; i<INDEX_EN; i++) {
       size_t utf8_size = strlen(q[i]);
       size_t iso8859_1_size = 2*strlen(q[i]);
       char *iso8859_1_buf = calloc(1, iso8859_1_size);
@@ -127,28 +133,21 @@ int main(int argc, char** argv)
 
   for (i=0; i<NB_OF_QUOTES; i++) {
     if (i==INDEX_FR) {
-      int res;
-      ECIDictHand hDic2;
-
-      //      eciSetParam(handle, eciLanguageDialect, eciStandardFrench);
-
-      hDic2 = eciNewDict(handle);
-      if (!hDic2)
-	return __LINE__;
-
-      res = eciLoadDict(handle, hDic2, eciMainDict, "main1-fr.dct");
-      if (res != DictNoError)
-	return __LINE__;
-
-      if (eciSetDict(handle, hDic2) != DictNoError)
-	return __LINE__;
-
-
-      if (eciLoadDict(handle, hDic2, eciRootDict, "root1.dct") != DictNoError)
+      ECIDictHand hDic1;
+      eciSetParam(handle, eciLanguageDialect, eciStandardFrench);
+      hDic1 = eciNewDict(handle);
+      if (!hDic1)
       	return __LINE__;
+      if (eciLoadDict(handle, hDic1, eciMainDict, "main1-fr.dct") != DictNoError)
+	return __LINE__;
+      if (eciSetDict(handle, hDic1) != DictNoError)
+      	return __LINE__;
+    }
 
-
-      
+    if (i==INDEX_EN) {
+      eciSetParam(handle, eciLanguageDialect, eciGeneralAmericanEnglish);
+      if (eciSetDict(handle, hDic1) != DictNoError)
+      	return __LINE__;
     }
 
     eciAddText(handle, q[i]);
