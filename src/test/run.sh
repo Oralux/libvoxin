@@ -9,7 +9,7 @@ fi
 
 TEST_NUMBER=$1
 
-rm -f /tmp/libvoxin.log*
+rm -f /tmp/libvoxin.log* /tmp/test_libvoxin*wav /tmp/test_libvoxin*raw
 echo 2 > /tmp/libvoxin.ok
 cd ../../build/rfs/usr/bin
 ln -sf test$TEST_NUMBER client

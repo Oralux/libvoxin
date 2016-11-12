@@ -278,6 +278,16 @@ int libvoxin_call_tts(libvoxin_handle_t i, struct msg_t *msg)
   }
   
  exit0:
+  switch(res) {
+  case ECONNREFUSED:
+  case ENOTCONN:
+    dbg("broken pipe (no msg exit)");
+    p->child = 0;
+    res = ECHILD;
+    break;
+  default:
+    break;
+  }
   dbg("LEAVE(res=0x%x)",res);  
   return res;
 }

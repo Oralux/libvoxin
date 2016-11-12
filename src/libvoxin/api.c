@@ -572,13 +572,26 @@ static int engine_restore(struct engine_t *engine)
       goto exit0;
   }
 
+  if (engine->output_filename) {
+    msg_set_header(&header, MSG_SET_OUTPUT_FILENAME, engine->handle);
+    if (api_send_command(engine->api, &header, engine->output_filename, &eci_res) || !eci_res)
+      goto exit0;
+  }
+
   // TODO filter
-  // TODO engine->output_filename = pFilename;
+
+  msg_set_header(&header, MSG_ADD_TEXT, engine->handle);
+  if (api_send_command(engine->api, &header, " Voxin: OK! ", &eci_res) || !eci_res)
+    goto exit0;
+
+  msg_set_header(&header, MSG_SYNTHESIZE, engine->handle);
+  if (api_send_command(engine->api, &header, NULL, &eci_res) || !eci_res)
+    goto exit0;
 
   res = 0;
-
+  
  exit0:
-  LEAVE();
+  dbg("LEAVE, res=%d", res);
   return res;
 }
 
@@ -722,12 +735,15 @@ static Boolean synchronize(struct engine_t *engine, enum msg_type type)
 
   api = engine->api;
 
-  res = pthread_mutex_lock(&api->api_mutex);
-  if (res) {
-    err("LEAVE, api_mutex error l (%d)", res);
+  if (api_lock(api))
     return eci_res;
+  
+  if (!IS_OBJECT_VALID(api, engine->birth)) {
+    res = engine_restore(engine);
+    if (res)
+      goto exit0;
   }
-
+  
   m = api->msg;
   c = m->count;
   msg_set_header(m, type, engine->handle);
@@ -775,12 +791,11 @@ static Boolean synchronize(struct engine_t *engine, enum msg_type type)
     eci_res =  m->res;
   } else if (res == ECHILD) {
     api->child_birth = NO_BIRTH;
+  } else {
+    err("res=%d!", res);
   }
 
-  res = pthread_mutex_unlock(&api->api_mutex);
-  if (res) {
-    err("api_mutex error u (%d)", res);
-  }
+  api_unlock(api);
 
   dbg("LEAVE(eci_res=0x%x)",eci_res);
   return eci_res;
@@ -822,7 +837,8 @@ ECIHand eciDelete(ECIHand hEngine)
     goto exit0;
 
   if (!IS_OBJECT_VALID(engine->api, engine->birth)) {
-    err("engine invalid");
+    dbg("engine invalid (implicitly deleted)");
+    eci_res = NULL_ECI_HAND;
     goto exit0;
   }
 

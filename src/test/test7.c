@@ -12,11 +12,17 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <time.h>
 #include <errno.h>
 #include <string.h>
 #include "eci.h"
 
-#define PATHNAME_RAW_DATA "/tmp/test_libvoxin.raw"
+enum lang_t {ENGLISH, FRENCH, MAX_LANG};
+static const char *pathname[MAX_LANG] = {"/tmp/test_libvoxin_en.raw", "/tmp/test_libvoxin_fr.raw"};
+static ECIHand handle[MAX_LANG];
+static const enum ECILanguageDialect lang[MAX_LANG] = {eciGeneralAmericanEnglish, eciStandardFrench};
+
+#define ONE_MILLISECOND_IN_NANOSECOND 1000000 
 #define TEST_DBG "/tmp/test_libvoxin.dbg"
 
 //#define MAX_SAMPLES 20000
@@ -55,13 +61,34 @@ enum ECICallbackReturn my_client_callback(ECIHand hEngine, enum ECIMessage Msg, 
   return eciDataProcessed;
 }
 
+
+static void speak(ECIHand handle) {
+  struct timespec req;
+  req.tv_sec=0;
+  req.tv_nsec=ONE_MILLISECOND_IN_NANOSECOND;
+  
+  while(eciSpeaking(handle) == ECIFalse)
+    nanosleep(&req, NULL);
+  
+  eciPause(handle, ECITrue);
+  sleep(1);
+  eciPause(handle, ECIFalse);
+  
+  while(eciSpeaking(handle) == ECITrue)
+    nanosleep(&req, NULL);  
+}
+
+
 int main(int argc, char** argv)
 {
   uint8_t *buf;
   size_t len;
   int i;
   char** q = malloc(sizeof(quote));
-
+  ECIHand handle[MAX_LANG];
+  ECIDictHand hDic1[MAX_LANG];
+  int fd;
+  
   {
     struct stat buf;
     while (!stat(TEST_DBG, &buf)) {
@@ -73,35 +100,42 @@ int main(int argc, char** argv)
     q[i] = strdup(quote[i]);
   }
 
-  ECIHand handle = eciNew();
-  if (!handle)
+  handle[0] = eciNew();
+  if (!handle[0])
     return __LINE__;
-
-  int fd = creat(PATHNAME_RAW_DATA, S_IRUSR|S_IWUSR);
+  fd = creat(pathname[ENGLISH], S_IRUSR|S_IWUSR);
   if (fd==-1)
     return __LINE__;
-
-  eciRegisterCallback(handle, my_client_callback, (char*)NULL + fd);
-
-  if (eciSetOutputBuffer(handle, MAX_SAMPLES, my_samples) == ECIFalse)
+  eciRegisterCallback(handle[0], my_client_callback, (char*)NULL + fd);
+  if (eciSetOutputBuffer(handle[0], MAX_SAMPLES, my_samples) == ECIFalse)
+    return __LINE__;
+  if (eciSetVoiceParam(handle[0], 0, eciSpeed, 70) < 0)
+    return __LINE__;
+  hDic1[0] = eciNewDict(handle[0]);
+  if (!hDic1[0])
+    return __LINE__;
+  if (eciLoadDict(handle[0], hDic1[0], eciMainDict, "main1.dct") != DictNoError)
+    return __LINE__;
+  if (eciLoadDict(handle[0], hDic1[0], eciRootDict, "root1.dct") != DictNoError)
+    return __LINE__;
+  if (eciSetDict(handle[0], hDic1[0]) != DictNoError)
     return __LINE__;
 
-  if (eciSetVoiceParam(handle, 0, eciSpeed, 70) < 0)
+  handle[1] = eciNewEx(eciStandardFrench);
+  if (!handle[1])
+    return __LINE__;
+  if (eciSetOutputFilename(handle[1], pathname[FRENCH]) == ECIFalse)
+    return __LINE__;
+  if (eciSetVoiceParam(handle[1], 0, eciSpeed, 70) < 0)
+    return __LINE__;
+  hDic1[1] = eciNewDict(handle[1]);
+  if (!hDic1[1])
+    return __LINE__;
+  if (eciLoadDict(handle[1], hDic1[1], eciMainDict, "main1-fr.dct") != DictNoError)
+    return __LINE__;
+  if (eciSetDict(handle[1], hDic1[1]) != DictNoError)
     return __LINE__;
   
-  ECIDictHand hDic1 = eciNewDict(handle);
-  if (!hDic1)
-    return __LINE__;
-
-  if (eciLoadDict(handle, hDic1, eciMainDict, "main1.dct") != DictNoError)
-    return __LINE__;
-
-  if (eciLoadDict(handle, hDic1, eciRootDict, "root1.dct") != DictNoError)
-    return __LINE__;
-  
-  if (eciSetDict(handle, hDic1) != DictNoError)
-    return __LINE__;
-
   for (i=0; i<NB_OF_QUOTES; i++) {
     char *s = q[i];
     int lq = strlen(s);
@@ -133,29 +167,37 @@ int main(int argc, char** argv)
 
   for (i=0; i<NB_OF_QUOTES; i++) {
     if (i==INDEX_FR) {
-      ECIDictHand hDic1;
-      eciSetParam(handle, eciLanguageDialect, eciStandardFrench);
-      hDic1 = eciNewDict(handle);
-      if (!hDic1)
+      ECIDictHand hDic1[0];
+      eciSetParam(handle[0], eciLanguageDialect, eciStandardFrench);
+      hDic1[0] = eciNewDict(handle[0]);
+      if (!hDic1[0])
       	return __LINE__;
-      if (eciLoadDict(handle, hDic1, eciMainDict, "main1-fr.dct") != DictNoError)
+      if (eciLoadDict(handle[0], hDic1[0], eciMainDict, "main1-fr.dct") != DictNoError)
 	return __LINE__;
-      if (eciSetDict(handle, hDic1) != DictNoError)
+      if (eciSetDict(handle[0], hDic1[0]) != DictNoError)
       	return __LINE__;
     }
 
     if (i==INDEX_EN) {
-      eciSetParam(handle, eciLanguageDialect, eciGeneralAmericanEnglish);
-      if (eciSetDict(handle, hDic1) != DictNoError)
+      eciSetParam(handle[0], eciLanguageDialect, eciGeneralAmericanEnglish);
+      if (eciSetDict(handle[0], hDic1[0]) != DictNoError)
       	return __LINE__;
     }
 
-    eciAddText(handle, q[i]);
-    eciSynthesize(handle);
-    eciSynchronize(handle);
+    eciAddText(handle[0], q[i]);
+    eciSynthesize(handle[0]);
+    eciSynchronize(handle[0]);
   }
 
-  if (eciDelete(handle) != NULL)
+  for (i=INDEX_FR; i<INDEX_EN; i++) {
+    eciAddText(handle[1], q[i]);
+    eciSynthesize(handle[1]);
+    speak(handle[1]);
+  }  
+  if (eciDelete(handle[1]) != NULL)
+    return __LINE__;
+
+  if (eciDelete(handle[0]) != NULL)
     return __LINE__;
 
  exit0:
