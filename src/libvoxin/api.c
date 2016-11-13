@@ -343,7 +343,7 @@ static int api_send_command(struct api_t* api, struct msg_t *header, const char*
     if (res)
       goto exit0;
   }
-  api->msg->allocated_data_length = ALLOCATED_MSG_LENGTH;
+  api->msg->allocated_data_length = ALLOCATED_MSG_LENGTH - MSG_HEADER_LENGTH;
 
   res = libvoxin_call_tts(api->my_instance, api->msg);
 
@@ -748,7 +748,7 @@ static Boolean synchronize(struct engine_t *engine, enum msg_type type)
   c = m->count;
   msg_set_header(m, type, engine->handle);
   m->count = c;
-  m->allocated_data_length = ALLOCATED_MSG_LENGTH;
+  m->allocated_data_length = ALLOCATED_MSG_LENGTH - MSG_HEADER_LENGTH;
   res = libvoxin_call_tts(api->my_instance, m);
   if (res)
     goto exit0;
@@ -780,7 +780,7 @@ static Boolean synchronize(struct engine_t *engine, enum msg_type type)
     }
 
     m->id = MSG_TO_ECI_ID;
-    m->allocated_data_length = ALLOCATED_MSG_LENGTH;
+    m->allocated_data_length = ALLOCATED_MSG_LENGTH - MSG_HEADER_LENGTH;
     res = libvoxin_call_tts(api->my_instance, m);
     if (res)
       goto exit0;
@@ -824,6 +824,7 @@ ECIHand eciDelete(ECIHand hEngine)
   ECIHand eci_res = hEngine;
   struct api_t *api;
   struct msg_t header;
+  int res = 0;
 
   ENTER();
 
@@ -833,14 +834,27 @@ ECIHand eciDelete(ECIHand hEngine)
   }
 
   api = engine->api;
-  if (api_lock(engine->api))
-    goto exit0;
-
-  if (!IS_OBJECT_VALID(engine->api, engine->birth)) {
-    dbg("engine invalid (implicitly deleted)");
-    eci_res = NULL_ECI_HAND;
+  if (!api || !api->my_instance) {
+    err("api error");
     goto exit0;
   }
+
+  res = pthread_mutex_lock(&api->api_mutex);
+  if (res) {
+    err("LEAVE, api_mutex error l (%d)", res);
+    goto exit0;
+  }  
+  if (!IS_OBJECT_VALID(engine->api, engine->birth)) {
+    dbg("engine invalid (implicitly deleted)");
+    engine_delete(engine);
+    eci_res = NULL_ECI_HAND;
+    pthread_mutex_unlock(&api->api_mutex);
+    goto exit0;
+  }
+  pthread_mutex_unlock(&api->api_mutex);
+
+  if (api_lock(engine->api))
+    goto exit0;
 
   msg_set_header(&header, MSG_DELETE, engine->handle);
   if (!engine_send_command(engine, &header, NULL, (int*)&eci_res) && !eci_res) {
@@ -858,7 +872,7 @@ void eciRegisterCallback(ECIHand hEngine, ECICallback Callback, void *pData)
 {
   struct engine_t *engine = (struct engine_t *)hEngine;
   struct msg_t header;
-
+  
   ENTER();
 
   if (!IS_ENGINE(engine)) {
@@ -1513,7 +1527,9 @@ ECIDictHand eciDeleteDict(ECIHand hEngine, ECIDictHand hDict)
   if (api_lock(engine->api))
     return eci_res;
 
-  if (engine_send_command(engine, &header, NULL, (int*)&eci_res) || eci_res)
+  if (IS_OBJECT_VALID(engine->api, engine->birth)
+      &&  (engine_send_command(engine, &header, NULL, (int*)&eci_res)
+	   || eci_res))
     goto exit0;
 
   i = d->lang;

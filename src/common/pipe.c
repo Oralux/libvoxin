@@ -71,7 +71,7 @@ int pipe_create(struct pipe_t **px)
     goto exit0;
   }
 
-  (*px)->ind = PIPE_SOCKET_PARENT;
+  (*px)->ind = PIPE_SOCKET_PARENT_INDEX;
 
  exit0:
   if (res) {

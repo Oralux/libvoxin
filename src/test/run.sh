@@ -2,11 +2,26 @@
 
 NBARGS=$#
 
-if [ "$NBARGS" != "1" ]; then
-    echo "usage: $0 <test_number>"
-    exit 1
-fi
+usage() {
+    echo "usage: $1 <test_number> [-g|-v]"
+    echo "-g: gdb"
+    echo "-v: valgrind"
+}
 
+unset cmd
+while getopts :gv opt; do
+      case $opt in
+	  g) cmd=gdb;;
+	  v) cmd="valgrind -v --leak-check=full";;
+	  *)
+	      echo -e "usage: $0 [-g|-v] <test_number>\n" \
+		   "\t-g: gdb\n" \
+		   "\t-v: valgrind"
+	      exit 1;;
+      esac
+done
+
+shift $(($OPTIND - 1))
 TEST_NUMBER=$1
 
 rm -f /tmp/libvoxin.log* /tmp/test_libvoxin*wav /tmp/test_libvoxin*raw
@@ -15,10 +30,9 @@ cd ../../build/rfs/usr/bin
 ln -sf test$TEST_NUMBER client
 export LD_LIBRARY_PATH=../lib/x86_64-linux-gnu
 export PATH=.:$PATH
-./client
+$cmd ./test$TEST_NUMBER
 RES=$?
 if [ "$RES" = "0" ]; then
-    # sox -r 11025 -e signed -b 16 -c 1 /tmp/test_libvoxin.raw /tmp/test_libvoxin.wav; aplay /tmp/test_libvoxin.wav
     echo -e "$TEST_NUMBER\t[OK]"
 else
     echo -e "$TEST_NUMBER\t[KO] ($RES)"

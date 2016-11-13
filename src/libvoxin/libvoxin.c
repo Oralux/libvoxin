@@ -152,7 +152,7 @@ static int daemon_start(struct libvoxin_t *this)
     if (getppid() != parent_pid) {
       exit(0);
     }
-    pipe_close(this->pipe_command, PIPE_SOCKET_PARENT);
+    pipe_close(this->pipe_command, PIPE_SOCKET_PARENT_INDEX);
     exit(child(this));
     
     break;
