@@ -288,7 +288,8 @@ static int api_lock(struct api_t *api)
 	header.args.sp.Param = i;
 	header.args.sp.iValue = *(api->default_param[i]);
 	dbg("set default_param[%d]: %d", i, *(api->default_param[i]));
-	if (api_send_command(api, &header, NULL, &eci_res) || !eci_res)
+	res = api_send_command(api, &header, NULL, &eci_res);
+	if (res || !eci_res)
 	  goto exit0;
       }
     }
@@ -791,6 +792,7 @@ static Boolean synchronize(struct engine_t *engine, enum msg_type type)
     eci_res =  m->res;
   } else if (res == ECHILD) {
     api->child_birth = NO_BIRTH;
+    eci_res = ECITrue;
   } else {
     err("res=%d!", res);
   }
