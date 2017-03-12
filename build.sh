@@ -77,13 +77,19 @@ fi
 if [ -n "$LIBVOXIN" ]; then
 	if [ "$ARCH" = "i386" ]; then
 		CFLAGS="-m32 $DBG_FLAGS"
+		CXXFLAGS="-m32 $DBG_FLAGS"
 		LDFLAGS=-m32
 		LIB=$LIB32
 	else
 		CFLAGS="$DBG_FLAGS $RFS32"
+		CXXFLAGS="$DBG_FLAGS $RFS32"
 		LDFLAGS=
 		LIB=$LIB64
 	fi
+	echo "Entering puncfilter"
+	cd $BASE/src/puncfilter
+	make clean
+	LIBDIR=$LIB CFLAGS="$CFLAGS" LDFLAGS=$LDFLAGS make all
 	echo "Entering libvoxin"
 	cd $BASE/src/libvoxin
 	make clean

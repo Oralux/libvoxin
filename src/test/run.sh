@@ -12,7 +12,7 @@ unset cmd
 while getopts :gv opt; do
       case $opt in
 	  g) cmd=gdb;;
-	  v) cmd="valgrind -v --leak-check=full";;
+	  v) cmd="valgrind -v --leak-check=full --show-leak-kinds=all --track-origins=yes";;
 	  *)
 	      echo -e "usage: $0 [-g|-v] <test_number>\n" \
 		   "\t-g: gdb\n" \

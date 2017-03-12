@@ -1,7 +1,6 @@
 /*
   eciSynchronize
  */
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -36,15 +35,19 @@ const char* vh_quote = "So long as there shall exist, by virtue of law and custo
   " "
   "HAUTEVILLE HOUSE, 1862.";
 
+typedef struct {
+  int fd;
+} data_cb_t;
 
+static data_cb_t data_cb;
 
 enum ECICallbackReturn my_client_callback(ECIHand hEngine, enum ECIMessage Msg, long lParam, void *pData)
 {
-  int fd = pData - (void*)NULL;
+  data_cb_t *data_cb = (data_cb_t *)pData;
 
-  if (Msg == eciWaveformBuffer)
+  if (data_cb && (Msg == eciWaveformBuffer))
     {
-      ssize_t len = write(fd, my_samples, 2*lParam);
+      ssize_t len = write(data_cb->fd, my_samples, 2*lParam);
     }
   return eciDataProcessed;
 }
@@ -53,7 +56,7 @@ int main(int argc, char** argv)
 {
   uint8_t *buf;
   size_t len;
-
+  
   {
     struct stat buf;
     while (!stat(TEST_DBG, &buf)) {
@@ -66,11 +69,11 @@ int main(int argc, char** argv)
   if (!handle)
     return __LINE__;
 
-  int fd = creat(PATHNAME_RAW_DATA, S_IRUSR|S_IWUSR);
-  if (fd==-1)
+  data_cb.fd = creat(PATHNAME_RAW_DATA, S_IRUSR|S_IWUSR);
+  if (data_cb.fd == -1)
     return __LINE__;
 
-  eciRegisterCallback(handle, my_client_callback, (char*)NULL + fd);
+  eciRegisterCallback(handle, my_client_callback, &data_cb);
 
   if (eciSetOutputBuffer(handle, MAX_SAMPLES, my_samples) == ECIFalse)
     return __LINE__;
