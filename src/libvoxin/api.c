@@ -1,3 +1,7 @@
+#include "puncfilter.h"
+
+extern "C" {
+
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
@@ -9,6 +13,9 @@
 #include "conf.h"
 #include "libvoxin.h"
 #include "msg.h"
+
+#define FILTER_SSML 1
+#define FILTER_PUNC 2
 
 #define ENGINE_ID 0x020A0005
 #define IS_ENGINE(e) (e && (e->id == ENGINE_ID) && e->handle && e->api)
@@ -22,6 +29,10 @@ struct engine_t {
   int16_t *samples; // user samples buffer
   uint32_t nb_samples; // current number of samples in the user sample buffer
   uint32_t stop_required;
+  // from eciAddText
+  uint32_t text_count;
+  uint32_t filters;
+  void *punc;
 };
 
 #define ALLOCATED_MSG_LENGTH PIPE_MAX_BLOCK
@@ -64,7 +75,7 @@ static int api_create(struct api_t *api) {
   }
 
   BUILD_ASSERT(PIPE_MAX_BLOCK > MSG_HEADER_LENGTH);
-  api->msg = calloc(1, PIPE_MAX_BLOCK);
+  api->msg = (msg_t*)calloc(1, PIPE_MAX_BLOCK);  
   if (!api->msg) {
 	res = errno;
 	goto exit0;
@@ -123,7 +134,7 @@ static int msg_copy_data(struct msg_t *msg, const char *text)
     return EINVAL;
   }
 
-  c = memccpy(msg->data, text, 0, ALLOCATED_MSG_LENGTH - MSG_HEADER_LENGTH - 1);
+  c = (char*)memccpy(msg->data, text, 0, ALLOCATED_MSG_LENGTH - MSG_HEADER_LENGTH - 1);
   if (c == NULL) {
     err("LEAVE, args error");
     return EINVAL;
@@ -246,7 +257,7 @@ static struct engine_t *engine_create(uint32_t handle, struct api_t *api)
   
   ENTER();
 
-  engine = calloc(1, sizeof(*engine));
+  engine = (engine_t*)calloc(1, sizeof(*engine));
   if (engine) {
 	engine->id = ENGINE_ID;
 	engine->handle = handle;
@@ -269,6 +280,8 @@ static struct engine_t *engine_delete(struct engine_t *engine)
   if (!engine)
 	return NULL;
 
+  puncfilter_delete(engine->punc);
+  
   memset(engine, 0, sizeof(*engine));
   free(engine);
   engine = NULL;
@@ -309,8 +322,8 @@ Boolean eciSetOutputBuffer(ECIHand hEngine, int iSize, short *psBuffer)
   struct msg_t header;
   struct api_t *api;
   
-  ENTER();
-
+  dbg("ENTER(%p,%d,%p)", hEngine, iSize, psBuffer);
+ 
   if (!IS_ENGINE(engine)) {
     err("LEAVE, args error");
     return eci_res;
@@ -350,7 +363,7 @@ Boolean eciSetOutputFilename(ECIHand hEngine, const void *pFilename)
   }
 
   msg_set_header(&header, MSG_SET_OUTPUT_FILENAME, engine->handle);
-  process_func1(engine->api, &header, pFilename, &eci_res, true, true);
+  process_func1(engine->api, &header, (const char*)pFilename, &eci_res, true, true);
   return eci_res;
 }
 
@@ -360,15 +373,40 @@ Boolean eciAddText(ECIHand hEngine, ECIInputText pText)
   Boolean eci_res = ECIFalse;
   struct engine_t *engine = (struct engine_t *)hEngine;
   struct msg_t header;
-  ENTER();
+  const char *filteredText = (const char *)pText;
+  dbg("ENTER(%p,%p)", hEngine, pText);
 
   if (!IS_ENGINE(engine)) {
     err("LEAVE, args error");
     return ECIFalse;
   }
-
+  
+  engine->text_count++;
+  // TODO locales
+  if ((engine->text_count <= 2) && (!strncmp((const char *)pText, " `gfa", 5))) {
+	char *c = (char*)pText + 5; 
+	switch(*c) {
+	case '1':
+	  dbg("Filter SSML");
+	  engine->filters |= FILTER_SSML;
+	  break;
+	case '2':
+	  dbg("Filter PUNC");
+	  engine->filters |= FILTER_PUNC;
+	  engine->punc = puncfilter_create();
+	  return ECITrue;
+	default:
+	  break;
+	}
+  }
+  
+  if (engine->punc) {
+	puncfilter_do(engine->punc, (const char*)pText, &filteredText);
+  }
+  
   msg_set_header(&header, MSG_ADD_TEXT, engine->handle);
-  process_func1(engine->api, &header, pText, &eci_res, true, true);
+  process_func1(engine->api, &header, filteredText, &eci_res, true, true);
+
   return eci_res;
 }
 
@@ -378,7 +416,7 @@ Boolean eciSynthesize(ECIHand hEngine)
   Boolean eci_res = ECIFalse;
   struct engine_t *engine = (struct engine_t *)hEngine;
   struct msg_t header;
-  ENTER();
+  dbg("ENTER(%p)", hEngine);  
 
   if (!IS_ENGINE(engine)) {
     err("LEAVE, args error");
@@ -428,14 +466,17 @@ static Boolean synchronize(struct engine_t *engine, enum msg_type type)
       break;
 
     m->res = eciDataAbort;
-    if (engine->cb && engine->samples && (m->effective_data_length <= 2*engine->nb_samples)) {
-      ECICallback cb = engine->cb;
-      enum ECIMessage Msg = m->func - MSG_CB_WAVEFORM_BUFFER + eciWaveformBuffer;
-      dbg("call user callback, handle=0x%x, msg=%s, #samples=%d", engine->handle, msg_string(m->func), m->effective_data_length/2);
+    if (engine->cb && engine->samples
+		&& (m->effective_data_length <= 2*engine->nb_samples)) {
+	  ECICallback cb = (ECICallback)engine->cb;
+	  enum ECIMessage Msg = (enum ECIMessage)(m->func - MSG_CB_WAVEFORM_BUFFER + eciWaveformBuffer);
+      dbg("call user callback, handle=0x%x, msg=%s, #samples=%d",
+		  engine->handle, msg_string((msg_type)(m->func)), m->effective_data_length/2);	  
       memcpy(engine->samples, m->data, m->effective_data_length);
       m->res = (enum ECICallbackReturn)cb((ECIHand)((char*)NULL+engine->handle), Msg, m->effective_data_length/2, engine->data_cb);
     } else {
-      err("error callback, handle=0x%x, msg=%s, #samples=%d", engine->handle, msg_string(m->func), m->effective_data_length/2);
+      err("error callback, handle=0x%x, msg=%s, #samples=%d",
+		  engine->handle, msg_string((msg_type)(m->func)), m->effective_data_length/2);
     }
 
     dbg("res user callback=%d", m->res);
@@ -473,9 +514,9 @@ Boolean eciSynchronize(ECIHand hEngine)
   struct api_t *api;
   int res;
   
-  ENTER();
+  dbg("ENTER(%p)", hEngine);
 
-  eci_res = synchronize(hEngine, MSG_SYNCHRONIZE);
+  eci_res = synchronize(engine, MSG_SYNCHRONIZE);
   
   LEAVE();
   return eci_res;
@@ -485,32 +526,34 @@ Boolean eciSynchronize(ECIHand hEngine)
 ECIHand eciDelete(ECIHand hEngine)
 {
   struct engine_t *engine = (struct engine_t *)hEngine;
-  ECIHand eci_res = hEngine;
+  ECIHand handle = hEngine;
+  int eci_res;
   struct api_t *api;
   struct msg_t header;
   int res;
     
-  ENTER();
+  dbg("ENTER(%p)", hEngine);
 
   if (!IS_ENGINE(engine)) {
     err("LEAVE, args error");
-    return hEngine;
+    return handle;
   }
 
   api = engine->api;
   if (api_lock(api))
-	return eci_res;
+	return handle;
 
   msg_set_header(&header, MSG_DELETE, engine->handle);
   if (!process_func1(engine->api, &header, NULL, (int*)&eci_res, false, false)) {
 	if (eci_res == NULL_ECI_HAND) {
-	  eci_res = engine_delete(engine);
+	  engine_delete(engine);
+	  handle = NULL_ECI_HAND;
 	}
 	api_unlock(api);
   }
   
   LEAVE();
-  return eci_res;
+  return handle;
 }
 
 
@@ -519,8 +562,8 @@ void eciRegisterCallback(ECIHand hEngine, ECICallback Callback, void *pData)
   struct engine_t *engine = (struct engine_t *)hEngine;
   struct msg_t header;
    
-  ENTER();
-
+  dbg("ENTER(%p,%p,%p)", hEngine, Callback, pData);
+  
   if (!IS_ENGINE(engine)) {
     err("LEAVE, args error");
     return;
@@ -546,9 +589,9 @@ Boolean eciSpeaking(ECIHand hEngine)
   int res;
   struct api_t *api;
   
-  ENTER();
+  dbg("ENTER(%p)", hEngine);  
 
-  eci_res = synchronize(hEngine, MSG_SPEAKING);
+  eci_res = synchronize(engine, MSG_SPEAKING);  
 
   LEAVE();
   return eci_res;
@@ -603,7 +646,7 @@ int eciGetAvailableLanguages(enum ECILanguageDialect *aLanguages, int *nLanguage
   struct msg_t header;
   struct api_t *api = &my_api;
    
-  ENTER();
+  dbg("ENTER(%p,%p)", aLanguages, nLanguages);  
 
   if (!aLanguages || !nLanguages) {
     err("LEAVE, args error");
@@ -619,7 +662,7 @@ int eciGetAvailableLanguages(enum ECILanguageDialect *aLanguages, int *nLanguage
       eci_res =  0;
       *nLanguages = lang->nb;
       for (i=0; i<lang->nb; i++) {
-		aLanguages[i] = lang->languages[i];
+		aLanguages[i] = (ECILanguageDialect)(lang->languages[i]);
 		msg("lang[%d]=0x%x", i, aLanguages[i]);
       }
     }	
@@ -636,8 +679,8 @@ ECIHand eciNewEx(enum ECILanguageDialect Value)
   struct msg_t header;
   struct api_t *api = &my_api;
  
-  ENTER();
-
+  dbg("ENTER(%d)", Value);
+	
   if (msg_set_header(&header, MSG_NEW_EX, 0))
 	return NULL;
 
@@ -682,7 +725,7 @@ int eciSetDefaultParam(enum ECIParam parameter, int value)
   struct api_t *api = &my_api;
   struct msg_t header;
    
-  ENTER();
+  dbg("ENTER(%d,%d)", parameter, value);  
 
   msg_set_header(&header, MSG_SET_DEFAULT_PARAM, 0);
   header.args.sp.Param = parameter;
@@ -699,7 +742,7 @@ int eciGetParam(ECIHand hEngine, enum ECIParam Param)
   struct api_t *api;
   int res = 0;  
    
-  ENTER();
+  dbg("ENTER(%d)", Param);  
 
   if (!IS_ENGINE(engine)) {
     err("LEAVE, args error");
@@ -720,7 +763,7 @@ int eciGetDefaultParam(enum ECIParam parameter)
   struct msg_t header;
   struct api_t *api = &my_api;
    
-  ENTER();
+  dbg("ENTER(%d)", parameter);  
 
   msg_set_header(&header, MSG_GET_DEFAULT_PARAM, 0);
   process_func1(api, &header, NULL, &eci_res, true, true);
@@ -737,8 +780,8 @@ void eciErrorMessage(ECIHand hEngine, void *buffer)
   struct api_t *api;
 
   ENTER();
-
-   if (!buffer) {
+  
+  if (!buffer) {
      err("LEAVE, args error 0");     
      return;
    }
@@ -767,7 +810,8 @@ int eciProgStatus(ECIHand hEngine)
   int eci_res = ECI_SYSTEMERROR;
   struct engine_t *engine = (struct engine_t *)hEngine;
   struct msg_t header;
-  ENTER();
+
+  dbg("ENTER(%p)", hEngine);  
 
   if (!IS_ENGINE(engine)) {
     err("LEAVE, args error");
@@ -784,7 +828,9 @@ void eciClearErrors(ECIHand hEngine)
 {
   struct engine_t *engine = (struct engine_t *)hEngine;
   struct msg_t header;
-  ENTER();
+
+  dbg("ENTER(%p)", hEngine);  
+
   if (!IS_ENGINE(engine)) {
     err("LEAVE, args error");
     return;
@@ -798,7 +844,9 @@ Boolean eciReset(ECIHand hEngine)
   Boolean eci_res = ECIFalse;
   struct engine_t *engine = (struct engine_t *)hEngine;
   struct msg_t header;
-  ENTER();
+
+  dbg("ENTER(%p)", hEngine);
+	
   if (!IS_ENGINE(engine)) {
     err("LEAVE, args error");
     return ECIFalse;
@@ -840,7 +888,7 @@ int eciGetVoiceParam(ECIHand hEngine, int iVoice, enum ECIVoiceParam Param)
   struct engine_t *engine = (struct engine_t *)hEngine;
   struct msg_t header;
    
-  ENTER();
+  dbg("ENTER(%p,%d,%d)", hEngine, iVoice, Param);  
 
   if (!IS_ENGINE(engine)) {
     err("LEAVE, args error");
@@ -861,7 +909,7 @@ int eciSetVoiceParam(ECIHand hEngine, int iVoice, enum ECIVoiceParam Param, int 
   struct engine_t *engine = (struct engine_t *)hEngine;
   struct msg_t header;
    
-  ENTER();
+  dbg("ENTER(%p,%d,%d,%d)", hEngine, iVoice, Param, iValue);  
   
   if (!IS_ENGINE(engine)) {
     err("LEAVE, args error");
@@ -883,7 +931,7 @@ Boolean eciPause(ECIHand hEngine, Boolean On)
   struct engine_t *engine = (struct engine_t *)hEngine;
   struct msg_t header;
   
-  ENTER();
+  dbg("ENTER(%p,%d)", hEngine, On);  
 
   if (!IS_ENGINE(engine)) {
     err("LEAVE, args error");
@@ -903,7 +951,7 @@ Boolean eciInsertIndex(ECIHand hEngine, int iIndex)
   struct engine_t *engine = (struct engine_t *)hEngine;
   struct msg_t header;
    
-  ENTER();
+  dbg("ENTER(%p,%d)", hEngine, iIndex);  
 
   if (!IS_ENGINE(engine)) {
     err("LEAVE, args error");
@@ -942,7 +990,9 @@ ECIDictHand eciNewDict(ECIHand hEngine)
   ECIDictHand eci_res = NULL_DICT_HAND;
   struct engine_t *engine = (struct engine_t *)hEngine;
   struct msg_t header;
-  ENTER();
+
+  dbg("ENTER(%p)", hEngine);
+	
   if (!IS_ENGINE(engine)) {
     err("LEAVE, args error");
     return NULL_DICT_HAND;
@@ -957,7 +1007,9 @@ ECIDictHand eciGetDict(ECIHand hEngine)
   ECIDictHand eci_res = NULL_DICT_HAND;
   struct engine_t *engine = (struct engine_t *)hEngine;
   struct msg_t header;
-  ENTER();
+
+  dbg("ENTER(%p)", hEngine);
+	
   if (!IS_ENGINE(engine)) {
     err("LEAVE, args error");
     return NULL_DICT_HAND;
@@ -973,7 +1025,7 @@ enum ECIDictError eciSetDict(ECIHand hEngine, ECIDictHand hDict)
   struct engine_t *engine = (struct engine_t *)hEngine;
   struct msg_t header;
    
-  ENTER();
+  dbg("ENTER(%p,%p)", hEngine, hDict);
 
   if (!IS_ENGINE(engine)) {
     err("LEAVE, args error");
@@ -1012,7 +1064,7 @@ enum ECIDictError eciLoadDict(ECIHand hEngine, ECIDictHand hDict, enum ECIDictVo
   struct engine_t *engine = (struct engine_t *)hEngine;
   struct msg_t header;
 
-  ENTER();
+  dbg("ENTER(%p)", hEngine);
 
    if (!pFilename) {
      err("LEAVE, args error 0");     
@@ -1028,7 +1080,7 @@ enum ECIDictError eciLoadDict(ECIHand hEngine, ECIDictHand hDict, enum ECIDictVo
   header.args.ld.hDict = (char*)hDict - (char*)NULL;
   header.args.ld.DictVol = DictVol;
 
-  process_func1(engine->api, &header, pFilename, (int*)&eci_res, true, true);
+  process_func1(engine->api, &header, (const char*)pFilename, (int*)&eci_res, true, true);
   return eci_res;
 }
 
@@ -1038,7 +1090,8 @@ Boolean eciClearInput(ECIHand hEngine)
   Boolean eci_res = ECIFalse;
   struct engine_t *engine = (struct engine_t *)hEngine;
   struct msg_t header;
-  ENTER();
+  dbg("ENTER(%p)", hEngine);
+
   if (!IS_ENGINE(engine)) {
     err("LEAVE, args error");
     return ECIFalse;
@@ -1056,8 +1109,8 @@ Boolean ECIFNDECLARE eciSetOutputDevice(ECIHand hEngine, int iDevNum)
   struct api_t *api;
   struct msg_t header;
    
-  ENTER();
-
+  dbg("ENTER(%p,%d)", hEngine, iDevNum);
+	
   if (!IS_ENGINE(engine)) {
     err("LEAVE, args error");
     return eci_res;
@@ -1069,3 +1122,4 @@ Boolean ECIFNDECLARE eciSetOutputDevice(ECIHand hEngine, int iDevNum)
   return eci_res;
 }
 
+}

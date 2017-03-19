@@ -24,10 +24,9 @@ extern "C" {
 #define ENTER() dbg("ENTER")
 #define LEAVE() dbg("LEAVE")
 
-  // compilation error if condition is not fullfilled (inspired from BUILD_BUG_ON, linux kernel)
-#define BUILD_ASSERT(condition) ((void)sizeof(struct {int:!!(condition)-1;})) 
-
-
+  // compilation error if condition is not fullfilled (inspired from
+  // BUILD_BUG_ON, linux kernel).
+#define BUILD_ASSERT(condition) ((void)sizeof(char[(condition)?1:-1]))
 
   extern int DebugEnabled(enum DebugLevel level);
   extern void DebugFileInit();

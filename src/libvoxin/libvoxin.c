@@ -1,3 +1,4 @@
+extern "C" {
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -23,17 +24,17 @@ struct libvoxin_t {
   uint32_t stop_required;
 };
 
-static void my_exit(struct libvoxin_t *this)
+static void my_exit(struct libvoxin_t *the_obj)
 {
   struct msg_t msg;
-  size_t l = sizeof(struct msg_t);
+  ssize_t l = sizeof(struct msg_t);
   int res;
   
   memset(&msg, 0, MIN_MSG_SIZE);
   msg.id = MSG_EXIT;
   
   dbg("send exit msg");
-  res = pipe_write(this->pipe_command, &msg, &l);
+  res = pipe_write(the_obj->pipe_command, &msg, &l);
   if (res) {
     dbg("write error (%d)", res);
   }
@@ -98,19 +99,19 @@ static int fdwalk (int (*cb)(void *data, int fd), void *data)
 
 static int close_cb(void *data, int fd) {
   int res = 0;
-  if ((fd != (int)data) && (close(fd) == -1))
-    res = errno;
+  if (((void*)fd != data) && (close(fd) == -1))
+	res = errno;
   return res;
 }
 
 
-static int child(struct libvoxin_t *this)
+static int child(struct libvoxin_t *the_obj)
 {
   int res = 0;
 
   ENTER();
   
-  pipe_dup2(this->pipe_command, PIPE_SOCKET_CHILD_INDEX, PIPE_COMMAND_FILENO);
+  pipe_dup2(the_obj->pipe_command, PIPE_SOCKET_CHILD_INDEX, PIPE_COMMAND_FILENO);
 
   DebugFileFinish();
   fdwalk (close_cb, (void*)PIPE_COMMAND_FILENO);
@@ -125,13 +126,13 @@ static int child(struct libvoxin_t *this)
     res = errno;
   }
 
-  my_exit(this);
+  my_exit(the_obj);
   
   LEAVE();
   return res;
 }
 
-static int daemon_start(struct libvoxin_t *this)
+static int daemon_start(struct libvoxin_t *the_obj)
 {
   pid_t child_pid;
   pid_t parent_pid;
@@ -139,7 +140,7 @@ static int daemon_start(struct libvoxin_t *this)
 
   ENTER();
   
-  if (!this)
+  if (!the_obj)
     return EINVAL;
 
   parent_pid = getpid();
@@ -152,16 +153,16 @@ static int daemon_start(struct libvoxin_t *this)
     if (getppid() != parent_pid) {
       exit(0);
     }
-    pipe_close(this->pipe_command, PIPE_SOCKET_PARENT);
-    exit(child(this));
+    pipe_close(the_obj->pipe_command, PIPE_SOCKET_PARENT);
+    exit(child(the_obj));
     
     break;
   case -1:
     res = errno;
     break;
   default:
-    this->child = child_pid;
-    pipe_close(this->pipe_command, PIPE_SOCKET_CHILD_INDEX);
+    the_obj->child = child_pid;
+    pipe_close(the_obj->pipe_command, PIPE_SOCKET_CHILD_INDEX);
     break;
   }
 
@@ -170,13 +171,13 @@ static int daemon_start(struct libvoxin_t *this)
 }
 
 
-static int daemon_stop(struct libvoxin_t *this)
+static int daemon_stop(struct libvoxin_t *the_obj)
 {  
   ENTER();
-  if (!this)
+  if (!the_obj)
     return EINVAL;
 
-  if (!this->child) { // TODO
+  if (!the_obj->child) { // TODO
   }
   
   LEAVE();
@@ -188,32 +189,32 @@ int libvoxin_create(libvoxin_handle_t *i)
 {
   static int once = 0;
   int res = 0;
-  struct libvoxin_t *this = NULL;
+  struct libvoxin_t *the_obj = NULL;
 
   ENTER();
 
   if (!i || once)
     return EINVAL;
 
-  this = calloc(1, sizeof(struct libvoxin_t));
-  if (!this)
+  the_obj = (libvoxin_t*)calloc(1, sizeof(struct libvoxin_t));
+  if (!the_obj)
     return errno;
 
-  res = pipe_create(&this->pipe_command);
+  res = pipe_create(&the_obj->pipe_command);
   if (res)    
     goto exit0;
 
-  this->id = LIBVOXIN_ID;
-  res = daemon_start(this);
+  the_obj->id = LIBVOXIN_ID;
+  res = daemon_start(the_obj);
   if (!res) {
 	once = 1;
-	*i = this;
+	*i = the_obj;
   }
   
  exit0:
   if (res) {
-	daemon_stop(this);
-    pipe_delete(&this->pipe_command);
+	daemon_stop(the_obj);
+    pipe_delete(&the_obj->pipe_command);
   }
 
   LEAVE();
@@ -225,7 +226,7 @@ int libvoxin_delete(libvoxin_handle_t *i)
 {
   static int once = 0;
   int res = 0;
-  struct libvoxin_t *this = NULL;
+  struct libvoxin_t *the_obj = NULL;
   
   ENTER();
 
@@ -235,21 +236,21 @@ int libvoxin_delete(libvoxin_handle_t *i)
   if (!*i)
     return 0;
   
-  this = (struct libvoxin_t*)*i;
+  the_obj = (struct libvoxin_t*)*i;
   
   if (once)
     return 0;
 
-  res = daemon_stop(this);
+  res = daemon_stop(the_obj);
   if (!res) {
-    res = pipe_delete(&this->pipe_command);
+    res = pipe_delete(&the_obj->pipe_command);
     if (res)    
       goto exit0;
   }
 
   if (!res) {
-    memset(this, 0, sizeof(*this));
-    free(this);
+    memset(the_obj, 0, sizeof(*the_obj));
+    free(the_obj);
     *i = NULL;
   }
 
@@ -274,23 +275,26 @@ int libvoxin_call_eci(libvoxin_handle_t i, struct msg_t *msg)
   allocated_msg_length = MSG_HEADER_LENGTH + msg->allocated_data_length;
   effective_msg_length = MSG_HEADER_LENGTH + msg->effective_data_length;
 
-  if ((effective_msg_length > allocated_msg_length) || !msg_string(msg->func)){
+  if ((effective_msg_length > allocated_msg_length) || !msg_string((msg_type)msg->func)){
     err("LEAVE, args error(%d)",1);
     return EINVAL;
   }
 
   msg->count = ++p->msg_count;
-  dbg("send msg '%s', length=%d (#%d)",msg_string(msg->func), msg->effective_data_length, msg->count);
-  res = pipe_write(p->pipe_command, msg, &effective_msg_length);
+  dbg("send msg '%s', length=%d (#%d)",msg_string((msg_type)(msg->func)), msg->effective_data_length, msg->count);  
+  ssize_t s = effective_msg_length;
+  res = pipe_write(p->pipe_command, msg, &s);
   if (res)
     goto exit0;
 
   effective_msg_length = allocated_msg_length;
   memset(msg, 0, MSG_HEADER_LENGTH);
-  res = pipe_read(p->pipe_command, msg, &effective_msg_length);
-  if (!res) {
-    if (!msg_string(msg->func)
-	|| (effective_msg_length < MSG_HEADER_LENGTH + msg->effective_data_length)) {
+  s = effective_msg_length;
+  res = pipe_read(p->pipe_command, msg, &s);
+  if (!res && (s >= 0)) {
+	effective_msg_length = (size_t)s;
+	if (!msg_string((msg_type)(msg->func))
+		|| (effective_msg_length < MSG_HEADER_LENGTH + msg->effective_data_length)) {
       res = EIO;
     } else if (msg->id == MSG_EXIT) {
       dbg("recv msg exit");
@@ -299,7 +303,7 @@ int libvoxin_call_eci(libvoxin_handle_t i, struct msg_t *msg)
       exit(1);
       //      res = ECHILD;
     } else {
-      dbg("recv msg '%s', length=%d, res=0x%x (#%d)", msg_string(msg->func), msg->effective_data_length, msg->res, msg->count);
+	  dbg("recv msg '%s', length=%d, res=0x%x (#%d)", msg_string((msg_type)(msg->func)), msg->effective_data_length, msg->res, msg->count);
     }
   }
   
@@ -309,3 +313,4 @@ int libvoxin_call_eci(libvoxin_handle_t i, struct msg_t *msg)
 }
 
 
+}

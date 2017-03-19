@@ -1,2 +1,6 @@
 
 The libvoxin library eases the integration of voxin on 64 bits architectures.
+
+
+* compil
+./build.sh all [debug]
