@@ -1,3 +1,6 @@
+/*
+  2 languages, eciNew + eciSetParam
+ */
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -80,7 +83,7 @@ int main(int argc, char **argv)
     return __LINE__;
 
   res = eciSetParam(handle, eciLanguageDialect, eciStandardFrench);
-  if (res != eciGeneralAmericanEnglish)
+  if (res != eciGeneralAmericanEnglish) // previous value
     return __LINE__;
   
   if (eciAddText(handle, quote) == ECIFalse)

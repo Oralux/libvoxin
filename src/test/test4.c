@@ -1,3 +1,6 @@
+/*
+  3 languages, eciNewEx
+ */
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -80,11 +83,9 @@ enum ECICallbackReturn my_client_callback(ECIHand hEngine, enum ECIMessage Msg, 
 
 int set_engine(int i)
 {
-  size_t utf8_size;
-  size_t iso8859_1_size;
-  char *iso8859_1_buf;
   char *buf;
-
+  int res = 0;
+  
   if (i>MAX_TESTED_LANG)
     return __LINE__;
 
@@ -105,28 +106,29 @@ int set_engine(int i)
   if (eciSetOutputBuffer(handle[i], max_samples[i], data[i].samples) == ECIFalse)
     return __LINE__;
 
-
-  utf8_size = strlen(quote[i]);
-  iso8859_1_size = 2*strlen(quote[i]);
-  iso8859_1_buf = calloc(1, iso8859_1_size);
-
   if (i != ENGLISH) {
+    size_t utf8_size = strlen(quote[i]);
+    size_t iso8859_1_size = 2*strlen(quote[i]);
+    char *iso8859_1_buf = calloc(1, iso8859_1_size);    
     iconv_t cd = iconv_open("ISO8859-1", "UTF8");
     buf = iso8859_1_buf;
     iconv(cd, &quote[i], &utf8_size, &iso8859_1_buf, &iso8859_1_size);
+    iconv_close(cd);
   } else {
-    buf = quote[i];
+    buf = strdup(quote[i]);
   }
   
-  if (eciAddText(handle[i], buf) == ECIFalse)
-    return __LINE__;
+  if (eciAddText(handle[i], buf) == ECIFalse) {
+    res = __LINE__;
+  }
   
-  if (eciSynthesize(handle[i]) == ECIFalse)
-    return __LINE__;
+  if (eciSynthesize(handle[i]) == ECIFalse) {
+    res = __LINE__;
+  }
 
-  return 0;
+  free(buf);
+  return res;
 }
-
 
 int main(int argc, char **argv)
 {
@@ -189,6 +191,8 @@ int main(int argc, char **argv)
   }
   
   for (i=0; i<nbLanguages; i++) {
+    free(data[i].samples);
+    close(data[i].fd);
     switch (Languages[i]) {
     case eciGeneralAmericanEnglish:
     case eciStandardFrench:

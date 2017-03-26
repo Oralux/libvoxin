@@ -1,3 +1,6 @@
+/*
+  eciSynchronize
+ */
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -53,7 +56,7 @@ int main(int argc, char** argv)
 {
   uint8_t *buf;
   size_t len;
-
+  
   {
     struct stat buf;
     while (!stat(TEST_DBG, &buf)) {
