@@ -1,4 +1,3 @@
-
 CXXFLAGS += -fPIC -I../common
 
 all: puncfilter.o

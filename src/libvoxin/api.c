@@ -389,11 +389,14 @@ Boolean eciAddText(ECIHand hEngine, ECIInputText pText)
 	case '1':
 	  dbg("Filter SSML");
 	  engine->filters |= FILTER_SSML;
-	  break;
+	  // use the minimal xml filter in puncfilter 
+	  //break;
 	case '2':
 	  dbg("Filter PUNC");
-	  engine->filters |= FILTER_PUNC;
-	  engine->punc = puncfilter_create();
+	  if (!(engine->filters & FILTER_PUNC)) {
+		engine->filters |= FILTER_PUNC;
+		engine->punc = puncfilter_create();
+	  }
 	  return ECITrue;
 	default:
 	  break;

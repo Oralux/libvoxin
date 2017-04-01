@@ -39,7 +39,7 @@ int main()
   /* enum ECILanguageDialect Languages[MAX_LANGUAGES]; */
   /* int nbLanguages=MAX_LANGUAGES; */
   
-  ECIHand handle = eciNewEx(eciStandardFrench);
+  ECIHand handle = eciNew();
   if (!handle)
     return __LINE__;
 
@@ -52,8 +52,8 @@ int main()
   if (eciSetOutputBuffer(handle, MAX_SAMPLES, my_samples) == ECIFalse)
     return __LINE__;
 
-  res = eciSetParam(handle, 3, 0);
-  res = eciSetParam(handle, 1, 1);
+  res = eciSetParam(handle, eciDictionary, 0);
+  res = eciSetParam(handle, eciInputType, 1);
 
   eciAddText(handle," `gfa1 ");
   eciAddText(handle," `gfa2 ");
@@ -84,8 +84,7 @@ int main()
   res = eciGetVoiceParam(handle, 0, 2);
   res = eciGetVoiceParam(handle, 0, 6);
 
-  //  res = eciSetVoiceParam(handle, 0, eciSpeed, 70);
-  res = eciSetVoiceParam(handle, 0, eciSpeed, 100);
+  res = eciSetVoiceParam(handle, 0, eciSpeed, 70);
   if (res < 0)
     return __LINE__;
 
@@ -97,14 +96,22 @@ int main()
   if (res < 0)
     return __LINE__;
 
+  typedef enum {
+	eciTextModeDefault = 0,
+	eciTextModeAlphaSpell = 1,
+	eciTextModeAllSpell = 2,
+	eciIRCSpell = 3
+  } ECITextMode;
+
+  ECITextMode mode = eciTextModeDefault;
   int i;
-  //  for (i=0; i<=10;i++) {
-  for (i=0; i<=2;i++) {
-  
+  for (i=0; i<2;i++) {
+	// PUNC_NONE
     eciAddText(handle,"`Pf0()?-");
 
-    res = eciSetParam(handle, eciTextMode, 0);
-    eciAddText(handle,"<speak>Screen reader on.</speak>");
+	mode = (!i) ? eciTextModeDefault : eciTextModeAlphaSpell; 
+    res = eciSetParam(handle, eciTextMode, mode);
+    eciAddText(handle,"<speak>Test punctuation: (0).</speak>");
 
     if (!eciInsertIndex(handle,0))
       return __LINE__;
@@ -115,9 +122,25 @@ int main()
     if (eciSynchronize(handle) == ECIFalse)
       return __LINE__;
 
+	// PUNC_ALL
+    eciAddText(handle,"`Pf1()?-");
+	mode = (!i) ? eciTextModeDefault : eciTextModeAllSpell; 
+    res = eciSetParam(handle, eciTextMode, mode);
+    eciAddText(handle,"<speak>Test punctuation: (1).</speak>");
+    if (!eciInsertIndex(handle,0))
+      return __LINE__;
+
+    if (eciSynthesize(handle) == ECIFalse)
+      return __LINE__;
+
+    if (eciSynchronize(handle) == ECIFalse)
+      return __LINE__;
+
+	// PUNC_SOME
+	mode = (!i) ? eciTextModeDefault : eciTextModeAllSpell; 
+    res = eciSetParam(handle, eciTextMode, mode);
     eciAddText(handle,"`Pf2()?-");
-    res = eciSetParam(handle, 2, 0);
-    eciAddText(handle,"<speak>Desktop frame</speak>");
+    eciAddText(handle,"<speak>Test punctuation: (2).</speak>");
     if (!eciInsertIndex(handle,0))
       return __LINE__;
 
@@ -127,19 +150,9 @@ int main()
     if (eciSynchronize(handle) == ECIFalse)
       return __LINE__;
 
-    res = eciSetParam(handle, 2, 0);
-    eciAddText(handle,"<speak>page tab list</speak>");
-    if (!eciInsertIndex(handle,0))
-      return __LINE__;
-
-    if (eciSynthesize(handle) == ECIFalse)
-      return __LINE__;
-
-    if (eciSynchronize(handle) == ECIFalse)
-      return __LINE__;
-
-    res = eciSetParam(handle, 2, 0);
-    eciAddText(handle,"<speak>ESSAYEZ-LE POUR 5 JOURS heading level 2</speak>");
+	mode = (!i) ? eciTextModeDefault : eciTextModeAllSpell; 
+    res = eciSetParam(handle, eciTextMode, mode);
+    eciAddText(handle,"<speak>END-OF-TEST</speak>");
     
     if (!eciInsertIndex(handle,0))
       return __LINE__;

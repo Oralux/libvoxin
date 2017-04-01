@@ -40,12 +40,12 @@ class puncFilter {
 
   void setMode(const char* msg);
 
-  int find_punctuation(list<wchar_t*> &the_list, wchar_t* src, int w_src_len);
+  void find_punctuation(list<wchar_t*> &the_list, wchar_t *src, int w_src_len, int &count, bool &xml_filtered);
 
   iconv_t my_wchar_to_utf8_convertor;
   iconv_t my_utf8_to_wchar_convertor;
   char *my_filtered_text;
-
+  
   enum mode{
     PUNC_NONE = 0,
     PUNC_ALL = 1,

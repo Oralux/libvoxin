@@ -35,7 +35,7 @@ unset LIBVOXIN VOXIND TEST CC CFLAGS DBG_FLAGS STRIP RFS32
 if [ "$#" -ge "1" ]; then
 	case "$1" in
 		-h|--help) usage; exit 0;;
-		libvoxin) LIBVOXIN=1;;
+		libvoxin) LIBVOXIN=1; TEST=1;;
 		voxind) VOXIND=1;;
 		*) LIBVOXIN=1; VOXIND=1; TEST=1;;
 	esac
@@ -89,7 +89,7 @@ if [ -n "$LIBVOXIN" ]; then
 	echo "Entering puncfilter"
 	cd $BASE/src/puncfilter
 	make clean
-	LIBDIR=$LIB CFLAGS="$CFLAGS" LDFLAGS=$LDFLAGS make all
+	LIBDIR=$LIB CXXFLAGS="$CXXFLAGS" LDFLAGS=$LDFLAGS make all
 	echo "Entering libvoxin"
 	cd $BASE/src/libvoxin
 	make clean

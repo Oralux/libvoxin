@@ -1,5 +1,5 @@
 /*
- * puncFilter.cpp - punctuation filter
+ * puncFilter.cc - punctuation filter
  *
  * Copyright (C) 2009, Gilles Casse <gcasse@oralux.org>
  *
@@ -149,6 +149,7 @@ bool puncFilter::filterText(const char *msg_in_utf8, const char **clientFiltered
     size_t bytes_out = 0;
     list<wchar_t *> a_list;
     int nb_of_punct = 0;
+	bool xml_filtered = false;
     int w_total_src = 0;
     size_t inbytesleft = 0;
     size_t outbytesleft = 0;
@@ -232,12 +233,28 @@ bool puncFilter::filterText(const char *msg_in_utf8, const char **clientFiltered
     dbg("msg=%s, bytes_in=%ld, bytes_out=%ld", msg_in_utf8, bytes_in, bytes_out);
 
     w_total_src = bytes_out/sizeof(wchar_t);
-    nb_of_punct = find_punctuation(a_list, src, w_total_src);
+    find_punctuation(a_list, src, w_total_src, nb_of_punct, xml_filtered);
     if (!nb_of_punct) {
-        my_filtered_text = (char*)malloc(bytes_in+1);
-        memcpy(my_filtered_text, msg_in_utf8, bytes_in+1);
-        goto end_punct1;
-    }
+		my_filtered_text = (char*)malloc(bytes_in+1);
+		if (!xml_filtered) {
+			memcpy(my_filtered_text, msg_in_utf8, bytes_in+1);
+			goto end_punct1;
+		} else {
+			inbuf = (char*)src;
+			inbytesleft = bytes_out;
+			outbuf = my_filtered_text;
+			outbytesleft = bytes_in;
+			status = iconv(my_wchar_to_utf8_convertor,
+						   &inbuf, &inbytesleft,
+						   &outbuf, &outbytesleft);
+
+			if (inbytesleft) {
+				dbg("Failed to convert utf-8 to wchar_t, status=0x%lx, inbytesleft=%ld",  status, inbytesleft);
+				a_status = false;
+				goto end_punct1;
+			}
+		}
+    } 
 
     {
 #define W_ANNOTATION L" `ts2 . `ts0 "
@@ -330,48 +347,76 @@ end_punct1:
 
 /* Find each punctuation character in the src buffer and put its address in a singly linked list.
    Returns the number of punctuations found. */
-int puncFilter::find_punctuation(list<wchar_t*> &the_list, wchar_t* src, int w_src_len)
+void puncFilter::find_punctuation(list<wchar_t*> &the_list, wchar_t *src, int w_src_len, int &count, bool &xml_filtered)
 {
     wchar_t* psrc = (wchar_t*)src;
-    int count = 0;
+	bool tag = false;
+
+	count = 0;
+	xml_filtered = false;
 
     dbg("ENTER (%ls)", src);
 
     if (!psrc || !w_src_len)
-        return 0;
-
+        return;
+	
     switch (my_mode) {
     case PUNC_ALL:
         while (w_src_len--) {
-            //             if (iswpunct(*psrc) && (*psrc != L'`') && (_iswpunct[*psrc % MAX_PUNCT])) {
-            if (iswpunct(*psrc) && (*psrc != L'`')) {
-                count++;
-                the_list.insert(the_list.end (), psrc);
-                dbg("punc=|%lc|", *psrc);
-            }
+			if (tag) {
+				tag = (*psrc != L'>');
+				*psrc = L' ';
+			} else if (*psrc == L'<') {
+				xml_filtered = tag = true;
+				*psrc = L' ';
+			} else {
+				//             if (iswpunct(*psrc) && (*psrc != L'`') && (_iswpunct[*psrc % MAX_PUNCT])) {
+				if (iswpunct(*psrc) && (*psrc != L'`')) {
+					count++;
+					the_list.insert(the_list.end (), psrc);
+					dbg("punc=|%lc|", *psrc);
+				}
+			}
             psrc++;
         }
         break;
 
     case PUNC_SOME:
         while (w_src_len--) {
-            int j=0;
-            for (j=0; j<my_punctuation_num; j++) {
-                if (*psrc == my_punctuation[j]) {
-                    count++;
-                    the_list.insert(the_list.end (), psrc);
-                    dbg("punc=|%lc|", *psrc);
-                    break;
-                }
-            }
+			if (tag) {
+				tag = (*psrc != L'>');
+				*psrc = L' ';
+			} else if (*psrc == L'<') {
+				xml_filtered = tag = true;
+				*psrc = L' ';
+			} else {
+				int j=0;
+				for (j=0; j<my_punctuation_num; j++) {
+					if (*psrc == my_punctuation[j]) {
+						count++;
+						the_list.insert(the_list.end (), psrc);
+						dbg("punc=|%lc|", *psrc);
+						break;
+					}
+				}
+			}
             psrc++;
         }
         break;
 
     default:
+        while (w_src_len--) {
+			if (tag) {
+				tag = (*psrc != L'>');
+				*psrc = L' ';
+			} else if (*psrc == L'<') {
+				xml_filtered = tag = true;
+				*psrc = L' ';
+			}
+            psrc++;
+        }
         break;
     }
-    return count;
 }
 
 
