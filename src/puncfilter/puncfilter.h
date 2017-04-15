@@ -27,11 +27,27 @@
 #include <list>
 using std::list;
 
+extern "C" {
+  enum charset_t {
+    CHARSET_UNDEFINED=0,
+    CHARSET_ISO_8859_1,
+    CHARSET_GBK,
+    CHARSET_UCS_2,
+    CHARSET_BIG_5,
+    CHARSET_SJIS,
+    CHARSET_MAX = CHARSET_SJIS,
+  };
+
+  void *puncfilter_create();
+  void puncfilter_delete(void *handle);
+  bool puncfilter_do(void *handle, const char *input, enum charset_t charset, const char **filteredText);
+}
+
 class puncFilter {
  public:
   puncFilter();
   ~puncFilter();
-  virtual bool filterText(const char *input, const char **filteredText);
+  virtual bool filterText(const char *input, enum charset_t charset, const char **filteredText);
 
  private:
   // setMode: process the msg format:
@@ -42,8 +58,8 @@ class puncFilter {
 
   void find_punctuation(list<wchar_t*> &the_list, wchar_t *src, int w_src_len, int &count, bool &xml_filtered);
 
-  iconv_t my_wchar_to_utf8_convertor;
-  iconv_t my_utf8_to_wchar_convertor;
+  iconv_t my_conv_to_output_charset;
+  iconv_t my_conv_to_wchar;
   char *my_filtered_text;
   
   enum mode{
@@ -57,11 +73,5 @@ class puncFilter {
   int my_punctuation_num;
 };
 
-
-extern "C" {
-  void *puncfilter_create();
-  void puncfilter_delete(void *handle);
-  bool puncfilter_do(void *handle, const char *input, const char **filteredText);
-}
 
 #endif

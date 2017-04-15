@@ -39,11 +39,11 @@ int main()
   /* enum ECILanguageDialect Languages[MAX_LANGUAGES]; */
   /* int nbLanguages=MAX_LANGUAGES; */
   
-  ECIHand handle = eciNew();
+  //  ECIHand handle = eciNew();
+  ECIHand handle = eciNewEx(eciStandardFrench);
   if (!handle)
     return __LINE__;
-
-
+  
   int fd = creat(PATHNAME_RAW_DATA, S_IRUSR|S_IWUSR);
   if (fd==-1)
     return __LINE__;
@@ -111,7 +111,9 @@ int main()
 
 	mode = (!i) ? eciTextModeDefault : eciTextModeAlphaSpell; 
     res = eciSetParam(handle, eciTextMode, mode);
-    eciAddText(handle,"<speak>Test punctuation: (0).</speak>");
+	//    eciAddText(handle,"<speak>Test punctuation: (0).</speak>");
+    eciAddText(handle,"<speak>Test de ponctuation.</speak>");
+    eciAddText(handle,"<speak>Étape : (0).</speak>");
 
     if (!eciInsertIndex(handle,0))
       return __LINE__;
@@ -126,7 +128,7 @@ int main()
     eciAddText(handle,"`Pf1()?-");
 	mode = (!i) ? eciTextModeDefault : eciTextModeAllSpell; 
     res = eciSetParam(handle, eciTextMode, mode);
-    eciAddText(handle,"<speak>Test punctuation: (1).</speak>");
+    eciAddText(handle,"<speak>Étape : (1).</speak>");
     if (!eciInsertIndex(handle,0))
       return __LINE__;
 
@@ -140,7 +142,7 @@ int main()
 	mode = (!i) ? eciTextModeDefault : eciTextModeAllSpell; 
     res = eciSetParam(handle, eciTextMode, mode);
     eciAddText(handle,"`Pf2()?-");
-    eciAddText(handle,"<speak>Test punctuation: (2).</speak>");
+    eciAddText(handle,"<speak>Étape : (2).</speak>");
     if (!eciInsertIndex(handle,0))
       return __LINE__;
 
@@ -152,7 +154,8 @@ int main()
 
 	mode = (!i) ? eciTextModeDefault : eciTextModeAllSpell; 
     res = eciSetParam(handle, eciTextMode, mode);
-    eciAddText(handle,"<speak>END-OF-TEST</speak>");
+    eciAddText(handle,"<speak>FIN-ÉTAPES.</speak>");
+	//    eciAddText(handle,"<speak>END-OF-TEST</speak>");
     
     if (!eciInsertIndex(handle,0))
       return __LINE__;
