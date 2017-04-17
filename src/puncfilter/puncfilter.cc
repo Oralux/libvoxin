@@ -52,11 +52,11 @@ static const int charset_nb_bytes[] = {
 
 	static const char* charset_name[] = {
 		NULL,
-		"ISO-8859-1",
-		"GBK",
-		"UCS2",
-		"BIG5",
-		"SJIS",
+		"ISO-8859-1//TRANSLIT",
+		"GBK//TRANSLIT",
+		"UCS2//TRANSLIT",
+		"BIG5//TRANSLIT",
+		"SJIS//TRANSLIT",
 	};
 
 

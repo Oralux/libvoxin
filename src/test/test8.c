@@ -112,9 +112,36 @@ int main()
 	mode = (!i) ? eciTextModeDefault : eciTextModeAlphaSpell; 
     res = eciSetParam(handle, eciTextMode, mode);
 	//    eciAddText(handle,"<speak>Test punctuation: (0).</speak>");
-    eciAddText(handle,"<speak>Test de ponctuation.</speak>");
-    eciAddText(handle,"<speak>Étape : (0).</speak>");
 
+	eciAddText(handle,"<speak>Test de ponctuation.</speak>");
+    eciAddText(handle,"<speak>Étape : (0).</speak>");
+	// <speak> + punc + 2b (È = 2 bytes in UTF8)
+	eciAddText(handle,"<speak>PREMIÈRE PROMENADE. Me voici donc seul ");
+	// </speak> punc + 2b + 3b (’ = 3 bytes in UTF-8)
+	eciAddText(handle,"sur la terre, n’ayant plus de frère, de prochain, d'ami,<speak>");
+	// <speak> + 2b
+	eciAddText(handle,"<speak>de société");
+	// 2b
+	eciAddText(handle,"que moi-même Le plus sociable et le plus aimant");
+	// 2b + punc
+	eciAddText(handle,"des humains en a été proscrit.");
+	// </speak>
+	eciAddText(handle," </speak>");
+	// <speak>
+	eciAddText(handle,"<speak>");
+	// space
+	eciAddText(handle," ");
+	// punc
+	eciAddText(handle,".");
+	eciAddText(handle," </speak>");
+	// speak + punc
+	eciAddText(handle,"<speak>.");
+	// </speak> + 2b
+	eciAddText(handle,"Par un accord unanime ils ont cherché dans les raffinements</speak>");
+	eciAddText(handle,"<speak>de leur haine quel tourment pouvait être le plus cruel à mon âme");
+	// </speak> + punc
+	eciAddText(handle,"sensible,</speak>");
+   
     if (!eciInsertIndex(handle,0))
       return __LINE__;
 
