@@ -1,7 +1,7 @@
 BIN := msg.o pipe.o debug.o
 #CFLAGS += -ggdb -DDEBUG -fPIC -I. -I../api
 CFLAGS += -fPIC -I. -I../api
-CC ?= gcc
+CC ?= gcc-4.8
 AR ?= ar
 INSTALL_DIR ?= .
 

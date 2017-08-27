@@ -4,11 +4,12 @@
 LIBS=-L../../build/rfs/usr/lib/x86_64-linux-gnu -lvoxin -lcommon
 CFLAGS += -I../api -I../common
 STRIP ?= strip --strip-unneeded
+CC = gcc-4.8
 
 all: say
 
 say: say.o
-	gcc -o $@ $< $(CFLAGS) $(LIBS)
+	$(CC) -o $@ $< $(CFLAGS) $(LIBS)
 	$(STRIP) say
 
 clean:

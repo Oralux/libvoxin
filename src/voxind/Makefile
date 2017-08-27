@@ -1,7 +1,7 @@
 BIN = main.o
 CFLAGS = -ggdb -DDEBUG -m32 -I../common -I../api
 LDFLAGS = -m32
-CC ?= gcc
+CC ?= gcc-4.8
 STRIP ?= strip --strip-unneeded
 LIBDIR ?= ../../build/rfs/usr/lib/i386-linux-gnu
 LIBDIR2 ?= /opt/IBM/ibmtts/lib

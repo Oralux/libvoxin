@@ -6,6 +6,7 @@ INSTALL_DIR ?= ../../build/rfs/usr/bin
 LDFLAGS += -L $(LIBDIR)
 LDLIBS = -lvoxin
 #CC=g++
+CC = gcc-4.8
 
 all: $(TARGET)
 
