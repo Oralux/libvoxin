@@ -171,7 +171,6 @@ bool puncFilter::filterText(const char *msg_in_utf8, charset_t charset, const ch
 	size_t bytes_out = 0;
 	list<wchar_t *> a_list;
 	int nb_of_punct = 0;
-	bool xml_filtered = false;
 	int w_total_src = 0;
 	size_t inbytesleft = 0;
 	size_t outbytesleft = 0;
@@ -255,7 +254,7 @@ bool puncFilter::filterText(const char *msg_in_utf8, charset_t charset, const ch
 	dbg("msg=%s, bytes_in=%ld, bytes_out=%ld", msg_in_utf8, bytes_in, bytes_out);
 
 	w_total_src = bytes_out/sizeof(wchar_t);
-	find_punctuation(a_list, src, w_total_src, nb_of_punct, xml_filtered);
+	find_punctuation(a_list, src, w_total_src, nb_of_punct);
 	if (!nb_of_punct) {
 		my_filtered_text = (char*)malloc(bytes_in+1);
 		inbuf = (char*)src;
@@ -365,37 +364,84 @@ end_punct1:
 }
 
 
-/* Find each punctuation character in the src buffer and put its address in a singly linked list.
-   Returns the number of punctuations found. */
-void puncFilter::find_punctuation(list<wchar_t*> &the_list, wchar_t *src, int w_src_len, int &count, bool &xml_filtered)
+typedef struct {
+	const wchar_t *str;
+	wchar_t c;
+	int l;
+} predef_t;
+
+static const predef_t xml_predefined_entity[] = {
+	{L"&quot;", L'"',6},
+	{L"&amp;", L'&',5},
+	{L"&apos;", L'\'',6},
+	{L"&lt;", L'<',4},
+	{L"&gt;", L'>',4},
+};
+
+#define MAX_ENTITY_NB (sizeof(xml_predefined_entity)/sizeof(xml_predefined_entity[0]))
+#define MIN_ENTITY_LENGTH 4
+
+static void convert_xml_predefined_entities(wchar_t *src, int nb_wchar)
 {
 	wchar_t* psrc = (wchar_t*)src;
-	bool tag = false;
+	bool xml_filtered = false;
+	int i = 0;
+
+	if (!psrc)
+		return;
+
+	while (i < nb_wchar) {
+		int l = 1;
+		if (xml_filtered) {
+			xml_filtered = (psrc[i] != L'>');
+			psrc[i] = L' ';
+		} else if (psrc[i] == L'&') {
+			int j = 0;
+			while(j < MAX_ENTITY_NB) {
+				if (!wcsncmp(psrc+i, xml_predefined_entity[j].str, xml_predefined_entity[j].l)) {
+					int k = 1;
+					psrc[i] = xml_predefined_entity[j].c;
+					l = xml_predefined_entity[j].l;
+					while (k < l) {
+						psrc[i+k] = L' ';
+						k++;
+					}
+					break;
+				}
+				j++;
+			}
+		} else if (psrc[i] == L'<') {
+			xml_filtered = true;
+			psrc[i] = L' ';
+		}
+		i += l;
+	}
+}
+
+
+/* Find each punctuation character in the src buffer and put its address in a singly linked list.
+   Returns the number of punctuations found. */
+void puncFilter::find_punctuation(list<wchar_t*> &the_list, wchar_t *src, int w_src_len, int &count)
+{
+	wchar_t* psrc = (wchar_t*)src;
 
 	count = 0;
-	xml_filtered = false;
 
 	dbg("ENTER (%ls)", src);
 
 	if (!psrc || !w_src_len)
 		return;
-	
+
+	convert_xml_predefined_entities(src, w_src_len);
+
 	switch (my_mode) {
 	case PUNC_ALL:
 		while (w_src_len--) {
-			if (tag) {
-				tag = (*psrc != L'>');
-				*psrc = L' ';
-			} else if (*psrc == L'<') {
-				xml_filtered = tag = true;
-				*psrc = L' ';
-			} else {
-				//             if (iswpunct(*psrc) && (*psrc != L'`') && (_iswpunct[*psrc % MAX_PUNCT])) {
-				if (iswpunct(*psrc) && (*psrc != L'`')) {
-					count++;
-					the_list.insert(the_list.end (), psrc);
-					dbg("punc=|%lc|", *psrc);
-				}
+			//             if (iswpunct(*psrc) && (*psrc != L'`') && (_iswpunct[*psrc % MAX_PUNCT])) {
+			if (iswpunct(*psrc) && (*psrc != L'`')) {
+				count++;
+				the_list.insert(the_list.end (), psrc);
+				dbg("punc=|%lc|", *psrc);
 			}
 			psrc++;
 		}
@@ -403,21 +449,13 @@ void puncFilter::find_punctuation(list<wchar_t*> &the_list, wchar_t *src, int w_
 
 	case PUNC_SOME:
 		while (w_src_len--) {
-			if (tag) {
-				tag = (*psrc != L'>');
-				*psrc = L' ';
-			} else if (*psrc == L'<') {
-				xml_filtered = tag = true;
-				*psrc = L' ';
-			} else {
-				int j=0;
-				for (j=0; j<my_punctuation_num; j++) {
-					if (*psrc == my_punctuation[j]) {
-						count++;
-						the_list.insert(the_list.end (), psrc);
-						dbg("punc=|%lc|", *psrc);
-						break;
-					}
+			int j=0;
+			for (j=0; j<my_punctuation_num; j++) {
+				if (*psrc == my_punctuation[j]) {
+					count++;
+					the_list.insert(the_list.end (), psrc);
+					dbg("punc=|%lc|", *psrc);
+					break;
 				}
 			}
 			psrc++;
@@ -425,16 +463,6 @@ void puncFilter::find_punctuation(list<wchar_t*> &the_list, wchar_t *src, int w_
 		break;
 
 	default:
-		while (w_src_len--) {
-			if (tag) {
-				tag = (*psrc != L'>');
-				*psrc = L' ';
-			} else if (*psrc == L'<') {
-				xml_filtered = tag = true;
-				*psrc = L' ';
-			}
-			psrc++;
-		}
 		break;
 	}
 }

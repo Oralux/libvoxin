@@ -3,10 +3,11 @@
 NBARGS=$#
 
 usage() {
-    echo "usage: $1 <test_number> [-g|-v]"
-    echo "-g: gdb"
-    echo "-v: valgrind"
+	echo -e "usage: run.sh [-g|-v] <test_number>\n" \
+		 "\t-g: gdb\n" \
+		 "\t-v: valgrind"
 }
+
 
 unset cmd
 while getopts :gv opt; do
@@ -14,15 +15,16 @@ while getopts :gv opt; do
 	  g) cmd=gdb;;
 	  v) cmd="valgrind -v --leak-check=full --show-leak-kinds=all --track-origins=yes";;
 	  *)
-	      echo -e "usage: $0 [-g|-v] <test_number>\n" \
-		   "\t-g: gdb\n" \
-		   "\t-v: valgrind"
+		  usage
 	      exit 1;;
       esac
 done
 
 shift $(($OPTIND - 1))
 TEST_NUMBER=$1
+
+[ -z "$TEST_NUMBER" ] && usage && exit 1
+
 
 rm -f /tmp/libvoxin.log* /tmp/test_libvoxin*wav /tmp/test_libvoxin*raw
 echo 2 > /tmp/libvoxin.ok

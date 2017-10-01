@@ -1,4 +1,4 @@
-TARGET = test1 test2 test3 test4 test5 test6 test7 test8
+TARGET = test1 test2 test3 test4 test5 test6 test7 test8 test9
 DOC = *.dct
 CFLAGS += -I../api
 LIBDIR ?= ../../build/rfs/usr/lib/x86_64-linux-gnu

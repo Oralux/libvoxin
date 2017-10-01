@@ -56,7 +56,7 @@ class puncFilter {
 
   void setMode(const char* msg);
 
-  void find_punctuation(list<wchar_t*> &the_list, wchar_t *src, int w_src_len, int &count, bool &xml_filtered);
+  void find_punctuation(list<wchar_t*> &the_list, wchar_t *src, int w_src_len, int &count);
 
   iconv_t my_conv_to_output_charset;
   iconv_t my_conv_to_wchar;
