@@ -51,7 +51,7 @@ static void my_exit()
 
 static void sighandler(int sig) {
   err("signal=%s (%d)", strsignal(sig), sig);
-  my_exit();
+  exit(EXIT_FAILURE);
 }
 
 static enum ECICallbackReturn my_callback(ECIHand hEngine, enum ECIMessage Msg, long lParam, void *pData)
