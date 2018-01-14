@@ -13,6 +13,7 @@ extern "C" {
 #include "conf.h"
 #include "libvoxin.h"
 #include "msg.h"
+#include <unistd.h>
 
 #define FILTER_SSML 1
 #define FILTER_PUNC 2
@@ -255,6 +256,7 @@ extern "C" {
       res = api_lock(api);
       if (res)
 	return res;
+      usleep(1000);
     }
 
     c = api->msg->count;
