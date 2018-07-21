@@ -50,15 +50,16 @@ static const int charset_nb_bytes[] = {
 	CHAR_LENGTH_ONE_BYTE|CHAR_LENGTH_TWO_BYTES, //CHARSET_SJIS
 };
 
-	static const char* charset_name[] = {
-		NULL,
-		"ISO-8859-1//TRANSLIT",
-		"GBK//TRANSLIT",
-		"UCS2//TRANSLIT",
-		"BIG5//TRANSLIT",
-		"SJIS//TRANSLIT",
-	};
+static const char* charset_name[] = {
+	NULL,
+	"ISO-8859-1//TRANSLIT",
+	"GBK//TRANSLIT",
+	"UCS2//TRANSLIT",
+	"BIG5//TRANSLIT",
+	"SJIS//TRANSLIT",
+};
 
+static void convert_xml_predefined_entities(wchar_t *src, int *nb_wchar);
 
 // #define MAX_PUNCT 256
 // static wchar_t _iswpunct[MAX_PUNCT];
@@ -240,9 +241,9 @@ bool puncFilter::filterText(const char *msg_in_utf8, charset_t charset, const ch
 	outbytesleft = bytes_out;
 
 	status = iconv(my_conv_to_wchar,
-				   &inbuf, &inbytesleft,
-				   &outbuf, &outbytesleft);
-
+		       &inbuf, &inbytesleft,
+		       &outbuf, &outbytesleft);
+	
 	if (inbytesleft) {
 		dbg("Failed to convert utf-8 to wchar_t, status=0x%lx, inbytesleft=%ld",  status, inbytesleft);
 		a_status = false;
@@ -252,8 +253,10 @@ bool puncFilter::filterText(const char *msg_in_utf8, charset_t charset, const ch
 	bytes_out -= outbytesleft;
 
 	dbg("msg=%s, bytes_in=%ld, bytes_out=%ld", msg_in_utf8, bytes_in, bytes_out);
-
+	
 	w_total_src = bytes_out/sizeof(wchar_t);
+	convert_xml_predefined_entities(src, &w_total_src);
+	bytes_out = w_total_src*sizeof(wchar_t);
 	find_punctuation(a_list, src, w_total_src, nb_of_punct);
 	if (!nb_of_punct) {
 		my_filtered_text = (char*)malloc(bytes_in+1);
@@ -381,41 +384,39 @@ static const predef_t xml_predefined_entity[] = {
 #define MAX_ENTITY_NB (sizeof(xml_predefined_entity)/sizeof(xml_predefined_entity[0]))
 #define MIN_ENTITY_LENGTH 4
 
-static void convert_xml_predefined_entities(wchar_t *src, int nb_wchar)
+static void convert_xml_predefined_entities(wchar_t *src, int *nb_wchar)
 {
 	wchar_t* psrc = (wchar_t*)src;
 	bool xml_filtered = false;
 	int i = 0;
+	int w = 0;
 
-	if (!psrc)
+	if (!psrc || !nb_wchar || !*nb_wchar)
 		return;
 
-	while (i < nb_wchar) {
+	while (i < *nb_wchar) {
 		int l = 1;
 		if (xml_filtered) {
 			xml_filtered = (psrc[i] != L'>');
-			psrc[i] = L' ';
 		} else if (psrc[i] == L'&') {
 			int j = 0;
-			while(j < MAX_ENTITY_NB) {
+			for (j=0; j < MAX_ENTITY_NB; j++) {
 				if (!wcsncmp(psrc+i, xml_predefined_entity[j].str, xml_predefined_entity[j].l)) {
-					int k = 1;
-					psrc[i] = xml_predefined_entity[j].c;
+					psrc[w] = xml_predefined_entity[j].c;
+					w++;
 					l = xml_predefined_entity[j].l;
-					while (k < l) {
-						psrc[i+k] = L' ';
-						k++;
-					}
 					break;
 				}
-				j++;
 			}
 		} else if (psrc[i] == L'<') {
 			xml_filtered = true;
-			psrc[i] = L' ';
+		} else {
+			psrc[w] = psrc[i];
+			w++;
 		}
 		i += l;
 	}
+	*nb_wchar = w;
 }
 
 
@@ -431,8 +432,6 @@ void puncFilter::find_punctuation(list<wchar_t*> &the_list, wchar_t *src, int w_
 
 	if (!psrc || !w_src_len)
 		return;
-
-	convert_xml_predefined_entities(src, w_src_len);
 
 	switch (my_mode) {
 	case PUNC_ALL:

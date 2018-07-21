@@ -56,10 +56,10 @@ int main()
   int i;
   const char* set_mode_fmt = "`Pf%d()?-";
   for (i=0; i<=2; i++) {
-	#define MAX_STRING 30
+	#define MAX_STRING 256
 	char set_mode[MAX_STRING];
 	snprintf(set_mode, MAX_STRING, "`Pf%d()?:;!'", i);
-    eciAddText(handle, set_mode);
+	eciAddText(handle, set_mode);
 	snprintf(set_mode, MAX_STRING, "<speak>Punctuation Mode %d</speak>", i);
 	eciAddText(handle, set_mode);
 	eciAddText(handle, "<speak>&amp; &lt;Bob&gt;&quot;Hello&quot; &apos;World&apos;!</speak>");

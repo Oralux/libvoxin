@@ -1,6 +1,6 @@
 SONAME=libvoxin.so.1
 MIN=1
-REV=8
+REV=10
 
 BIN := api.o libvoxin.o
 #CFLAGS += $(DEBUG) -fPIC -I../api -I../common -Wno-pointer-to-int-cast 
