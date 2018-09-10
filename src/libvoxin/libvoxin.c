@@ -116,13 +116,9 @@ static int child(struct libvoxin_t *the_obj)
   DebugFileFinish();
   fdwalk (close_cb, (void*)PIPE_COMMAND_FILENO);
 
-  if (execlp(VOXIND_CMD_ARG0,
-	     VOXIND_CMD_ARG0,
-	     VOXIND_CMD_ARG1,
-	     VOXIND_CMD_ARG2,
-	     VOXIND_CMD_ARG3,
-	     VOXIND_CMD_ARG4,
-	     NULL) == -1) {
+  if (execlp("voxind_init",
+			 "voxind_init",
+			 NULL) == -1) {
     res = errno;
   }
 
