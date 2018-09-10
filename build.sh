@@ -184,6 +184,7 @@ if [ -n "$RELEASE" ]; then
 tar -C \"$RFSDIR\" -zcf \"$RELDIR/libvoxin-$VERSION-$ARCH.tgz\" usr/lib/libibmeci.so opt/voxin/\"$VERSION\"/lib/libvoxin.so* && \
 tar -C \"$RFSDIR\" -zcf \"$RELDIR/voxind-$VERSION-$ARCH.tgz\" usr/bin/voxind_init opt/voxin/\"$VERSION\"/bin/voxind_init opt/voxin/\"$VERSION\"/rfs32/usr/bin/voxind && \
 tar -C \"$RFSDIR\" --exclude \"libvoxin*\" --exclude \"voxind*\" -zcf \"$RELDIR/voxin-rfs32-$VERSION-$ARCH.tgz\" opt/voxin/\"$VERSION\"/rfs32"
-
+	
+	printf "\nRelease available in $RELDIR\n"	
 fi
 
