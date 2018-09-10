@@ -3,13 +3,13 @@ BIN := msg.o pipe.o debug.o
 CFLAGS += -fPIC -I. -I../api
 CC ?= gcc
 AR ?= ar
-INSTALL_DIR ?= .
 
 all: $(BIN)
 	$(AR) rcs libcommon.a $(^)
 
 install:
-	mv libcommon.a $(INSTALL_DIR)
+	[ ! -d $(DESTDIR)/lib ] && mkdir -p $(DESTDIR)/lib || true
+	mv libcommon.a $(DESTDIR)/lib/
 
 clean:
 	rm -f *o *~ *a

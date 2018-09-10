@@ -1,2 +1,17 @@
 
 The libvoxin library eases the integration of voxin on 64 bits architectures.
+
+
+* version in src/common/conf.h
+
+* compil
+# ../rfs32 path to a 32 bits rootfilesystem (built e.g. by buildroot, see config in src/buildroot/)
+./build.sh -Rr ../rfs32
+
+* test
+./build.sh -lvtdr ../rfs32
+
+./test.sh -b
+./test.sh -t 1
+./test.sh -d
+

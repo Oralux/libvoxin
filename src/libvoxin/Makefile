@@ -1,24 +1,28 @@
-SONAME=libvoxin.so.1
-MIN=2
-REV=0
+# version
+VERMAJ ?= 0
+VERMIN ?= 0
+VERMIC ?= 1
+
+SONAME=libvoxin.so.$(VERMAJ)
+MIN=$(VERMIN)
+REV=$(VERMIC)
 
 BIN := api.o libvoxin.o
-PUNC = ../puncfilter/puncfilter.o
-#CFLAGS += $(DEBUG) -fPIC -I../api -I../common -I../puncfilter -Wno-pointer-to-int-cast -Wno-int-to-pointer-cast
+#CFLAGS += $(DEBUG) -fPIC -I../api -I../common -Wno-pointer-to-int-cast 
 #CC ?= gcc
+PUNC = ../puncfilter/puncfilter.o
 CFLAGS += $(DEBUG) -fPIC -I../api -I../common -I../puncfilter -Wno-int-to-pointer-cast
 CC = g++
-LIBDIR ?= ../../build/rfs/usr/lib/x86_64-linux-gnu
-INSTALL_DIR ?= .
 STRIP ?= strip --strip-unneeded
 
 all: $(BIN)
-	$(CC) -shared -Wl,-soname,libvoxin.so.1 -o $(SONAME).$(MIN).$(REV) -Wl,--version-script=libvoxin.ld $(^) $(LDFLAGS) -L$(LIBDIR) -lcommon $(PUNC)
+	$(CC) -shared -Wl,-soname,libvoxin.so.$(VERMAJ) -o $(SONAME).$(MIN).$(REV) -Wl,--version-script=libvoxin.ld $(^) $(LDFLAGS) -L$(DESTDIR)/lib -lcommon $(PUNC)
 	$(STRIP) $(SONAME).$(MIN).$(REV)
 
 clean:
-	rm -f *o *~ libvoxin.so* $(INSTALL_DIR)/libvoxin.so*
+	rm -f *o *~ libvoxin.so* $(DESTDIR)/lib/libvoxin.so*
 
 install:
-	install -m 644 $(SONAME).$(MIN).$(REV) $(INSTALL_DIR)
-	cd $(INSTALL_DIR); ln -s $(SONAME).$(MIN).$(REV) libvoxin.so; ln -s $(SONAME).$(MIN).$(REV) $(SONAME)
+	[ ! -d $(DESTDIR)/lib ] && mkdir -p $(DESTDIR)/lib || true
+	install -m 644 $(SONAME).$(MIN).$(REV) $(DESTDIR)/lib
+	cd $(DESTDIR); ln -s $(SONAME).$(MIN).$(REV) $(DESTDIR)/lib/libvoxin.so; ln -s $(SONAME).$(MIN).$(REV) $(DESTDIR)/lib/$(SONAME)

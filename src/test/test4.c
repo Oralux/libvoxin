@@ -140,10 +140,14 @@ int main(int argc, char **argv)
   enum state_t {IDLE, SPEAKING, OVER};
   int state[MAX_TESTED_LANG];
   int nbLanguagesOver;
-  
+
+  for (i=0;i<MAX_TESTED_LANG;i++) {
+	state[i] = -1;	
+  }
+	  
   if (eciGetAvailableLanguages(Languages, &nbLanguages))
     return __LINE__;
-  
+
   for (i=0; i<nbLanguages; i++) {
     switch (Languages[i]) {
     case eciGeneralAmericanEnglish:
@@ -162,6 +166,13 @@ int main(int argc, char **argv)
       fprintf(stderr,"not yet tested: %d\n", Languages[i]);
       break;
     }
+  }
+
+  for (i=0;i<MAX_TESTED_LANG;i++) {
+	if (state[i] == -1) {
+      fprintf(stderr,"Install all required languages\n");
+	  return __LINE__;
+	}
   }
 
   #define ONE_MILLISECOND_IN_NANOSECOND 1000000 

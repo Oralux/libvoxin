@@ -156,7 +156,7 @@ int main(int argc, char *argv[]) {
 	  usage();
 	  exit(errno);
 	}
-	sentence = calloc(1, buf.st_size+1);
+	sentence = (char*)calloc(1, buf.st_size+1);
 	len = read(fd, sentence, buf.st_size);
 	sentence[len]=0;
 	free(pathname);

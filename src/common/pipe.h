@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#define PIPE_SOCKET_PARENT_INDEX 0
+#define PIPE_SOCKET_PARENT 0
 #define PIPE_SOCKET_CHILD_INDEX 1
 
 // max size of transfered block between client and server

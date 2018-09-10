@@ -146,8 +146,8 @@ struct msg_t {
   uint32_t engine;
   union args_t args;
   uint32_t res;
-  uint32_t allocated_data_length; // max possible data size
-  uint32_t effective_data_length; // effective data size
+  uint32_t allocated_data_length;
+  uint32_t effective_data_length;
   uint8_t data[0] __attribute__ ((aligned (16))); // placeholder
 } __attribute__ ((packed, aligned (16)));
 
