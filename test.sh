@@ -25,10 +25,11 @@ Build a dedicated directory to test locally libvoxin.
 Run test, and finally delete the directory.
 
 Options: 
--h, --help         display this help 
--b, --build        build the directory
--d, --delete       delete the dedicated directory
--t, --test <num>   run test number <num>
+-h, --help          display this help 
+-b, --build         build the directory
+-c, --clean         clean-up: delete the dedicated directory
+-s, --strace <log>  with strace using <log> as logfile prefix
+-t, --test <num>    run test number <num>
 
 Example:
 # build the dedicated directory in
@@ -56,9 +57,9 @@ Example:
 # 	fi
 # }
 
-unset HELP ARCH BUILD DELETE TEST 
+unset HELP ARCH BUILD CLEAN STRACE TEST 
 
-OPTIONS=`getopt -o bdht: --long build,delete,help,test: \
+OPTIONS=`getopt -o bchs:t: --long build,clean,help,strace:,test: \
              -n "$NAME" -- "$@"`
 [ $? != 0 ] && usage && exit 1
 eval set -- "$OPTIONS"
@@ -67,17 +68,18 @@ while true; do
   case "$1" in
     -h|--help) HELP=1; shift;;
     -b|--build) BUILD=1; shift;;
-    -d|--delete) DELETE=1; shift;;
+    -c|--delete) CLEAN=1; shift;;
+    -s|--strace) STRACE=$2; shift 2;;
     -t|--test) TEST=$2; shift 2;;
     --) shift; break;;
     *) break;;
   esac
 done
 
-[ -z "$BUILD" ] && [ -z "$DELETE" ] && [ -z "$TEST" ] && HELP=1
+[ -z "$BUILD" ] && [ -z "$CLEAN" ] && [ -z "$TEST" ] && HELP=1
 
 [ -n "$HELP" ] && usage && exit 0
-if [ -n "$DELETE" ]; then
+if [ -n "$CLEAN" ]; then
 	sudo rm -rf "$RFSDIR"
 	exit 0
 fi
@@ -86,9 +88,16 @@ if [ -n "$TEST" ]; then
 	export LD_LIBRARY_PATH=../lib
 	export PATH=.:$PATH
 	sudo rm -f "$RFS32"/tmp/test_voxind
-	rm -f /tmp/test_libvoxin*
 	set +e
-	"./test$TEST"
+	if [ -n "$STRACE" ]; then
+		touch "$RFS32"/tmp/test_voxind
+		./test"$TEST" &
+		sudo chroot "$RFS32" /bin/sh -c "strace -s300 -tt -ff -o /tmp/strace -p $(pidof voxind)" &
+		sudo rm "$RFS32"/tmp/test_voxind
+	else
+	rm -f /tmp/test_libvoxin*
+		./test"$TEST"
+	fi
 	popd
 	src/test/play.sh 	
 	exit 0
