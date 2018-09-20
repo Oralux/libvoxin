@@ -1,12 +1,12 @@
 BIN = main.o
 CFLAGS += -m32 -ggdb -DDEBUG -I../common -I../api
-LDFLAGS += -m32
+LDFLAGS += -m32 -Wl,-rpath=lib:usr/lib:opt/IBM/ibmtts/lib -Wl,--dynamic-linker,./lib/ld-linux.so.2
 CC ?= gcc
 STRIP ?= strip --strip-unneeded
 IBMTTSDIR = /opt/IBM/ibmtts/lib/
 
 voxind: $(BIN)
-	$(CC) -o $(@) $(^) $(LDFLAGS) -L$(DESTDIR)/lib -lcommon -L$(DESTDIR)/../$(IBMTTSDIR) -Wl,-rpath=$(IBMTTSDIR) -libmeci -letidev
+	$(CC) -o $(@) $(^) $(LDFLAGS) -L$(DESTDIR)/lib -lcommon -L$(DESTDIR)/../$(IBMTTSDIR) -libmeci -letidev
 	$(STRIP) $(@)
 
 all: voxind

@@ -15,6 +15,12 @@ extern "C" {
 #include "msg.h"
 #include "debug.h"
 
+#define DEFAULT_PATH "/usr/bin"
+#define IBMTTS_LIB_PATH "opt/IBM/ibmtts/lib"
+#define LIB_PATH "lib"
+#define USR_LIB_PATH "usr/lib"
+#define FORMAT "%s/%s:%s/%s:%s/%s"
+  
 struct libvoxin_t {
   uint32_t id;
   uint32_t msg_count;
@@ -23,7 +29,7 @@ struct libvoxin_t {
   struct pipe_t *pipe_command;
   uint32_t stop_required;
 };
-
+  
 static void my_exit(struct libvoxin_t *the_obj)
 {
   struct msg_t msg;
@@ -97,7 +103,76 @@ static int fdwalk (int (*cb)(void *data, int fd), void *data)
 }
 
 
-static int close_cb(void *data, int fd) {
+// Return the directory containing the exe (according to the PATH or
+// if PATH is empty uses possibly the default path)
+//
+// e.g. getExePath("ls",NULL) returns "/bin/"
+// e.g. getExePath("usr/bin/poc.i386",NULL) returns "<root directory of the 32 bits rootfilesystem>"
+static char *getExePath(const char *exe, const char *default_path)
+{
+  char *env = NULL;
+  char *resolved_path = NULL;
+  char *saveptr = NULL;
+  char *path = NULL;
+  const char *basename=NULL;
+  
+  if (!exe || !default_path)
+	return NULL;
+
+  basename = strrchr(exe, '/');
+  if (basename) {
+	basename++;
+  } else {
+	basename = exe;
+  }
+  
+  env = getenv("PATH");
+  if (!env) {
+	env = (char *)default_path;
+  }
+
+  path = (char*)malloc(PATH_MAX + 1);
+  if (!path) {
+	dbg("malloc error\n");
+	return NULL;
+  }
+
+  int len_exe = strlen(exe);
+  while(1) {
+	int n;
+	char *dir = strtok_r(env, ":", &saveptr);
+	if (!dir) {
+	  dbg("exe not found\n");
+	  break;
+	}
+
+	n = snprintf(path, PATH_MAX, "%s/%s", dir, basename);
+	if (n >= PATH_MAX) {
+	  dbg("path too long\n");
+	  break;
+	}
+
+	resolved_path = realpath(path, NULL);
+	if (resolved_path) {
+	  int len = strlen(resolved_path);
+	  if ((len_exe >= len)
+		  || (strcmp(resolved_path+len-len_exe, exe))) {
+		free(resolved_path);
+		resolved_path = NULL;
+	  } else {
+		resolved_path[len-len_exe] = 0;
+		break;
+	  }
+	}
+
+	env = NULL;
+  }
+
+  free(path);  
+  return resolved_path;
+}
+
+ static int close_cb(void *data, int fd) {
   int res = 0;
   if (((void*)fd != data) && (close(fd) == -1))
 	res = errno;
@@ -108,24 +183,57 @@ static int close_cb(void *data, int fd) {
 static int child(struct libvoxin_t *the_obj)
 {
   int res = 0;
+  char *resolved_path = NULL;
+  char *library_path = NULL;
 
   ENTER();
+
+  {
+	resolved_path = getExePath(VOXIND, DEFAULT_PATH);
+	if (!resolved_path) {
+	  dbg("exe path not found!");
+	  return res;
+	}
+	if (chdir(resolved_path)) {
+	  res = errno;
+	  goto exit1;
+	}
+	
+	int len = 3*strlen(resolved_path) + strlen(FORMAT IBMTTS_LIB_PATH LIB_PATH USR_LIB_PATH);	
+	library_path = (char*)calloc(1, len);	
+	if (!library_path) {
+	  res = errno;
+	  goto exit1;
+	}
+	int i = snprintf(library_path, len, FORMAT, resolved_path, IBMTTS_LIB_PATH, resolved_path, LIB_PATH, resolved_path, USR_LIB_PATH);
+	if (i >= len) {
+	  res = ENOMEM;
+	  goto exit1;
+	}
+  }
   
   pipe_dup2(the_obj->pipe_command, PIPE_SOCKET_CHILD_INDEX, PIPE_COMMAND_FILENO);
 
   DebugFileFinish();
   fdwalk (close_cb, (void*)PIPE_COMMAND_FILENO);
+  
+  if (setenv("LD_LIBRARY_PATH", library_path, 1)) {
+	res = errno;
+	goto exit1;
+  }
 
-  if (execlp("voxind_init",
-			 "voxind_init",
-			 NULL) == -1) {
+  if (execl(VOXIND, VOXIND, NULL) == -1) {
     res = errno;
   }
 
   my_exit(the_obj);
   
+ exit1:
+  dbg("%s\n", strerror(res));
+  free(resolved_path);
+  free(library_path);
   LEAVE();
-  return res;
+  return res;  
 }
 
 static int daemon_start(struct libvoxin_t *the_obj)

@@ -5,7 +5,6 @@
 #define VERMIN 3
 #define VERMIC 0
 
-#define VOXIND "/usr/bin/voxind"
-
+#define VOXIND "usr/bin/voxind"
 
 #endif // _CONF_H
