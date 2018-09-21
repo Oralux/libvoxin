@@ -15,10 +15,11 @@ Usage:
 
 Build the libvoxin binaries (libvoxin, voxind, tests).
 
-Voxind will be installed in a copy of the supplied
-rootfilesystem. This helps to isolate the proprietary 32 bits
-text-to-speech inside a small rootfilesystem and avoid dependencies
-issues with the host filesystem.
+Voxind will be installed in a 32 bits root filesystem to lower
+dependencies issues with the host filesystem.
+
+Note that a minimal 32 bits root filesystem is needed as input to this
+script (see README.org).
 
 Options: 
 -c, --clean		   clean-up: delete the build directory and object files
@@ -26,20 +27,23 @@ Options:
 -h, --help         display this help 
 -m, --mach <arch>  architecture of the native binaries (libvoxin,
                    tests). arch=i386, otherwise current arch 
--r, --rfs32 <dir>  path of a 32 bits rootfilesystem
+-r, --rfs32 <dir>  path of a 32 bits root filesystem.
+                   default: /opt/voxin/rfs32
 -R, --release      build the tarballs in build/<arch>/release:
                    - libvoxin: libvoxin-${VERSION}-<arch>.tgz
                    - voxind: voxind-${VERSION}-<arch>.tgz  
-                   - 32 bits rootfilesystem:
-                     voxin-rfs32-${VERSION}-<arch>.tgz
 -t, --test         build tests 
 
 Example:
-# compile libvoxin/voxind, and build the tarballs
- $0 -R --rfs32=../rfs32/
+# compile libvoxin and voxind using the default 32 bits root
+# filesystem present in /opt/voxin/rfs32
+ $0
+
+# compile libvoxin/voxind and build the tarballs
+ $0 -R
 
 # compile libvoxin/voxind/tests with debug symbols
- $0 -dtr ../rfs32/
+ $0 -dt
 
 " 
 
@@ -77,8 +81,10 @@ case "$ARCH" in
 esac
 
 if [ -z "$RFS32REF" ] && [ -z "$CLEAN" ]; then
-	HELP=1
-elif [ ! -d "$RFS32REF" ] || [ ! -e "$RFS32REF/$IBMTTSLIB" ] || [ ! -e "$RFS32REF/$IBMTTSCONF" ]; then
+	RFS32REF=/opt/voxin/rfs32
+fi
+
+if [ ! -e "$RFS32REF/$IBMTTSLIB" ] || [ ! -e "$RFS32REF/$IBMTTSCONF" ]; then
 	echo "No $RFS32REF/$IBMTTSLIB or $RFS32REF/$IBMTTSCONF"
 	HELP=1
 fi
@@ -93,7 +99,7 @@ SRCDIR="$BASE/src"
 ARCHDIR="$BASE/build/$ARCH"
 RELDIR="$ARCHDIR/release"
 RFSDIR="$ARCHDIR/rfs"
-export DESTDIR="$RFSDIR/opt/voxin/$VERSION"
+export DESTDIR="$RFSDIR/opt/voxin"
 RFS32="$DESTDIR/rfs32"
 DESTDIR_RFS32="$RFS32/usr"
 
@@ -152,15 +158,14 @@ fi
 # symlinks for a global install (to be adapted according to the distro)
 cd $RFSDIR
 mkdir -p usr/{bin,lib}
-ln -s ../../opt/voxin/"$VERSION"/rfs32/usr/bin/voxind usr/bin/voxind
-ln -s ../../opt/voxin/"$VERSION"/lib/libvoxin.so."$VERMAJ" usr/lib/libibmeci.so
+ln -s ../../opt/voxin/rfs32/usr/bin/voxind usr/bin/voxind
+ln -s ../../opt/voxin/lib/libvoxin.so."$VERMAJ" usr/lib/libibmeci.so
 
 if [ -n "$RELEASE" ]; then
 	mkdir -p "$RELDIR"
 	fakeroot bash -c "\
-tar -C \"$RFSDIR\" -zcf \"$RELDIR/libvoxin-$VERSION-$ARCH.tgz\" usr/lib/libibmeci.so opt/voxin/\"$VERSION\"/lib/libvoxin.so* && \
-tar -C \"$RFSDIR\" -zcf \"$RELDIR/voxind-$VERSION-$ARCH.tgz\" usr/bin/voxind opt/voxin/\"$VERSION\"/rfs32/usr/bin/voxind && \
-tar -C \"$RFSDIR\" --exclude \"libvoxin*\" --exclude \"voxind*\" -zcf \"$RELDIR/voxin-rfs32-$VERSION-$ARCH.tgz\" opt/voxin/\"$VERSION\"/rfs32"	
+tar -C \"$RFSDIR\" -zcf \"$RELDIR/libvoxin-$VERSION-$ARCH.tgz\" usr/lib/libibmeci.so opt/voxin/lib/libvoxin.so* && \
+tar -C \"$RFSDIR\" -zcf \"$RELDIR/voxind-$VERSION-$ARCH.tgz\" usr/bin/voxind opt/voxin/rfs32/usr/bin/voxind"
 	printf "\nTarballs available in $RELDIR\n"	
 fi
 

@@ -9,7 +9,7 @@ getVersion
 ARCH=$(uname -m)
 ARCHDIR="$BASE/build/$ARCH"
 RFSDIR="$ARCHDIR/test/rfs"
-export DESTDIR="$RFSDIR/opt/voxin/$VERSION"
+export DESTDIR="$RFSDIR/opt/voxin"
 RFS32="$DESTDIR/rfs32"
 DESTDIR_RFS32="$RFS32/usr"
 

@@ -8,7 +8,8 @@ The libvoxin library eases the integration of voxin on 64 bits architectures.
 ./build.sh --release --rfs32=../rfs32
 #+END_SRC
 
-../rfs32 is the path to a minimal 32 bits rootfilesystem (see below).
+../rfs32 is the path to a minimal 32 bits root filesystem including the viavoice binaries (see below).
+By default /opt/voxin/rfs32 is used.
 
 ** Build with debug symbols + tests
 #+BEGIN_SRC shell
@@ -30,11 +31,22 @@ The libvoxin library eases the integration of voxin on 64 bits architectures.
 ./test.sh -d
 #+END_SRC
 
-* Minimal rfs32 rootfilesystem
+* Minimal rfs32 root filesystem
 
-Built e.g. by [[https://buildroot.org][Buildroot]] (see config in src/buildroot/).
+The 32 bits binaries are now located in rfs32, a dedicated 32 bits directory available globally in /opt/voxin/rfs32 or even locally.
 
-The tree is basically:
+Install the required 32 bits standard libraries (glibc,...) to test libvoxin/voxind.
+
+** viavoice
+
+Install the voxin-viavoice-xxx packages supplied by Oralux.
+Note that the conf file eci.ini is now expected in /opt/voxin/rfs32/ and must point to the installed binaries in the rfs32 directory.
+
+** standard 32 bits libraries
+
+These libraries can be built for example by [[https://buildroot.org][Buildroot]] (see its config in src/buildroot/).
+Or install the voxin-rfs32 package supplied by Oralux.
+The tree is basically :
 
 #+BEGIN_SRC shell
 tree rfs32
@@ -56,5 +68,10 @@ rfs32
     ├── bin
     ├── lib
     └── lib32 -> lib
+
+
 #+END_SRC
-* Memo: version in src/common/conf.h
+
+
+* Memo: version 
+The program version is stored in src/common/conf.h
