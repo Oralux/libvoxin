@@ -160,6 +160,7 @@ cd $RFSDIR
 mkdir -p usr/{bin,lib}
 ln -s ../../opt/voxin/rfs32/usr/bin/voxind usr/bin/voxind
 ln -s ../../opt/voxin/lib/libvoxin.so."$VERMAJ" usr/lib/libibmeci.so
+ln -s ../../opt/voxin/lib/libvoxin.so."$VERMAJ" usr/lib/libvoxin.so."$VERMAJ"
 
 if [ -n "$RELEASE" ]; then
 	mkdir -p "$RELDIR"
