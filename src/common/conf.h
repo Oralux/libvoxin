@@ -3,7 +3,7 @@
 
 #define VERMAJ 1
 #define VERMIN 3
-#define VERMIC 0
+#define VERMIC 1
 
 #define VOXIND "usr/bin/voxind"
 
