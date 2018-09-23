@@ -161,12 +161,18 @@ mkdir -p usr/{bin,lib}
 ln -s ../../opt/voxin/rfs32/usr/bin/voxind usr/bin/voxind
 ln -s ../../opt/voxin/lib/libvoxin.so."$VERMAJ" usr/lib/libibmeci.so
 ln -s ../../opt/voxin/lib/libvoxin.so."$VERMAJ" usr/lib/libvoxin.so."$VERMAJ"
+# compat ibmtts clients
+mkdir -p opt/IBM/ibmtts/inc
+ln -s ../../../voxin/rfs32/opt/IBM/ibmtts/inc/eci.h opt/IBM/ibmtts/inc/eci.h
+
 
 if [ -n "$RELEASE" ]; then
 	mkdir -p "$RELDIR"
 	fakeroot bash -c "\
 tar -C \"$RFSDIR\" -zcf \"$RELDIR/libvoxin-$VERSION-$ARCH.tgz\" usr/lib/libibmeci.so opt/voxin/lib/libvoxin.so* && \
-tar -C \"$RFSDIR\" -zcf \"$RELDIR/voxind-$VERSION-$ARCH.tgz\" usr/bin/voxind opt/voxin/rfs32/usr/bin/voxind"
+tar -C \"$RFSDIR\" -zcf \"$RELDIR/voxind-$VERSION-all.tgz\" usr/bin/voxind opt/voxin/rfs32/usr/bin/voxind && \
+tar -C \"$RFSDIR\" -zcf \"$RELDIR/libvoxin-dev-$VERSION-all.tgz\" opt/IBM/ibmtts/inc/eci.h
+"
 	printf "\nTarballs available in $RELDIR\n"	
 fi
 
