@@ -25,6 +25,8 @@ Options:
 -h, --help          display this help 
 -b, --build         build the directory
 -c, --clean         clean-up: delete the dedicated directory
+-g, --gdb           with gdb on libvoxin
+-G, --GDB           with gdb on voxind
 -s, --strace <log>  with strace using <log> as logfile prefix
 -t, --test <num>    run test number <num>
 
@@ -47,9 +49,9 @@ Example:
 
 }
 
-unset HELP ARCH BUILD CLEAN GDB STRACE TEST 
+unset ARCH BUILD CLEAN GDB_LIBVOXIN GDB_VOXIND HELP STRACE TEST 
 
-OPTIONS=`getopt -o bchs:t: --long build,clean,help,strace:,test: \
+OPTIONS=`getopt -o bcghs:t: --long build,clean,gdb,help,strace:,test: \
              -n "$NAME" -- "$@"`
 [ $? != 0 ] && usage && exit 1
 eval set -- "$OPTIONS"
@@ -59,6 +61,8 @@ while true; do
     -h|--help) HELP=1; shift;;
     -b|--build) BUILD=1; shift;;
     -c|--delete) CLEAN=1; shift;;
+    -g|--gdb) GDB_LIBVOXIN=1; shift;;
+    -G|--GDB) GDB_VOXIND=1; shift;;
     -s|--strace) STRACE=$2; shift 2;;
     -t|--test) TEST=$2; shift 2;;
     --) shift; break;;
@@ -85,11 +89,25 @@ if [ -n "$TEST" ]; then
 	rm -f /tmp/test_libvoxin* /tmp/libvoxin.log.*
 	export PATH="$RFSDIR"/usr/bin:$PATH
 	export LD_LIBRARY_PATH="$DESTDIR"/lib
+
+	unset pathname
+	for i in $(grep Path=/ $RFS32/eci.ini ); do
+		while read line; do
+			[ -e $line ] || pathname=$line;
+		done <<< "$(echo $i | sed 's+Path=/+/+')"
+		if [ -n "$pathname" ]; then
+			echo "File not found: $pathname"
+			exit 1
+		fi
+	done
+	
 	if [ -n "$STRACE" ]; then
 		strace -s300 -tt -ff -o "$STRACE" "$DESTDIR"/bin/test"$TEST"
 #		strace -s300 -tt -ff -o /tmp/voxind -p $(pidof voxind) &
 #		rm /tmp/test_voxind
-	elif [ -n "$GDB" ]; then
+	elif [ -n "$GDB_LIBVOXIN" ]; then
+		gdb -ex 'set follow-fork-mode child' -ex 'b child' "$DESTDIR"/bin/test"$TEST"
+	elif [ -n "$GDB_VOXIND" ]; then
 		touch /tmp/test_voxind
 		"$DESTDIR"/bin/test"$TEST" &
 		gdb -p $(pidof voxind)
@@ -105,6 +123,6 @@ fi
 
 touch /tmp/libvoxin.ok
 rsync -av --delete "$ARCHDIR"/rfs/ "$RFSDIR"
-sed -i "s#=/#=$RFS32/#" "$RFS32"/eci.ini
+sed -i "s#=/opt/voxin/rfs32/#=$RFS32/#" "$RFS32"/eci.ini
 #sudo bash -c "echo 0 > /proc/sys/kernel/yama/ptrace_scope"
 
