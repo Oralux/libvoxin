@@ -146,6 +146,13 @@ DESTDIR=$DESTDIR_RFS32 make clean
 DESTDIR=$DESTDIR_RFS32 make all
 DESTDIR=$DESTDIR_RFS32 make install
 
+#say
+echo "Entering say"
+cd "$SRCDIR"/say
+make clean
+make all
+make install
+
 # test
 if [ -n "$TEST" ]; then
 	echo "Entering test"
