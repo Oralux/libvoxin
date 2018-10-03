@@ -6,7 +6,7 @@ STRIP ?= strip --strip-unneeded
 IBMTTSDIR = /opt/IBM/ibmtts/lib/
 
 voxind: $(BIN)
-	$(CC) -o $(@) $(^) $(LDFLAGS) -L$(DESTDIR)/lib -lcommon -L$(DESTDIR)/../$(IBMTTSDIR) -libmeci -letidev
+	$(CC) -o $(@) $(^) $(LDFLAGS) -L$(DESTDIR)/lib -lcommon -L$(DESTDIR)/../$(IBMTTSDIR) -libmeci -letidev $(DESTDIR)/lib/libstdc++-libc6.2-2.so.3
 	$(STRIP) $(@)
 
 all: voxind
