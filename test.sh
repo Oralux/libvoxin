@@ -28,6 +28,7 @@ Options:
 -g, --gdb           with gdb on libvoxin
 -G, --GDB           with gdb on voxind
 -s, --strace <log>  with strace using <log> as logfile prefix
+-S, --system        test using the libvoxin library installed system wide
 -t, --test <num>    run test number <num>
 
 Example:
@@ -38,9 +39,11 @@ Example:
 # run test 1
  $0 -t 1
 
-# test with strace
- $0 -s /tmp/strace -t 1
+# test with strace and store log files in /tmp/log.pid
+ $0 -s /tmp/log -t1
 
+# test using the system wide libvoxin
+./test.sh -St1
 
 # delete the directory 
  $0 -c
@@ -49,9 +52,9 @@ Example:
 
 }
 
-unset ARCH BUILD CLEAN GDB_LIBVOXIN GDB_VOXIND HELP STRACE TEST 
+unset ARCH BUILD CLEAN GDB_LIBVOXIN GDB_VOXIND HELP STRACE SYS TEST 
 
-OPTIONS=`getopt -o bcghs:t: --long build,clean,gdb,help,strace:,test: \
+OPTIONS=`getopt -o bcgGhs:St: --long build,clean,gdb,GDB,help,strace:,system,test: \
              -n "$NAME" -- "$@"`
 [ $? != 0 ] && usage && exit 1
 eval set -- "$OPTIONS"
@@ -64,6 +67,7 @@ while true; do
     -g|--gdb) GDB_LIBVOXIN=1; shift;;
     -G|--GDB) GDB_VOXIND=1; shift;;
     -s|--strace) STRACE=$2; shift 2;;
+    -S|--system) SYS=1; shift;;
     -t|--test) TEST=$2; shift 2;;
     --) shift; break;;
     *) break;;
@@ -87,19 +91,20 @@ fi
 if [ -n "$TEST" ]; then
 	set +e
 	rm -f /tmp/test_libvoxin* /tmp/libvoxin.log.*
-	export PATH="$RFSDIR"/usr/bin:$PATH
-	export LD_LIBRARY_PATH="$DESTDIR"/lib
-
-	unset pathname
-	for i in $(grep Path=/ $RFS32/eci.ini ); do
-		while read line; do
-			[ -e $line ] || pathname=$line;
-		done <<< "$(echo $i | sed 's+Path=/+/+')"
-		if [ -n "$pathname" ]; then
-			echo "File not found: $pathname"
-			exit 1
-		fi
-	done
+	if [ -z "$SYS" ]; then
+		export PATH="$RFSDIR"/usr/bin:$PATH
+		export LD_LIBRARY_PATH="$DESTDIR"/lib
+		unset pathname
+		for i in $(grep Path=/ $RFS32/eci.ini ); do
+			while read line; do
+				[ -e $line ] || pathname=$line;
+			done <<< "$(echo $i | sed 's+Path=/+/+')"
+			if [ -n "$pathname" ]; then
+				echo "File not found: $pathname"
+				exit 1
+			fi
+		done
+	fi		
 	
 	if [ -n "$STRACE" ]; then
 		strace -s300 -tt -ff -o "$STRACE" "$DESTDIR"/bin/test"$TEST"
@@ -119,6 +124,7 @@ if [ -n "$TEST" ]; then
 	exit 0
 fi
 
+# BUILD
 [ ! -d "$RFSDIR" ] && mkdir -p "$RFSDIR"
 
 touch /tmp/libvoxin.ok
