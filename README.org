@@ -1,19 +1,33 @@
 
 The libvoxin library eases the integration of voxin on 64 bits architectures.
 
+For info, [[https://github.com/Oralux/libvoxin-debian][libvoxin-debian]] provide helper scripts to build the libvoxin packages and some of its dependencies. 
+Below we detail how to compile libvoxin and test it. 
 
 * Compil
-** Build the libvoxin tarballs
-#+BEGIN_SRC shell
-./build.sh --release --rfs32=../rfs32
-#+END_SRC
 
-../rfs32 is the path to a minimal 32 bits root filesystem including the viavoice binaries (see below).
-By default /opt/voxin/rfs32 is used.
+Firstly, install the voxin-libstdc++, voxin-rfs32 and voxin-viavoice packages which populates /opt/voxin/rfs32, the dedicated 32 bits directory:
+
+- the voxin-viavoice packages provide the ibmtts binaries,
+- voxin-libstdc++ and voxin-rfs32 provide standard 32 bits libraries.
+
+All these packages are included in voxin (>1.15).
+
+voxin-libstdc++ and voxin-rfs32 can be build from standard repositories, check for example [[https://github.com/Oralux/libvoxin-debian][libvoxin-debian]] .
+
+The voxin-viavoice packages include the same ibmtts binaries as previously. 
+The installation path has been changed (/opt/voxin/rfs32/ instead of / ).
+Consequently, eci.ini, the configuration file is now expected in /opt/voxin/rfs32/ and its pathnames must point to the installed binaries in the rfs32 directory.
+
+** Build the libvoxin tarballs
+ 
+#+BEGIN_SRC shell
+./build.sh --release
+#+END_SRC
 
 ** Build with debug symbols + tests
 #+BEGIN_SRC shell
-./build.sh -tdr ../rfs32
+./build.sh -td
 #+END_SRC
 
 ** Create a testing directory
@@ -32,15 +46,6 @@ By default /opt/voxin/rfs32 is used.
 #+END_SRC
 
 * Minimal rfs32 root filesystem
-
-The 32 bits binaries are now located in rfs32, a dedicated 32 bits directory available globally in /opt/voxin/rfs32 or even locally.
-
-Install the required 32 bits standard libraries (glibc,...) to test libvoxin/voxind.
-
-** viavoice
-
-Install the voxin-viavoice-xxx packages supplied by Oralux.
-Note that the conf file eci.ini is now expected in /opt/voxin/rfs32/ and must point to the installed binaries in the rfs32 directory.
 
 ** standard 32 bits libraries
 
@@ -71,6 +76,9 @@ rfs32
 
 
 #+END_SRC
+
+** old libstdc++ library
+install voxin-libstdc++ provided by Oralux or check https://github.com/Oralux/libvoxin-debian
 
 * Memo: version 
 The program version is stored in src/common/conf.h
