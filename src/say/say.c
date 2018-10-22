@@ -128,7 +128,9 @@ static void setWavHeader(wav_header_t *w, uint32_t wavSize)
 
 static int createWAV(FILE *fd)
 {
-  wav_header_t w; 
+  wav_header_t w;
+  ENTER();
+  
   if (!fd)
 	return -1;
   memset(&w, 0, sizeof(w));
@@ -144,6 +146,8 @@ static int updateHeaderWAV()
   int i;
   int err = 0;
 
+  ENTER();
+  
   for (i=0; i<obj.jobs; i++) {
 	if (!obj.wav[i].filename) {
 	  err = EINVAL;
@@ -158,17 +162,21 @@ static int updateHeaderWAV()
 
   setWavHeader(&w, wavSize);
 
+  if (obj.wav[0].fd) {
+	fclose(obj.wav[0].fd);
+  }
+
+  obj.wav[0].fd = fopen(obj.wav[0].filename, "r+");
   if (!obj.wav[0].fd) {
-	obj.wav[0].fd = fopen(obj.wav[0].filename, "r");
-	if (!obj.wav[0].fd) {
-	  err = errno;
-	  goto exit0;	  
-	}
-  } else {
-	rewind(obj.wav[0].fd);
+	err = errno;
+	goto exit0;	  
   }
   
-  fwrite(&w, 1, sizeof(w), obj.wav[0].fd);
+  i = fwrite(&w, 1, sizeof(w), obj.wav[0].fd);
+  // TODO
+  if (i != sizeof(w)) {
+	err("%d written (%ld expected)", i, sizeof(w));
+  }
 
  exit0:
   if (err) {
@@ -180,6 +188,7 @@ static int updateHeaderWAV()
 static int closeWAV()
 {
   int i;
+  ENTER();
   for (i=0; i<obj.jobs; i++) {
 	if (obj.wav[i].fd) {
 	  fclose(obj.wav[i].fd);
@@ -195,6 +204,8 @@ static int mergeWAV(const char *filename)
   int i;  
   FILE *fd = NULL;
 
+  ENTER();
+  
   if (!filename) {
 	err = EINVAL;
 	goto exit0;
@@ -309,12 +320,6 @@ static int saySentences()
   } else {
 	err = 0;
   }
-
-  err = updateHeaderWAV();
-  if (err) {
-	goto exit0;
-  }
-  err = closeWAV();
 
 exit0:  
   return err;
@@ -613,13 +618,25 @@ int main(int argc, char *argv[])
   }
 
   if (obj.text.filename) {
-	return sayText();
+	  sayText();
+	  err = updateHeaderWAV();
+	  // TODO
+	  /* if (err) { */
+	  /* 	goto exit0; */
+	  /* } */
+	  err = closeWAV();
+	  return err;
   }
 
   if (!*sentences) {
 	strcpy(sentences, "Hello World!");
   }
   err = saySentences();
+  err = updateHeaderWAV();
+  if (err) {
+	goto exit0;
+  }
+  err = closeWAV();
   
  exit0:
   if (obj.text.fd) {
