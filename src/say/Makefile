@@ -1,5 +1,7 @@
+# version
+VERSION ?= 0.0.1
 LIBS=-L$(DESTDIR)/lib -lvoxin -lcommon
-CFLAGS += -I../api -I../common
+CFLAGS += -DVERSION='"$(VERSION)"' -I../api -I../common
 STRIP ?= strip --strip-unneeded
 
 all: say
@@ -14,3 +16,6 @@ install:
 
 clean:
 	rm -f say.o say
+
+test:
+	./test.sh
