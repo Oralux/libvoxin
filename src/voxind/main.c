@@ -407,13 +407,13 @@ int main(int argc, char **argv)
   ENTER();
   BUILD_ASSERT(PIPE_MAX_BLOCK > MIN_MSG_SIZE);
 
-  memset(&act, 0, sizeof(act));
-  sigemptyset(&act.sa_mask);
-  act.sa_flags = 0;
-  act.sa_handler = sighandler;
-  for (i = 1; i < NSIG; i++) {
-    sigaction(i, &act, NULL);
-  }
+  /* memset(&act, 0, sizeof(act)); */
+  /* sigemptyset(&act.sa_mask); */
+  /* act.sa_flags = 0; */
+  /* act.sa_handler = sighandler; */
+  /* for (i = 1; i < NSIG; i++) { */
+  /*   sigaction(i, &act, NULL); */
+  /* } */
   
   my_voxind = calloc(1, sizeof(struct voxind_t));
   if (!my_voxind) {
