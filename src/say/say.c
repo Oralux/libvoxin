@@ -17,6 +17,7 @@
 #define MAX_SAMPLES 10240
 #define MAX_CHAR 10240
 #define MAX_JOBS 32
+#define SPEED_UNDEFINED -1
 static char sentences[MAX_CHAR+10];
 
 void usage()
@@ -29,10 +30,12 @@ The text can be supplied in a file or as the last argument of the \n\
 command line (between quotes). \n\
 \n\
 OPTIONS :\n\
-  wavfile    the output wavfile (without header by default)	\n\
-  textfile   (optional) text file to be spoken. \n\
-  jobs       (optional) number of jobs, share the worload on several \n\
-             processes to speedup the overall conversion. \n\
+  -w    the output wavfile (without header by default)	\n\
+  -f    (optional) text file to be spoken. \n\
+  -j    (optional) number of jobs, share the worload on several \n\
+        processes to speedup the overall conversion. \n\
+  -s    speed in words per minute (from 0 to 1297) \n\
+  -S    speed in units (from 0 to 250) \n\
 ", VERSION);
 }
 
@@ -65,6 +68,7 @@ typedef struct {
   int with_wav_header;
   tts_t tts;
   int jobs;
+  int speed;
 } obj_t;
 
 static obj_t obj;
@@ -84,6 +88,8 @@ typedef struct __attribute__((__packed__)) {
   char subChunk2ID[4];
   uint32_t subChunk2Size;
 } wav_header_t;
+
+#define getSpeedUnits(i) ((i<0) ? 0 : ((i>250) ? 250 : i))
 
 
 static void setWavHeader(wav_header_t *w, uint32_t wavSize)
@@ -270,8 +276,10 @@ static ECIHand initECI()
   }
   
   handle = eciNew();
-  if (!handle)
+  if (!handle) {
+	err("null handle");
 	return NULL;
+  }
 
   data_cb.fd = fileno(obj.wav[0].fd);
   if (data_cb.fd == -1) {
@@ -279,6 +287,14 @@ static ECIHand initECI()
 	goto exit0;
   }
 
+
+  if (obj.speed != SPEED_UNDEFINED) {
+	if (eciSetVoiceParam(handle, 0, eciSpeed, obj.speed) == -1) {
+	  err("error: set param %d to %d", eciSpeed, obj.speed);
+	  goto exit0;
+	}
+  }
+  
   eciRegisterCallback(handle, my_client_callback, &data_cb);
 
   if (!eciSetOutputBuffer(handle, MAX_SAMPLES, obj.tts.samples))
@@ -553,9 +569,10 @@ int main(int argc, char *argv[])
   ENTER();
 
   *sentences = 0;
-  obj.jobs = 1;	  
+  obj.jobs = 1;
+  obj.speed = SPEED_UNDEFINED;
 
-  while ((opt = getopt(argc, argv, "hf:j:w:")) != -1) {
+  while ((opt = getopt(argc, argv, "hf:j:w:s:S:")) != -1) {
     switch (opt) {
     case 'w':
 	  if (obj.wav[0].filename)
@@ -575,6 +592,18 @@ int main(int argc, char *argv[])
 
     case 'h':
 	  help = 1;	  
+      break;
+
+    case 'S':
+	  obj.speed = getSpeedUnits(atoi(optarg));
+      break;
+
+    case 's':
+	  {
+		int i = atoi(optarg);
+		i = (i*2-140)/10;
+		obj.speed = getSpeedUnits(i);
+	  }
       break;
 
     default:
