@@ -167,5 +167,17 @@ time ./say -j 4 -w $FILE.wav -f $FILE
 play $FILE.wav
 rm $FILE.wav
 
+echo "test 4"
+getTextFileLong $FILE
+time ./say -s 500 -w $FILE.wav -f $FILE
+play $FILE.wav
+rm $FILE.wav
+
+echo "test 5"
+getTextFileLong $FILE
+time ./say -S 86 -w $FILE.wav -f $FILE
+play $FILE.wav
+rm $FILE.wav
+
 rm "$FILE"
 
