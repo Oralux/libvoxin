@@ -149,12 +149,6 @@ EOF
 
 }
 
-rawToWAV() {
-	local rawfile=$1
-	sox -r 11025 -e signed -b 16 -c 1 $rawfile ${rawfile%.*}.wav
-}
-
-
 FILE=$(mktemp -t say.XXXXXXXXXX)
 
 echo "test 1"
@@ -175,6 +169,13 @@ rm $FILE.wav
 echo "test 4"
 getTextFileLong $FILE
 time ./say -S 86 -f $FILE | $PLAY
+
+echo "test 5"
+./say -L
+
+#echo "test 6"
+#./say -L | grep -qo ",fr,"
+
 
 rm "$FILE"
 

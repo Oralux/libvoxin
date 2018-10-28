@@ -23,7 +23,7 @@ static char tempbuf[MAX_CHAR+10];
 #define FILE_TEMPLATE_LENGTH 20
 void usage()
 {
-  fprintf(stderr, "Usage: say [-w wavfile] [-f textfile] [-j jobs] \"optional text\"\n \
+  fprintf(stderr, "Usage: say [-w wavfile] [-f textfile] [-j jobs] [-L] \"optional text\"\n \
  \n\
 say (version %s) \n\
 Converts the text to a wav file. \n\
@@ -35,11 +35,12 @@ OPTIONS :\n\
         say -w file.wav	\n\
         other ways to get the wav output:	\n\
         say > file.wav	\n\
-        say | play -	\n\
+        say | aplay	\n\
         say | paplay	\n\
   -f    (optional) text file to be spoken. \n\
   -j    (optional) number of jobs, share the worload on several \n\
         processes to speedup the overall conversion. \n\
+  -L    list installed voices\n\
   -s    speed in words per minute (from 0 to 1297) \n\
   -S    speed in units (from 0 to 250) \n\
   -d    for debug, wait in an infinite loop \n\
@@ -97,8 +98,84 @@ typedef struct __attribute__((__packed__)) {
   uint32_t subChunk2Size;
 } wav_header_t;
 
+typedef struct {
+  char *name;
+  char *language;
+  char *variant;
+} voice_t;
+
 #define getSpeedUnits(i) ((i<0) ? 0 : ((i>250) ? 250 : i))
 
+// eciLocale, eciLocales from speech-dispatcher (ibmtts.c)
+typedef struct _eciLocale {
+	char *name;
+	char *lang;
+	char *dialect;
+	enum ECILanguageDialect langID;
+	char *charset;
+} eciLocale, *eciLocaleList;
+
+static eciLocale eciLocales[] = {
+	{
+	 "American_English", "en", "US", eciGeneralAmericanEnglish,
+	 "ISO-8859-1"},
+	{"British_English", "en", "GB", eciBritishEnglish, "ISO-8859-1"},
+	{"Castilian_Spanish", "es", "ES", eciCastilianSpanish, "ISO-8859-1"},
+	{"Mexican_Spanish", "es", "MX", eciMexicanSpanish, "ISO-8859-1"},
+	{"French", "fr", "FR", eciStandardFrench, "ISO-8859-1"},
+	{"Canadian_French", "ca", "FR", eciCanadianFrench, "ISO-8859-1"},
+	{"German", "de", "DE", eciStandardGerman, "ISO-8859-1"},
+	{"Italian", "it", "IT", eciStandardItalian, "ISO-8859-1"},
+	{"Mandarin_Chinese", "zh", "CN", eciMandarinChinese, "GBK"},
+	{"Mandarin_Chinese GB", "zh", "CN_GB", eciMandarinChineseGB, "GBK"},
+	{
+	 "Mandarin_Chinese PinYin", "zh", "CN_PinYin", eciMandarinChinesePinYin,
+	 "GBK"},
+	{"Mandarin_Chinese UCS", "zh", "CN_UCS", eciMandarinChineseUCS, "UCS2"},
+	{"Taiwanese_Mandarin", "zh", "TW", eciTaiwaneseMandarin, "BIG5"},
+	{
+	 "Taiwanese_Mandarin Big 5", "zh", "TW_Big5", eciTaiwaneseMandarinBig5,
+	 "BIG5"},
+	{
+	 "Taiwanese_Mandarin ZhuYin", "zh", "TW_ZhuYin",
+	 eciTaiwaneseMandarinZhuYin, "BIG5"},
+	{
+	 "Taiwanese_Mandarin PinYin", "zh", "TW_PinYin",
+	 eciTaiwaneseMandarinPinYin, "BIG5"},
+	{
+	 "Taiwanese_Mandarin UCS", "zh", "TW_UCS", eciTaiwaneseMandarinUCS,
+	 "UCS2"},
+	{
+	 "Brazilian_Portuguese", "pt", "BR", eciBrazilianPortuguese,
+	 "ISO-8859-1"},
+	{"Japanese", "ja", "JP", eciStandardJapanese, "SJIS"},
+	{"Japanese_SJIS", "ja", "JP_SJIS", eciStandardJapaneseSJIS, "SJIS"},
+	{"Japanese_UCS", "ja", "JP_UCS", eciStandardJapaneseUCS, "UCS2"},
+	{"Finnish", "fi", "FI", eciStandardFinnish, "ISO-8859-1"},
+	{"Korean", "ko", "KR", eciStandardKorean, "UHC"},
+	{"Korean_UHC", "ko", "KR_UHC", eciStandardKoreanUHC, "UHC"},
+	{"Korean_UCS", "ko", "KR_UCS", eciStandardKoreanUCS, "UCS2"},
+	{"Cantonese", "zh", "HK", eciStandardCantonese, "GBK"},
+	{"Cantonese_GB", "zh", "HK_GB", eciStandardCantoneseGB, "GBK"},
+	{"Cantonese_UCS", "zh", "HK_UCS", eciStandardCantoneseUCS, "UCS2"},
+	{"HongKong_Cantonese", "zh", "HK", eciHongKongCantonese, "BIG5"},
+	{
+	 "HongKong_Cantonese Big 5", "zh", "HK_BIG5", eciHongKongCantoneseBig5,
+	 "BIG5"},
+	{
+	 "HongKong_Cantonese UCS", "zh", "HK_UCS", eciHongKongCantoneseUCS,
+	 "UCS-2"},
+	{"Dutch", "nl", "BE", eciStandardDutch, "ISO-8859-1"},
+	{"Norwegian", "no", "NO", eciStandardNorwegian, "ISO-8859-1"},
+	{"Swedish", "sv", "SE", eciStandardSwedish, "ISO-8859-1"},
+	{"Danish", "da", "DK", eciStandardDanish, "ISO-8859-1"},
+	{"Reserved", "en", "US", eciStandardReserved, "ISO-8859-1"},
+	{"Thai", "th", "TH", eciStandardThai, "TIS-620"},
+	{"ThaiTIS", "th", "TH_TIS", eciStandardThaiTIS, "TIS-620"},
+	{NULL, 0, NULL}
+};
+
+#define MAX_NB_OF_LANGUAGES (sizeof(eciLocales)/sizeof(eciLocales[0]) - 1)
 
 static void WavSetHeader(wav_header_t *w, uint32_t wavSize)
 {
@@ -357,6 +434,75 @@ static void *synthInit(tts_t *tts, FILE *fdo)
   return NULL;
 }
 
+
+static int synthConvertVoiceId(int voiceId, voice_t *v)
+{
+  int i;
+  int err = EINVAL;
+
+  if (!v) {
+	err = EINVAL;
+	goto exit0;
+  }
+
+  for (i=0; i<MAX_NB_OF_LANGUAGES; i++) {
+	if (eciLocales[i].langID == voiceId) {
+	  v->name = eciLocales[i].name;
+	  v->language = eciLocales[i].lang;
+	  v->variant = eciLocales[i].dialect;
+	  err = 0;
+	  break;
+	}
+  }
+
+ exit0:
+  if (err) {
+	err("%s",strerror(err));
+  }
+  return err;	
+}
+
+static int synthGetVoices(voice_t *list, int *nbVoices)
+{
+  int err = 0;
+  int i = 0;
+  enum ECILanguageDialect *voiceId = NULL;
+  int max = 0;
+
+  if (!nbVoices || (*nbVoices && !list)) {
+	err = EINVAL;
+	goto exit0;
+  }
+  max = *nbVoices;
+  if (max) {
+	voiceId = calloc(max, sizeof(voiceId));
+	if (!voiceId) {
+	  err = errno;
+	  goto exit0;
+	}
+  } else {
+	static enum ECILanguageDialect foo;
+	voiceId = &foo;
+  }
+  if (eciGetAvailableLanguages(voiceId, nbVoices)) {
+	err = EINVAL;
+	goto exit0;
+  }
+
+  for (i=0; i<max; i++) {
+	synthConvertVoiceId(voiceId[i], list+i);
+  }
+  
+ exit0:
+  if (max && voiceId) {
+	free(voiceId);
+  }
+  if (err) {
+	err("%s",strerror(err));
+  }
+  return err;	
+}
+
 // text: 16 char min
 static int synthSay(tts_t *tts, char *text)
 {
@@ -589,6 +735,45 @@ static int objFlushWav()
   }  
   return err;
 }
+
+
+static int objList()
+{
+  int err = 0;  
+  voice_t *list = NULL;
+  int nbVoices = 0;
+  int i;
+  
+  synthGetVoices(NULL, &nbVoices);
+  if (err) {
+	goto exit0;
+  }
+  list = (voice_t *)calloc(nbVoices, sizeof(voice_t));
+  if (!list) {
+	err = errno;
+	goto exit0;
+  }
+  err = synthGetVoices(list, &nbVoices);
+  if (err) {
+	goto exit0;
+  }
+
+  printf("Name,Language,Variant\n");
+  for (i=0; i<nbVoices; i++) {
+	printf("%s,%s,%s\n", list[i].name, list[i].language, list[i].variant);
+  }
+
+exit0:
+  if (list) {
+	free(list);
+  }
+  if (err) {
+	char *s = strerror(err);
+	err("%s", s);
+  }
+return err;
+}
+
 
 static int objSayText(region_t r, char* output, int withWavHeader)
 {
@@ -862,10 +1047,11 @@ int main(int argc, char *argv[])
   int temporaryOutput = 0;
   int fifo = 0;
   int err = EINVAL;
+  int list = 0;
   
   ENTER();
  
-  while ((opt = getopt(argc, argv, "dhf:j:w:s:S:")) != -1) {
+  while ((opt = getopt(argc, argv, "df:hj:Ls:S:w:")) != -1) {
     switch (opt) {
     case 'w':
 	  if (output) {
@@ -887,6 +1073,10 @@ int main(int argc, char *argv[])
 
     case 'h':
 	  help = 1;	  
+      break;
+
+    case 'L':
+	  list = 1;	  
       break;
 
     case 'S':
@@ -925,6 +1115,11 @@ int main(int argc, char *argv[])
 	goto exit0;
   }
 
+  if (list) {
+	err = objList();
+	goto exit0;
+  }
+  
   {
 	const char *s =  (optind == argc-1) ? argv[optind] : NULL;  
 	sentenceCreate(s);
@@ -941,7 +1136,7 @@ int main(int argc, char *argv[])
 	usage();
 	goto exit0;
   }
-  
+
   objSay();
   
  exit0:
