@@ -18,29 +18,43 @@
 #define MAX_CHAR 10240
 #define MAX_JOBS 32
 #define SPEED_UNDEFINED -1
+#define VOICE_UNDEFINED -1
 static char tempbuf[MAX_CHAR+10];
 #define FILE_TEMPLATE "/tmp/say.XXXXXXXXXX"
 #define FILE_TEMPLATE_LENGTH 20
 void usage()
 {
-  fprintf(stderr, "Usage: say [-w wavfile] [-f textfile] [-j jobs] [-L] \"optional text\"\n \
+  fprintf(stderr, "Usage: say OPTIONS \"optional text\"\n \
  \n\
 say (version %s) \n\
-Converts the text to a wav file. \n\
-The text can be supplied in a file or as the last argument of the \n\
-command line (between quotes). \n\
+Read the supplied text and writes speech to an audio file (WAV format)\n\
+or an external audio player.\n\
+\n\
+EXAMPLES :\n\
+\n\
+./say \"hello world\" | aplay\n\
+./say -f file.txt > audio.wav\n\
+# Wrong command because no output is supplied\n\
+./say \"Hello all\"\n\
+\n\
+# Read file.txt in French at 500 words per minute, use 4 jobs to speed\n\
+  up conversion\n\
+./say -f file.txt -l fr -s 500 -j 4 -w audio.wav\n\
+#\n\
+\n\
 \n\
 OPTIONS :\n\
-  -w    (optional) the output wavfile (with header by default)	\n\
+  -w    the output wavfile (with header by default)	\n\
         say -w file.wav	\n\
         other ways to get the wav output:	\n\
         say > file.wav	\n\
         say | aplay	\n\
         say | paplay	\n\
-  -f    (optional) text file to be spoken. \n\
-  -j    (optional) number of jobs, share the worload on several \n\
-        processes to speedup the overall conversion. \n\
-  -L    list installed voices\n\
+  -f    text file to be spoken. \n\
+  -j    number of jobs, share the workload on several \n\
+        processes to speedup conversion. \n\
+  -l    select voice/language\n\
+  -L    list installed voices/languages\n\
   -s    speed in words per minute (from 0 to 1297) \n\
   -S    speed in units (from 0 to 250) \n\
   -d    for debug, wait in an infinite loop \n\
@@ -68,7 +82,8 @@ typedef struct {
 typedef struct {
   void *handle;
   short samples[MAX_SAMPLES];
-  int speed;
+  int speed; // SPEED_UNDEFINED if unset
+  int voiceID; // VOICE_UNDEFINED if unset
 } tts_t;
 
 typedef struct {
@@ -409,9 +424,16 @@ static void *synthInit(tts_t *tts, FILE *fdo)
 	goto exit0;
   }
 
+  if (tts->voiceID != VOICE_UNDEFINED) {
+	if (eciSetParam(tts->handle, eciLanguageDialect, tts->voiceID) == -1) {
+	  err("error: set param %d to %d", eciLanguageDialect, tts->voiceID);
+	  goto exit0;
+	}
+  }
+
   if (tts->speed != SPEED_UNDEFINED) {
 	if (eciSetVoiceParam(tts->handle, 0, eciSpeed, tts->speed) == -1) {
-	  err("error: set param %d to %d", eciSpeed, tts->speed);
+	  err("error: set voice param %d to %d", eciSpeed, tts->speed);
 	  goto exit0;
 	}
   }
@@ -435,7 +457,32 @@ static void *synthInit(tts_t *tts, FILE *fdo)
 }
 
 
-static int synthConvertVoiceId(int voiceId, voice_t *v)
+static int synthSearchVoice(char *name, int *voiceID)
+{
+  int i;
+  int err = EINVAL;
+
+  if (!name || !voiceID) {
+	err = EINVAL;
+	goto exit0;
+  }
+
+  for (i=0; i<MAX_NB_OF_LANGUAGES; i++) {
+	if (!strcasecmp(name, eciLocales[i].name) || !strcasecmp(name, eciLocales[i].lang)) {
+	  *voiceID = eciLocales[i].langID;
+	  err= 0;
+	  break;
+	}
+  }
+
+ exit0:
+  if (err) {
+	err("%s",strerror(err));
+  }
+  return err;	
+}
+
+static int synthConvertVoiceID(int voiceID, voice_t *v)
 {
   int i;
   int err = EINVAL;
@@ -446,7 +493,7 @@ static int synthConvertVoiceId(int voiceId, voice_t *v)
   }
 
   for (i=0; i<MAX_NB_OF_LANGUAGES; i++) {
-	if (eciLocales[i].langID == voiceId) {
+	if (eciLocales[i].langID == voiceID) {
 	  v->name = eciLocales[i].name;
 	  v->language = eciLocales[i].lang;
 	  v->variant = eciLocales[i].dialect;
@@ -466,7 +513,7 @@ static int synthGetVoices(voice_t *list, int *nbVoices)
 {
   int err = 0;
   int i = 0;
-  enum ECILanguageDialect *voiceId = NULL;
+  enum ECILanguageDialect *voiceID = NULL;
   int max = 0;
 
   if (!nbVoices || (*nbVoices && !list)) {
@@ -475,27 +522,27 @@ static int synthGetVoices(voice_t *list, int *nbVoices)
   }
   max = *nbVoices;
   if (max) {
-	voiceId = calloc(max, sizeof(voiceId));
-	if (!voiceId) {
+	voiceID = calloc(max, sizeof(voiceID));
+	if (!voiceID) {
 	  err = errno;
 	  goto exit0;
 	}
   } else {
 	static enum ECILanguageDialect foo;
-	voiceId = &foo;
+	voiceID = &foo;
   }
-  if (eciGetAvailableLanguages(voiceId, nbVoices)) {
+  if (eciGetAvailableLanguages(voiceID, nbVoices)) {
 	err = EINVAL;
 	goto exit0;
   }
 
   for (i=0; i<max; i++) {
-	synthConvertVoiceId(voiceId[i], list+i);
+	synthConvertVoiceID(voiceID[i], list+i);
   }
   
  exit0:
-  if (max && voiceId) {
-	free(voiceId);
+  if (max && voiceID) {
+	free(voiceID);
   }
   if (err) {
 	err("%s",strerror(err));
@@ -949,7 +996,7 @@ static int objSay()
   return err;
 }
 
-static int objCreate(char *input, char *output, int withWavHeader, int jobs, int speed)
+static int objCreate(char *input, char *output, int withWavHeader, int jobs, int speed, char *voice)
 {
   int err = 0;
   
@@ -959,7 +1006,17 @@ static int objCreate(char *input, char *output, int withWavHeader, int jobs, int
   obj.wav[0].filename = output;
   obj.withWavHeader = withWavHeader;
   obj.jobs = jobs;
-  obj.tts.speed = speed; 
+  obj.tts.speed = speed;
+  obj.tts.voiceID = VOICE_UNDEFINED;
+  if (voice) {
+	int voiceID;
+	err = synthSearchVoice(voice, &voiceID);
+	free(voice);
+	if (err) {
+	  goto exit0;
+	}
+	obj.tts.voiceID = voiceID;
+  }
   
   err = checkOutput(&obj.wav[0].filename, &obj.wav[0].temporary);
   if (err) {
@@ -1029,10 +1086,10 @@ static void objDelete()
 	  obj.wav[i].filename = NULL;
 	}
   }
-
+  
   if (obj.tts.handle) {
 	eciDelete(obj.tts.handle);
-  }  
+  }
 }
 
 int main(int argc, char *argv[])
@@ -1048,10 +1105,11 @@ int main(int argc, char *argv[])
   int fifo = 0;
   int err = EINVAL;
   int list = 0;
+  char *voice = NULL;
   
   ENTER();
  
-  while ((opt = getopt(argc, argv, "df:hj:Ls:S:w:")) != -1) {
+  while ((opt = getopt(argc, argv, "df:hj:l:Ls:S:w:")) != -1) {
     switch (opt) {
     case 'w':
 	  if (output) {
@@ -1073,6 +1131,13 @@ int main(int argc, char *argv[])
 
     case 'h':
 	  help = 1;	  
+      break;
+
+    case 'l':
+	  if (voice) {
+		free(voice);
+	  }
+	  voice = strdup(optarg);
       break;
 
     case 'L':
@@ -1131,7 +1196,7 @@ int main(int argc, char *argv[])
 	goto exit0;
   }
 
-  err = objCreate(input, output, 1, jobs, speed);
+  err = objCreate(input, output, 1, jobs, speed, voice);
   if (err) {
 	usage();
 	goto exit0;
