@@ -13,6 +13,13 @@
 #Release Date: June 22, 2008 [EBook #135]
 #Last Updated: October 30, 2009
 
+unset PLAY
+which aplay && PLAY=aplay
+which paplay && PLAY=paplay
+
+[ -z "$PLAY" ] && echo "Install aplay (alsa-utils) or paplay (pulseaudio-utils)" && exit 1
+
+
 getTextFileShort() {
 	local TEXTFILE=$1
 	cat <<EOF>$TEXTFILE
@@ -151,33 +158,34 @@ rawToWAV() {
 FILE=$(mktemp -t say.XXXXXXXXXX)
 
 echo "test 1"
-time ./say -w $FILE.wav "hello world!"
-play $FILE.wav
+time ./say "hello world!" > $FILE.wav 
+$PLAY $FILE.wav
 rm $FILE.wav
 
 echo "test 2"
 getTextFileShort $FILE
-time ./say -w $FILE.wav -f $FILE
-play $FILE.wav
-rm $FILE.wav
+time ./say -f $FILE | $PLAY
 
 echo "test 3"
 getTextFileLong $FILE
-time ./say -j 4 -w $FILE.wav -f $FILE
-play $FILE.wav
+time ./say -j 4 -s 500 -w $FILE.wav -f $FILE
+$PLAY $FILE.wav
 rm $FILE.wav
 
 echo "test 4"
 getTextFileLong $FILE
-time ./say -s 500 -w $FILE.wav -f $FILE
-play $FILE.wav
-rm $FILE.wav
-
-echo "test 5"
-getTextFileLong $FILE
-time ./say -S 86 -w $FILE.wav -f $FILE
-play $FILE.wav
-rm $FILE.wav
+time ./say -S 86 -f $FILE | $PLAY
 
 rm "$FILE"
+
+# debug
+#sudo bash -c "echo 0 > /proc/sys/kernel/yama/ptrace_scope"
+# ./say -d > /tmp/fic1
+# gdb -p $(pidof say)
+# (gdb) up
+# (gdb) up
+# ...
+#		  sleep(5);
+# (gdb) set var debug=0
+# (gdb) continue
 

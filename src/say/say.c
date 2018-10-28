@@ -18,11 +18,12 @@
 #define MAX_CHAR 10240
 #define MAX_JOBS 32
 #define SPEED_UNDEFINED -1
-static char sentences[MAX_CHAR+10];
-
+static char tempbuf[MAX_CHAR+10];
+#define FILE_TEMPLATE "/tmp/say.XXXXXXXXXX"
+#define FILE_TEMPLATE_LENGTH 20
 void usage()
 {
-  fprintf(stderr, "Usage: say -w wavfile [-f textfile] [-j jobs] \"optional text\"\n \
+  fprintf(stderr, "Usage: say [-w wavfile] [-f textfile] [-j jobs] \"optional text\"\n \
  \n\
 say (version %s) \n\
 Converts the text to a wav file. \n\
@@ -30,12 +31,18 @@ The text can be supplied in a file or as the last argument of the \n\
 command line (between quotes). \n\
 \n\
 OPTIONS :\n\
-  -w    the output wavfile (without header by default)	\n\
+  -w    (optional) the output wavfile (with header by default)	\n\
+        say -w file.wav	\n\
+        other ways to get the wav output:	\n\
+        say > file.wav	\n\
+        say | play -	\n\
+        say | paplay	\n\
   -f    (optional) text file to be spoken. \n\
   -j    (optional) number of jobs, share the worload on several \n\
         processes to speedup the overall conversion. \n\
   -s    speed in words per minute (from 0 to 1297) \n\
   -S    speed in units (from 0 to 250) \n\
+  -d    for debug, wait in an infinite loop \n\
 ", VERSION);
 }
 
@@ -49,6 +56,7 @@ static data_cb_t data_cb;
 typedef struct {
   char *filename;
   FILE *fd;
+  int temporary;
 } file_t;
 
 typedef struct {
@@ -59,16 +67,16 @@ typedef struct {
 typedef struct {
   void *handle;
   short samples[MAX_SAMPLES];
+  int speed;
 } tts_t;
 
 typedef struct {
   file_t text;
   region_t region;
   file_t wav[MAX_JOBS];
-  int with_wav_header;
+  int withWavHeader;
   tts_t tts;
   int jobs;
-  int speed;
 } obj_t;
 
 static obj_t obj;
@@ -92,15 +100,17 @@ typedef struct __attribute__((__packed__)) {
 #define getSpeedUnits(i) ((i<0) ? 0 : ((i>250) ? 250 : i))
 
 
-static void setWavHeader(wav_header_t *w, uint32_t wavSize)
+static void WavSetHeader(wav_header_t *w, uint32_t wavSize)
 {
   uint32_t rawSize = 0;
 
-  if (!w)
+  if (!w) {
 	return;
+  }
 
-  if (wavSize < sizeof(wav_header_t))
+  if (wavSize < sizeof(wav_header_t)) {
 	wavSize = sizeof(wav_header_t);
+  }
 
   rawSize = wavSize - sizeof(wav_header_t);
   
@@ -122,35 +132,383 @@ static void setWavHeader(wav_header_t *w, uint32_t wavSize)
   w->subChunk2Size = rawSize;
  
   
-/* 00000000  52 49 46 46 78 22 10 00  57 41 56 45 66 6d 74 20  |RIFFx"..WAVEfmt | */
-/* 00000010  10 00 00 00 01 00 01 00  11 2b 00 00 22 56 00 00  |.........+.."V..| */
-/* 00000020  02 00 10 00 64 61 74 61  54 22 10 00 85 ff ea ff  |....dataT"......| */
+  /* 00000000  52 49 46 46 78 22 10 00  57 41 56 45 66 6d 74 20  |RIFFx"..WAVEfmt | */
+  /* 00000010  10 00 00 00 01 00 01 00  11 2b 00 00 22 56 00 00  |.........+.."V..| */
+  /* 00000020  02 00 10 00 64 61 74 61  54 22 10 00 85 ff ea ff  |....dataT"......| */
 
-/* <4:"RIFF">     <4:riffsize>             <8:"WAVEfmt "> */
-/* <4:0x00000010> <2:0x0001> <2:0x0001>    <4:0x00002b11> <4:00005622> */
-/* <2:0x0002> <2:0x0010> <4:"data"> <4:dataSize> */
+  /* <4:"RIFF">     <4:riffsize>             <8:"WAVEfmt "> */
+  /* <4:0x00000010> <2:0x0001> <2:0x0001>    <4:0x00002b11> <4:00005622> */
+  /* <2:0x0002> <2:0x0010> <4:"data"> <4:dataSize> */
   
 }
 
-static int createWAV(FILE *fd)
+static int copyFile(const char *filename, FILE *dest)
 {
-  wav_header_t w;
-  ENTER();
+  int size = 1;
+  int err=0;
+  FILE *src = NULL;
+
+  if (!filename || !dest) {
+	err = EINVAL;
+	goto exit0;
+  }
+
+  src = fopen(filename, "r");
+  if (!src) {
+	err = errno;
+	goto exit0;
+  }
   
-  if (!fd)
-	return -1;
-  memset(&w, 0, sizeof(w));
-  fwrite(&w, 1, sizeof(w), fd);
-  return 0;
+  while(size) {
+	// TODO checks
+	size = fread(tempbuf, 1, MAX_CHAR, src);
+	fwrite(tempbuf, 1, size, dest);
+  }
+  fclose(src);
+  
+ exit0:
+  if (err) {
+	err("%s", strerror(err));
+  }
+  return err;
 }
 
-static int updateHeaderWAV()
+static int getTempFilename(char **filename)
+{
+  int err = 0;
+  
+  if (!filename) {
+	err = EINVAL;
+	goto exit0;	  	
+  }
+  if (*filename) {
+	free(*filename);
+  }
+  *filename = malloc(FILE_TEMPLATE_LENGTH);
+  if (!*filename) {
+	err = errno;
+	goto exit0;	  
+  }
+  strcpy(*filename, FILE_TEMPLATE);
+  if (mkstemp(*filename) == -1) {
+	err = errno;
+	goto exit0;	  
+  }
+
+ exit0:
+  if (err) {
+	char *s = strerror(err);
+	err("%s", s);
+	fprintf(stderr,"Error: %s\n", s);
+	if (filename && *filename) {
+	  free(*filename);
+	  *filename = NULL;
+	}
+  }
+  return err;
+}
+
+static int checkInput(char **filename, int *temporary)
+{
+  struct stat statbuf;	
+  int err = 0;
+
+  if (!filename || !temporary) {
+	err = EINVAL;
+	goto exit0;	  
+  }
+  
+  if (!*filename) {
+	FILE *fd;
+	if (!*tempbuf) {
+	  strcpy(tempbuf, "Hello World!");
+	}
+	err = getTempFilename(filename);
+	if (err) {
+	  goto exit0;
+	}
+	fd = fopen(*filename, "w");
+	if (fd) {
+	  fwrite(tempbuf, 1, strnlen(tempbuf, MAX_CHAR), fd);
+	  fclose(fd);	  
+	  *temporary = 1;
+	} else {
+	  err = errno;
+	  goto exit0;
+	}
+  }
+
+  if (stat(*filename, &statbuf) == -1) {
+	err = errno;
+  }
+  
+ exit0:
+  if (err) {
+	char *s = strerror(err);
+	err("%s", s);
+  }
+  return err;
+}
+
+static int checkOutput(char **filename, int *fifo)
+{
+  struct stat statbuf;	
+  int err = 0;
+
+  if (!filename || !fifo) {
+	err = EINVAL;
+	goto exit0;	  
+  }
+
+  *fifo = 0;
+  if (*filename) {
+	FILE *fdo = fopen(*filename, "w");
+	if (!fdo)  {
+	  err = errno;
+	  goto exit0;	  
+	}
+	fclose(fdo);
+	return 0;
+  }
+
+  if (fstat(STDOUT_FILENO, &statbuf)) {
+	err = errno;
+	goto exit0;	  
+  }
+  
+  if (S_ISREG(statbuf.st_mode)) {
+	*filename = realpath("/proc/self/fd/1", NULL);
+	if (!*filename) {
+	  err = errno;
+	  goto exit0;	  
+	}
+  } else if (S_ISFIFO(statbuf.st_mode)) {
+	err = getTempFilename(filename);
+	if (err) {
+	  goto exit0;	  
+	}
+	*fifo = 1;
+  } else {
+	err = EINVAL;
+  }
+
+ exit0:
+  if (err) {
+	char *s = strerror(err);
+	err("%s", s);
+  }
+  return err;
+}
+
+static enum ECICallbackReturn my_client_callback(ECIHand hEngine, enum ECIMessage Msg, long lParam, void *pData)
+{
+  data_cb_t *data_cb = (data_cb_t *)pData;
+
+  if (data_cb && (Msg == eciWaveformBuffer)) {
+	ssize_t len = write(data_cb->fd, obj.tts.samples, 2*lParam);
+  }
+  return eciDataProcessed;
+}
+
+static void *synthInit(tts_t *tts, FILE *fdo)
+{
+  ENTER();
+  int err = 0;
+
+  if (!tts || !fdo) {
+	err = EINVAL;
+	goto exit0;
+  }
+  
+  tts->handle = eciNew();
+  if (!tts->handle) {
+	err("null handle");
+	return NULL;
+  }
+
+  data_cb.fd = fileno(fdo);
+  if (data_cb.fd == -1) {
+	err = errno;
+	goto exit0;
+  }
+
+  if (tts->speed != SPEED_UNDEFINED) {
+	if (eciSetVoiceParam(tts->handle, 0, eciSpeed, tts->speed) == -1) {
+	  err("error: set param %d to %d", eciSpeed, tts->speed);
+	  goto exit0;
+	}
+  }
+  
+  eciRegisterCallback(tts->handle, my_client_callback, &data_cb);
+
+  if (!eciSetOutputBuffer(tts->handle, MAX_SAMPLES, tts->samples)) {
+	goto exit0;
+  }
+
+  return tts->handle;
+  
+ exit0:
+  if (tts->handle) {
+	eciDelete(tts->handle);
+  }
+  if (err) {
+	err("%s", strerror(err));
+  }
+  return NULL;
+}
+
+// text: 16 char min
+static int synthSay(tts_t *tts, char *text)
+{
+  int err = EINVAL;
+  ENTER();
+  msg("[%d] ENTER %s", getpid(), __func__);
+
+  if (!tts || !text) {
+	return EINVAL;
+  }
+
+  if (!eciAddText(tts->handle, text)) {
+	tempbuf[16] = 0;
+	err("Error: add text=%s...", text);
+  } else if (!eciSynthesize(tts->handle)) {
+	err("Error: synth handle=0x%p", text);
+  } else if (!eciSynchronize(tts->handle)) {
+	err("Error: sync handle=0x%p", text);
+  } else {
+	err = 0;
+  }
+
+ exit0:  
+  return err;
+}
+
+static void sentenceCreate(const char *s)
+{
+  *tempbuf = 0;
+  if (s) {
+  	strncpy(tempbuf, s, MAX_CHAR);	  
+	tempbuf[MAX_CHAR] = 0;
+  }  
+}
+
+static int sentenceSearchLast(long *length)
+{
+  int err = 0;
+  
+  if (!length) {
+	return EINVAL;
+  }
+  
+  if (*length > 2) {
+	long length0 = *length;
+	int i;
+	int found=0;
+	for (i=*length-2; i>0; i--) {
+	  if ((tempbuf[i] == '.') && isspace(tempbuf[i+1])) {
+		found = 1;
+		length0 = i+2;
+		break;
+	  }
+	}
+	if (!found) {
+	  for (i=*length-2; i>0; i--) {
+		if (!isspace(tempbuf[i]) && isspace(tempbuf[i+1])) {
+		  length0 = i+2;
+		  break;
+		}
+	  }
+	}
+	*length = length0;
+  }
+  return err;
+}
+
+static int sentenceGet(region_t r, FILE *fd, long *length)
+{
+  int err = 0;
+  long max, x;
+
+  msg("[%d] ENTER %s", getpid(), __func__);
+  
+  if (!length || !obj.text.fd) {
+	err = EINVAL;
+	goto exit0;
+  }
+
+  *length = 0;
+  *tempbuf = 0;
+  
+  if (r.end <= r.begin) {
+	goto exit0;
+  }
+  x = r.end - r.begin;
+  max = (x < MAX_CHAR) ? x : MAX_CHAR;  
+
+  if (fseek(fd, r.begin, SEEK_SET) == -1) {
+	err = errno;
+	goto exit0;
+  }
+  *length = fread(tempbuf, 1, max, fd);
+  err = sentenceSearchLast(length);
+  if (err) {
+	goto exit0;
+  }  
+  tempbuf[*length] = 0;
+  msg("[%d] read from=%ld, to=%ld", getpid(), r.begin, r.end);
+
+ exit0:
+  if (err) {
+	err("%s",strerror(err));
+  }
+  return err;
+}
+
+static int sentenceGetPosPrevious(region_t *r, FILE *fd)
+{
+  int max = 0;
+  long range = 0;
+  int err = 0;
+  
+  if (!r || !fd) {
+	err = EINVAL;
+	goto exit0;
+  }
+  
+  range = r->end - r->begin;
+  if (range < 0) {
+	err = EINVAL;
+	goto exit0;
+  }
+  max = (range < MAX_CHAR) ? range : MAX_CHAR;
+
+  {
+	long length = 0;
+	region_t r0;
+	r0.begin = r->begin + (r->end - max); 
+	r0.end = r->end; 
+	err = sentenceGet(r0, fd, &length);
+	if (err) {
+	  goto exit0;
+	}
+	r->end = r0.begin + length;
+  }
+  
+ exit0:
+  if (err) {
+	err("%s",strerror(err));
+  }
+  return err;
+}
+
+static int objUpdateHeaderWav()
 {
   wav_header_t w;
   long wavSize = 0;
   struct stat statbuf;
   int i;
   int err = 0;
+  FILE *fd = NULL;
 
   ENTER();
   
@@ -166,76 +524,24 @@ static int updateHeaderWAV()
 	wavSize += statbuf.st_size;
   }
 
-  setWavHeader(&w, wavSize);
+  WavSetHeader(&w, wavSize);
 
   if (obj.wav[0].fd) {
 	fclose(obj.wav[0].fd);
   }
-
-  obj.wav[0].fd = fopen(obj.wav[0].filename, "r+");
-  if (!obj.wav[0].fd) {
+  
+  fd = fopen(obj.wav[0].filename, "r+");
+  if (!fd) {
 	err = errno;
 	goto exit0;	  
   }
   
-  i = fwrite(&w, 1, sizeof(w), obj.wav[0].fd);
+  i = fwrite(&w, 1, sizeof(w), fd);
   // TODO
   if (i != sizeof(w)) {
 	err("%d written (%ld expected)", i, sizeof(w));
   }
 
- exit0:
-  if (err) {
-	err("%s", strerror(err));
-  }  
-  return err;
-}
-
-static int closeWAV()
-{
-  int i;
-  ENTER();
-  for (i=0; i<obj.jobs; i++) {
-	if (obj.wav[i].fd) {
-	  fclose(obj.wav[i].fd);
-	  obj.wav[i].fd = NULL;
-	}
-  }
-  return 0;
-}
-
-static int mergeWAV(const char *filename)
-{
-  int err = 0;
-  int i;  
-  FILE *fd = NULL;
-
-  ENTER();
-  
-  if (!filename) {
-	err = EINVAL;
-	goto exit0;
-  }
-
-  fd = fopen(filename, "w");
-  if (!fd) {
-	err = errno;
-	goto exit0;
-  }
-
-  for (i=0; i < obj.jobs; i++) {
-	FILE *fdi = fopen(obj.wav[i].filename, "r");
-	int size = 1;
-	while(size) {
-	  size = fread(sentences, 1, MAX_CHAR, fdi);
-	  fwrite(sentences, 1, size, fd);
-	}
-	fclose(fdi);
-	unlink(obj.wav[i].filename);
-	free(obj.wav[i].filename);
-	obj.wav[i].filename = NULL;
-  }
-	
  exit0:
   if (fd) {
 	fclose(fd);
@@ -246,214 +552,108 @@ static int mergeWAV(const char *filename)
   return err;
 }
 
-static enum ECICallbackReturn my_client_callback(ECIHand hEngine, enum ECIMessage Msg, long lParam, void *pData)
+static int objFlushWav()
 {
-  data_cb_t *data_cb = (data_cb_t *)pData;
-
-  if (data_cb && (Msg == eciWaveformBuffer)) {
-	ssize_t len = write(data_cb->fd, obj.tts.samples, 2*lParam);
-  }
-  return eciDataProcessed;
-}
-
-static ECIHand initECI()
-{
-  ENTER();
+  int i;
   int err = 0;
-  ECIHand handle;
-  
-  if (!obj.wav[0].filename)
-	return NULL;
+  FILE *fdo = NULL;
 
-  if (obj.wav[0].fd)
-	fclose(obj.wav[0].fd);
-  
-  obj.wav[0].fd = fopen(obj.wav[0].filename, "w");
-  if (!obj.wav[0].fd)
-	return NULL;
-  if (obj.with_wav_header) {
-	createWAV(obj.wav[0].fd);
-  }
-  
-  handle = eciNew();
-  if (!handle) {
-	err("null handle");
-	return NULL;
-  }
+  ENTER();
 
-  data_cb.fd = fileno(obj.wav[0].fd);
-  if (data_cb.fd == -1) {
-	err = errno;
-	goto exit0;
-  }
-
-
-  if (obj.speed != SPEED_UNDEFINED) {
-	if (eciSetVoiceParam(handle, 0, eciSpeed, obj.speed) == -1) {
-	  err("error: set param %d to %d", eciSpeed, obj.speed);
-	  goto exit0;
+  for (i=0; i<obj.jobs; i++) {
+	if (obj.wav[i].fd) {
+	  fclose(obj.wav[i].fd);
+	  obj.wav[i].fd = NULL;
 	}
   }
-  
-  eciRegisterCallback(handle, my_client_callback, &data_cb);
 
-  if (!eciSetOutputBuffer(handle, MAX_SAMPLES, obj.tts.samples))
+  if (obj.wav[0].temporary) {
+	fdo = stdout;
+	copyFile(obj.wav[0].filename, fdo);
+  } else if (obj.jobs > 1) {
+	fdo = fopen(obj.wav[0].filename, "a");
+  } else {
 	goto exit0;
+  }
 
-  return handle;
+  for (i=1; i<obj.jobs; i++) {
+	copyFile(obj.wav[i].filename, fdo);
+  }
   
  exit0:
-  if (handle) {
-	eciDelete(handle);
+  if ((fdo != stdout) && fdo) {
+	fclose(fdo);
   }
   if (err) {
 	err("%s", strerror(err));
-  }
-  return NULL;
-}
-
-
-static int saySentences()
-{
-  int err = EINVAL;
-  ENTER();
-  msg("[%d] ENTER %s", getpid(), __func__);
-
-  if (!obj.tts.handle) {
-	obj.tts.handle = initECI(obj.wav[0].filename);
-	if (!obj.tts.handle) {
-	  goto exit0;
-	}
-  }
-
-  if (!eciAddText(obj.tts.handle, sentences)) {
-	sentences[16] = 0;
-	err("Error: add text=%s...", sentences);
-  } else if (!eciSynthesize(obj.tts.handle)) {
-	err("Error: synth handle=0x%p", obj.tts.handle);
-  } else if (!eciSynchronize(obj.tts.handle)) {
-	err("Error: sync handle=0x%p", obj.tts.handle);
-  } else {
-	err = 0;
-  }
-
-exit0:  
+  }  
   return err;
 }
 
-static void searchLastSentence(long *length)
+static int objSayText(region_t r, char* output, int withWavHeader)
 {
-  if (!length)
-	return;
-  
-  if (*length > 2) {
-	long length0 = *length;
-	int i;
-	int found=0;
-	for (i=*length-2; i>0; i--) {
-	  if ((sentences[i] == '.') && isspace(sentences[i+1])) {
-		found = 1;
-		length0 = i+2;
-		break;
-	  }
-	}
-	if (!found) {
-	  for (i=*length-2; i>0; i--) {
-		if (!isspace(sentences[i]) && isspace(sentences[i+1])) {
-		  length0 = i+2;
-		  break;
-		}
-	  }
-	}
-	*length = length0;
-  }
-}
-
-static int getPosPreviousSentence()
-{
-  int max = 0;
   long length = 0;
-  long length0 = 0;
-  long rel = 0;
-  long offset = obj.region.end - obj.region.begin;
+  int err = 0;  
   
-  if (!obj.text.fd || (offset <= 0)) {
-	return EINVAL;
-  }
-  
-  max = (offset < MAX_CHAR) ? offset : MAX_CHAR;
-  
-  if (fseek(obj.text.fd, max - offset, SEEK_END) == -1) {
-	int err = errno;
-	err("%s",strerror(err));
-	return err;
-  }
-
-  length = fread(sentences, 1, max, obj.text.fd);
-  length0 = length;
-  searchLastSentence(&length0);
-  offset -= (length - length0);
-  return 0;
-}
-
-static int getSentences(long *length)
-{
-  int err = 0;
-  long max, x;
-
-  msg("[%d] ENTER %s", getpid(), __func__);
-  
-  if (!length || !obj.text.fd) {
+  if (!output) {
 	err = EINVAL;
 	goto exit0;
   }
-
-  *length = 0;
-  *sentences = 0;
   
-  if (obj.region.end <= obj.region.begin) {
+  if (obj.wav[0].fd) {
+	fclose(obj.wav[0].fd);
+	obj.wav[0].fd = NULL;
+  }
+  
+  if (obj.text.fd) {
+	fclose(obj.text.fd);
+	obj.text.fd = NULL;
+  }
+
+  obj.region.begin = r.begin;
+  obj.region.end = r.end;
+  obj.wav[0].filename = output;
+  obj.withWavHeader = withWavHeader;
+  
+  msg("[%d] begin=%ld, end=%ld [%s] ", getpid(), r.begin, r.end, output);
+
+  obj.text.fd = fopen(obj.text.filename, "r");    
+  if (!obj.text.fd) {
+	err = errno;
 	goto exit0;
   }
-  x = obj.region.end - obj.region.begin;
-  max = (x < MAX_CHAR) ? x : MAX_CHAR;  
 
   if (fseek(obj.text.fd, obj.region.begin, SEEK_SET) == -1) {
 	err = errno;
 	goto exit0;
   }
-  *length = fread(sentences, 1, max, obj.text.fd);
-  searchLastSentence(length);
-  sentences[*length] = 0;
-  msg("[%d] read from=%ld, to=%ld [%s] ", getpid(), obj.region.begin, obj.region.end, (obj.wav[0].filename) ? obj.wav[0].filename : "null");
 
- exit0:
-  if (err) {
-	err("%s",strerror(err));
+  obj.wav[0].fd = fopen(obj.wav[0].filename, "w");
+  if (!obj.wav[0].fd) {
+	err = errno;
+	goto exit0;
   }
-  return err;
-}
-
-static int sayText()
-{
-  long length = 0;
-  int err = 0;
-  if (!obj.text.fd)
-	return EINVAL;
-
-  msg("[%d] begin=%ld, end=%ld [%s] ", getpid(), obj.region.begin, obj.region.end, (obj.wav[0].filename) ? obj.wav[0].filename : "null");
-  if (fseek(obj.text.fd, obj.region.begin, SEEK_SET) == -1) {
-	int err = errno;
-	err("%s",strerror(err));
-	return err;
+  if (obj.withWavHeader) {
+	wav_header_t w;
+	memset(&w, 0, sizeof(w));
+	fwrite(&w, 1, sizeof(w), obj.wav[0].fd);
+  }
+  
+  if (!obj.tts.handle) {
+	obj.tts.handle = synthInit(&obj.tts, obj.wav[0].fd);
+	if (!obj.tts.handle) {
+	  err = EIO;
+	  goto exit0;
+	}
   }
   
   length = 1;
   while(length) {
-	err = getSentences(&length);
-	if (err)
+	err = sentenceGet(obj.region, obj.text.fd, &length);
+	if (err) {	  
 	  break;
-	
-  	if (!*sentences) {
+	}	
+  	if (!length) {
   	  if (feof(obj.text.fd)) {
   		err=0;
   		break;
@@ -463,131 +663,226 @@ static int sayText()
   		break;
   	  }
   	} else {
-	  saySentences();
+	  synthSay(&obj.tts, tempbuf);
 	}
 	obj.region.begin += length;
+  }
+
+ exit0:
+  if (err) {
+	char *s = strerror(err);
+	err("%s", s);
+  }
+  if (obj.wav[0].fd) {
+	fclose(obj.wav[0].fd);
+	obj.wav[0].fd = NULL;
+  }  
+  if (obj.text.fd) {
+	fclose(obj.text.fd);
+	obj.text.fd = NULL;
   }
   return err;
 }
 
-
-static int jobs()
+static int objSay()
 {
-	long partlen = 0;
-	struct stat statbuf;
-	pid_t pid[MAX_JOBS];
-	char *wavFilename = obj.wav[0].filename;
-	int i = 0;
-	int err = 0;
+  long partlen = 0;
+  pid_t pid[MAX_JOBS];
+  int i = 0;
+  int err = 0;
+  region_t r, r0;
+  r.begin = r.end = 0;
+  r0.begin = r0.end = 0;
+    
+  if (!obj.text.filename || !obj.jobs || (obj.jobs > MAX_JOBS) || !obj.wav[0].filename) {
+	err = EINVAL;
+	goto exit0;
+  }
 	
-	if (!obj.text.filename || !obj.jobs || (obj.jobs > MAX_JOBS) || !obj.wav[0].filename) {
-	  err = EINVAL;
-	  goto exit0;
-	}
-	
-	if (stat(obj.text.filename, &statbuf)) {
-	  err = errno;
-	  goto exit0;
-	}
-
-	if (statbuf.st_size < obj.jobs) {
-	  obj.jobs = 1;
-	}
+  if (obj.region.end < obj.jobs) {
+	obj.jobs = 1;
+  }
 	  
-	partlen = statbuf.st_size/obj.jobs;
-	obj.region.begin = 0;
-	for (i=0; i<obj.jobs; i++) {
-	  const char* fmt="%s.part%d.raw";
-	  obj.region.end = (i == obj.jobs-1) ? statbuf.st_size : obj.region.begin + partlen;
-	  if (getPosPreviousSentence() == -1) {
+  partlen = obj.region.end/obj.jobs;
+
+  for (i=0; i<obj.jobs; i++) {
+	const char* fmt = "%s.part%d.raw";
+	r.begin = r.end;
+	if (i == obj.jobs-1) {
+	  r.end = obj.region.end;
+	} else {
+	  r.end = r.begin + partlen;
+	  if (sentenceGetPosPrevious(&r, obj.text.fd) == -1) {
 		err = EINVAL;
 		goto exit0;
 	  }
-		
-	  obj.wav[i].filename = (char*)malloc(strlen(wavFilename)+strlen(fmt)+10);
-	  if (!obj.wav[i].filename) {
-		err = errno;
-		goto exit0;
-	  }
-	  sprintf(obj.wav[i].filename, fmt, wavFilename, i);
-	  pid[i] = fork();
-	  if (!pid[i]) {
-		obj.jobs = 1;
-		obj.wav[0].filename = obj.wav[i].filename;
-		if (obj.wav[0].fd) {
-		  fclose(obj.wav[0].fd);
-		  obj.wav[0].fd = NULL;
-		}
-		obj.with_wav_header = (!i) ? 1 : 0;
-		if (obj.text.fd) {
-		  fclose(obj.text.fd);
-		}
-		obj.text.fd = fopen(obj.text.filename, "r");
-		err = sayText();
-		exit(err);
-	  }
-	  msg("[%d] child pid=%d, begin=%ld, end=%ld [%s] ", getpid(), pid[i], obj.region.begin, obj.region.end, (obj.wav[i].filename) ? obj.wav[i].filename : "null");
-	  
-	  obj.region.begin = obj.region.end;
 	}
-	
-	for (i=0; i < obj.jobs; i++) {
-	  int status;
-	  int pid = wait(&status);
-	  err = EINTR;
-	  if (WIFEXITED(status)) {
-		err = WEXITSTATUS(status);
-	  }
-	  if (err) {
-		goto exit0;
-	  }
+	if (!i) {
+	  r0.begin = 0;
+	  r0.end = r.end;
+	  continue;
 	}
-	
-	err = updateHeaderWAV();
+	if (obj.wav[i].filename) {
+	  free(obj.wav[i].filename);
+	}
+	obj.wav[i].filename = (char*)malloc(strlen(obj.wav[0].filename) + strlen(fmt) + 10);
+	if (!obj.wav[i].filename) {
+	  err = errno;
+	  goto exit0;
+	}
+	sprintf((char *)obj.wav[i].filename, fmt, obj.wav[0].filename, i);
+	obj.wav[i].temporary = 1;
+	pid[i] = fork();
+	if (!pid[i]) {	  
+	  err = objSayText(r, obj.wav[i].filename, 0);
+	  exit(err);
+	}	
+	msg("[%d] child pid=%d, begin=%ld, end=%ld [%s] ", getpid(), pid[i], obj.region.begin, obj.region.end, (obj.wav[i].filename) ? obj.wav[i].filename : "null");	  
+  }
+
+  err = objSayText(r0, obj.wav[0].filename, obj.withWavHeader);
+
+  for (i=1; i < obj.jobs; i++) {
+	int status;
+	int pid = wait(&status);
+	err = EINTR;
+	if (WIFEXITED(status)) {
+	  err = WEXITSTATUS(status);
+	}
 	if (err) {
 	  goto exit0;
 	}
-	err = closeWAV();
-	if (err) {
-	  goto exit0;
-	}
-	err = mergeWAV(wavFilename);
+  }
+	
+  err = objUpdateHeaderWav();
+  if (err) {
+	goto exit0;
+  }
+  err = objFlushWav();
 	
  exit0:
-	if (wavFilename)
-	  free(wavFilename);
-	return err;
+  return err;
 }
 
-
-int main(int argc, char *argv[])
+static int objCreate(char *input, char *output, int withWavHeader, int jobs, int speed)
 {
-  int help = 0;
-  int opt;
-  int err = EINVAL;
+  int err = 0;
   
   ENTER();
 
-  *sentences = 0;
-  obj.jobs = 1;
-  obj.speed = SPEED_UNDEFINED;
+  obj.text.filename = input;
+  obj.wav[0].filename = output;
+  obj.withWavHeader = withWavHeader;
+  obj.jobs = jobs;
+  obj.tts.speed = speed; 
+  
+  err = checkOutput(&obj.wav[0].filename, &obj.wav[0].temporary);
+  if (err) {
+	goto exit0;
+  }
 
-  while ((opt = getopt(argc, argv, "hf:j:w:s:S:")) != -1) {
+  err = checkInput(&obj.text.filename, &obj.text.temporary);
+  if (err) {
+	goto exit0;
+  }
+
+  if (obj.text.filename) {
+	struct stat statbuf;
+	if (obj.text.fd) {
+	  fclose(obj.text.fd);
+	}
+	obj.text.fd = fopen(obj.text.filename, "r");
+	if (!obj.text.fd) {
+	  err = errno;
+	  goto exit0;
+	}
+	if (stat(obj.text.filename, &statbuf) == -1) {
+	  err = errno;
+	  goto exit0;	  
+	}
+	obj.region.begin = 0;
+	obj.region.end = statbuf.st_size;
+  }
+
+ exit0:
+  if (err) {
+	char *s = strerror(err);
+	err("%s", s);
+	fprintf(stderr,"Error: %s\n", s);
+  }
+  return err;
+}
+
+static void objDelete()
+{
+  int i;
+
+  ENTER();
+  
+  if (obj.text.fd) {
+	fclose(obj.text.fd);
+	obj.text.fd = NULL;
+  }
+  if (obj.text.filename) {
+	if (obj.text.temporary) {
+	  unlink(obj.text.filename);
+	}
+	free(obj.text.filename);
+	obj.text.filename = NULL;
+  }
+  
+  for (i=0; i<MAX_JOBS; i++) {
+	if (obj.wav[i].fd) {
+	  fclose(obj.wav[i].fd);
+	  obj.wav[i].fd = NULL;
+	}
+	if (obj.wav[i].filename) {
+	  if (obj.wav[i].temporary) {
+		unlink(obj.wav[i].filename);
+	  }
+	  free(obj.wav[i].filename);
+	  obj.wav[i].filename = NULL;
+	}
+  }
+
+  if (obj.tts.handle) {
+	eciDelete(obj.tts.handle);
+  }  
+}
+
+int main(int argc, char *argv[])
+{
+  int debug = 0;
+  int help = 0;
+  char *input = NULL;
+  char *output = NULL;
+  int jobs = 1;
+  int speed = SPEED_UNDEFINED;
+  int opt;
+  int temporaryOutput = 0;
+  int fifo = 0;
+  int err = EINVAL;
+  
+  ENTER();
+ 
+  while ((opt = getopt(argc, argv, "dhf:j:w:s:S:")) != -1) {
     switch (opt) {
     case 'w':
-	  if (obj.wav[0].filename)
-		free(obj.wav[0].filename);
-      obj.wav[0].filename = strdup(optarg);
+	  if (output) {
+		free(output);
+	  }
+      output = strdup(optarg);
       break;
       
     case 'f':
-	  if (obj.text.filename)
-		free(obj.text.filename);
-	  obj.text.filename = strdup(optarg);	  
+	  if (input) {
+		free(input);
+	  }
+	  input = strdup(optarg);	  
       break;
 
     case 'j':
-	  obj.jobs = atoi(optarg);	  
+	  jobs = atoi(optarg);	  
       break;
 
     case 'h':
@@ -595,15 +890,19 @@ int main(int argc, char *argv[])
       break;
 
     case 'S':
-	  obj.speed = getSpeedUnits(atoi(optarg));
+	  speed = getSpeedUnits(atoi(optarg));
       break;
 
     case 's':
 	  {
 		int i = atoi(optarg);
 		i = (i*2-140)/10;
-		obj.speed = getSpeedUnits(i);
+		speed = getSpeedUnits(i);
 	  }
+      break;
+
+    case 'd':
+	  debug = 1;	  
       break;
 
     default:
@@ -612,71 +911,41 @@ int main(int argc, char *argv[])
     }
   }
 
-  if (help || (obj.wav[0].filename == NULL)) {
+  if (debug) {
+	while (debug) {
+	  // to quit the loop, change debug var using gdb:
+	  // set var debug=0
+	  fprintf(stderr, "infinite loop for debug...\n");
+	  sleep(5);
+	}
+  }
+
+  if (help) {
 	usage();
 	goto exit0;
   }
-  obj.with_wav_header = 1;
 
-  if (optind == argc-1) {
-	strncpy(sentences, argv[optind], MAX_CHAR);	  
-	sentences[MAX_CHAR] = 0;
+  {
+	const char *s =  (optind == argc-1) ? argv[optind] : NULL;  
+	sentenceCreate(s);
   }
   
-  if (obj.text.filename) {
-	struct stat statbuf;	
-	obj.text.fd = fopen(obj.text.filename, "r");
-	if (!obj.text.fd) {
-	  err = errno;
-	  goto exit0;
-	}
-	if (stat(obj.text.filename, &statbuf)) {
-	  err = errno;
-	  goto exit0;	  
-	}
-	obj.region.end = statbuf.st_size;
-  }
-
-  if ((obj.jobs <= 0) || (obj.jobs > MAX_JOBS)) {
+  if ((jobs <= 0) || (jobs > MAX_JOBS)) {
 	err = EINVAL;
 	err("jobs=%d (limit=1..%d)", obj.jobs, MAX_JOBS);
 	goto exit0;
-  } else if (obj.jobs != 1) {
-	err = jobs();
-	goto exit0;
   }
 
-  if (obj.text.filename) {
-	  sayText();
-	  err = updateHeaderWAV();
-	  // TODO
-	  /* if (err) { */
-	  /* 	goto exit0; */
-	  /* } */
-	  err = closeWAV();
-	  return err;
-  }
-
-  if (!*sentences) {
-	strcpy(sentences, "Hello World!");
-  }
-  err = saySentences();
-  err = updateHeaderWAV();
+  err = objCreate(input, output, 1, jobs, speed);
   if (err) {
+	usage();
 	goto exit0;
   }
-  err = closeWAV();
+  
+  objSay();
   
  exit0:
-  if (obj.text.fd) {
-	fclose(obj.text.fd);
-  }
-  if (obj.wav[0].fd) {
-	fclose(obj.wav[0].fd);
-  }
-  if (obj.tts.handle) {
-	eciDelete(obj.tts.handle);
-  }
+  objDelete();
 
   if (err) {
 	char *s = strerror(err);
@@ -686,4 +955,3 @@ int main(int argc, char *argv[])
   
   return 0;
 }
-
