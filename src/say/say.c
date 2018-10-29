@@ -24,40 +24,37 @@ static char tempbuf[MAX_CHAR+10];
 #define FILE_TEMPLATE_LENGTH 20
 void usage()
 {
-  fprintf(stderr, "Usage: say OPTIONS \"optional text\"\n \
+  fprintf(stderr, "Usage: say [OPTION]... [text]\n \
  \n\
 say (version %s) \n\
-Read the supplied text (utf-8) and writes speech to an audio file (WAV\n\
-format) or an external audio player.\n\
+Read the text, and writes speech to the standard output or the\n\
+supplied file.\n\
 \n\
 EXAMPLES :\n\
 \n\
+# Say 'hello world' and redirect output to an external audio player:\n\
 ./say \"hello world\" | aplay\n\
-./say -f file.txt > audio.wav\n\
-# Wrong command because no output is supplied\n\
+# Read file.txt and save speech to an audio file:\n\
+./say -f file.txt -w file.wav\n\
+./say -f file.txt > file.wav\n\
+# The following command is incorrect because no output is supplied:\n\
 ./say \"Hello all\"\n\
-\n\
-# Read file.txt in French at 500 words per minute, use 4 jobs to speed\n\
+# Correct command to read a file in French at 500 words per minute,\n\
+  use 4 jobs to speed\n\
   up conversion\n\
 ./say -f file.txt -l fr -s 500 -j 4 -w audio.wav\n\
-#\n\
 \n\
 \n\
 OPTIONS :\n\
-  -w    the output wavfile (with header by default)	\n\
-        say -w file.wav	\n\
-        other ways to get the wav output:	\n\
-        say > file.wav	\n\
-        say | aplay	\n\
-        say | paplay	\n\
-  -f    text file to be spoken. \n\
-  -j    number of jobs, share the workload on several \n\
-        processes to speedup conversion. \n\
-  -l    select voice/language\n\
-  -L    list installed voices/languages\n\
-  -s    speed in words per minute (from 0 to 1297) \n\
-  -S    speed in units (from 0 to 250) \n\
-  -d    for debug, wait in an infinite loop \n\
+  -f FILE   supply the UTF-8 text file to read. \n\
+  -j NUM    number of jobs, help to share the workload on several \n\
+            processes to speedup conversion. \n\
+  -l NAME   select voice/language. \n\
+  -L        list installed voices/languages. \n\
+  -s NUM    speed in words per minute (from 0 to 1297). \n\
+  -S NUM    speed in units (from 0 to 250). \n\
+  -w FILE   supply the output wavfile. \n\
+  -d        for debug, wait in an infinite loop. \n\
 ", VERSION);
 }
 
@@ -1016,6 +1013,7 @@ static int objCreate(char *input, char *output, int withWavHeader, int jobs, int
   obj.jobs = jobs;
   obj.tts.speed = speed;
   obj.tts.voiceID = VOICE_UNDEFINED;
+
   if (voice) {
 	int voiceID;
 	err = synthSearchVoice(voice, &voiceID);
@@ -1114,7 +1112,7 @@ int main(int argc, char *argv[])
   int err = EINVAL;
   int list = 0;
   char *voice = NULL;
-  
+ 
   ENTER();
  
   while ((opt = getopt(argc, argv, "df:hj:l:Ls:S:w:")) != -1) {
