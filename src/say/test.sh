@@ -281,6 +281,8 @@ echo "test 6"
 if [ "$?" = "0" ]; then
 	echo "French voice installed"
 fi
+time ./say -l fr -s 500 -j 4 -f $FILE.fr | $PLAY
+
 
 rm "$FILE" "$FILE.en" "$FILE.en.short" "$FILE.fr.short"
 

@@ -27,8 +27,8 @@ void usage()
   fprintf(stderr, "Usage: say OPTIONS \"optional text\"\n \
  \n\
 say (version %s) \n\
-Read the supplied text and writes speech to an audio file (WAV format)\n\
-or an external audio player.\n\
+Read the supplied text (utf-8) and writes speech to an audio file (WAV\n\
+format) or an external audio player.\n\
 \n\
 EXAMPLES :\n\
 \n\
@@ -411,7 +411,7 @@ static void *synthInit(tts_t *tts, FILE *fdo)
 	err = EINVAL;
 	goto exit0;
   }
-  
+
   tts->handle = eciNew();
   if (!tts->handle) {
 	err("null handle");
@@ -424,6 +424,14 @@ static void *synthInit(tts_t *tts, FILE *fdo)
 	goto exit0;
   }
 
+  // enable dictionaries
+  eciSetParam(tts->handle, eciDictionary, 0);
+
+  /* enable ssml and punctuation filters */
+  eciSetParam(tts->handle, eciInputType, 1);
+  eciAddText(tts->handle, " `gfa1 ");
+  eciAddText(tts->handle, " `gfa2 ");
+  
   if (tts->voiceID != VOICE_UNDEFINED) {
 	if (eciSetParam(tts->handle, eciLanguageDialect, tts->voiceID) == -1) {
 	  err("error: set param %d to %d", eciLanguageDialect, tts->voiceID);
