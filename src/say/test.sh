@@ -1,5 +1,9 @@
 #!/bin/bash -xe
 
+BASE=$(dirname $(realpath "$0"))
+NAME=$(basename "$0")
+cd $BASE
+
 # Reference of the text samples:
 # Les Misérables, by Victor Hugo, 1862, Tome I, Fantine, chapter II.
 # 
@@ -250,7 +254,7 @@ EOF
 
 }
 
-FILE=$(mktemp -t say.XXXXXXXXXX)
+FILE=$(mktemp -t voxin-say.XXXXXXXXXX)
 getEnglishText $FILE.en
 head $FILE.en > $FILE.en.short
 
@@ -258,38 +262,38 @@ getFrenchText $FILE.fr
 head $FILE.fr > $FILE.fr.short
 
 echo "test 1"
-time ./say "hello world!" > $FILE.wav 
+time ./voxin-say "hello world!" > $FILE.wav 
 $PLAY $FILE.wav
 rm $FILE.wav
 
 echo "test 2"
-time ./say -f $FILE.en.short | $PLAY
+time ./voxin-say -f $FILE.en.short | $PLAY
 
 echo "test 3"
-time ./say -j 4 -s 500 -w $FILE.wav -f $FILE.en.short
+time ./voxin-say -j 4 -s 500 -w $FILE.wav -f $FILE.en.short
 $PLAY $FILE.wav
 rm $FILE.wav
 
 echo "test 4"
-time ./say -S 100 -f $FILE.en | $PLAY
+time ./voxin-say -S 100 -f $FILE.en | $PLAY
 
 echo "test 5"
-./say -L
+./voxin-say -L
 
 echo "test 6"
-./say -L | grep -qo ",fr,"
+./voxin-say -L | grep -qo ",fr,"
 if [ "$?" = "0" ]; then
 	echo "French voice installed"
 fi
-time ./say -l fr -s 500 -j 4 -f $FILE.fr | $PLAY
+time ./voxin-say -l fr -s 500 -j 4 -f $FILE.fr | $PLAY
 
 
 rm "$FILE" "$FILE.en" "$FILE.en.short" "$FILE.fr.short"
 
 # debug
 #sudo bash -c "echo 0 > /proc/sys/kernel/yama/ptrace_scope"
-# ./say -d > /tmp/fic1
-# gdb -p $(pidof say)
+# ./voxin-say -d > /tmp/fic1
+# gdb -p $(pidof voxin-say)
 # (gdb) up
 # (gdb) up
 # ...

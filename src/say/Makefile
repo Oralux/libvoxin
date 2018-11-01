@@ -4,18 +4,18 @@ LIBS=-L$(DESTDIR)/lib -lvoxin -lcommon
 CFLAGS += -DVERSION='"$(VERSION)"' -I../api -I../common
 STRIP ?= strip --strip-unneeded
 
-all: say
+all: voxin-say
 
-say: say.o
+voxin-say: voxin-say.o
 	gcc -o $@ $< $(CFLAGS) $(LIBS)
-	$(STRIP) say
+	$(STRIP) voxin-say
 
 install:
 	[ ! -d $(DESTDIR)/bin ] && mkdir -p $(DESTDIR)/bin || true
-	install -m 755 say $(DESTDIR)/bin
+	install -m 755 voxin-say $(DESTDIR)/bin
 
 clean:
-	rm -f say.o say
+	rm -f voxin-say.o voxin-say
 
 test:
 	./test.sh
