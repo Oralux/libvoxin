@@ -177,7 +177,7 @@ ln -s ../../../voxin/rfs32/opt/IBM/ibmtts/inc/eci.h opt/IBM/ibmtts/inc/eci.h
 if [ -n "$RELEASE" ]; then
 	mkdir -p "$RELDIR"
 	fakeroot bash -c "\
-tar -C \"$RFSDIR\" -zcf \"$RELDIR/libvoxin$VERMAJ-$VERSION-$ARCH.tgz\" usr/lib/libibmeci.so opt/voxin/lib/libvoxin.so* && \
+tar -C \"$RFSDIR\" -zcf \"$RELDIR/libvoxin$VERMAJ-$VERSION-$ARCH.tgz\" usr/lib/libibmeci.so usr/lib/libvoxin.so."$VERMAJ" opt/voxin/lib/libvoxin.so* && \
 tar -C \"$RFSDIR\" -zcf \"$RELDIR/voxind-$VERSION-all.tgz\" usr/bin/voxind opt/voxin/rfs32/usr/bin/voxind && \
 tar -C \"$RFSDIR\" -zcf \"$RELDIR/voxin-say-$VERSION-$ARCH.tgz\" usr/bin/voxin-say opt/voxin/bin/voxin-say && \
 tar -C \"$RFSDIR\" -zcf \"$RELDIR/libvoxin$VERMAJ-dev-$VERSION-all.tgz\" opt/IBM/ibmtts/inc/eci.h

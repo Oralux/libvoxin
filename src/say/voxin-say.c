@@ -27,7 +27,7 @@ void usage()
   fprintf(stderr, "Usage: voxin-say [OPTION]... [text]\n \
  \n\
 voxin-say (version %s) \n\
-Read the text, and writes speech to the standard output or the\n\
+Converts text to speech written to the standard output or the\n\
 supplied file.\n\
 \n\
 EXAMPLES :\n\
