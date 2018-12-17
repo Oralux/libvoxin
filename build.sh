@@ -28,7 +28,7 @@ Options:
 -m, --mach <arch>  architecture of the native binaries (libvoxin,
                    tests). arch=i386, otherwise current arch 
 -r, --rfs32 <dir>  path of a 32 bits root filesystem.
-                   default: /opt/voxin/rfs32
+                   default: /opt/oralux/voxin/rfs32
 -R, --release      build the tarballs in build/<arch>/release:
                    - libvoxin: libvoxin-${VERSION}-<arch>.tgz
                    - voxind: voxind-${VERSION}-<arch>.tgz  
@@ -36,7 +36,7 @@ Options:
 
 Example:
 # compile libvoxin and voxind using the default 32 bits root
-# filesystem present in /opt/voxin/rfs32
+# filesystem present in /opt/oralux/voxin/rfs32
  $0
 
 # compile libvoxin/voxind and build the tarballs
@@ -80,11 +80,9 @@ case "$ARCH" in
 		ARCH=$(uname -m);;
 esac
 
-if [ -z "$RFS32REF" ] && [ -z "$CLEAN" ]; then
-	RFS32REF=/opt/voxin/rfs32
-fi
+[ -z "$RFS32REF" ] && RFS32REF=/opt/oralux/voxin/rfs32
 
-if [ ! -e "$RFS32REF/$IBMTTSLIB" ] || [ ! -e "$RFS32REF/$IBMTTSCONF" ]; then
+if [[ -z "$CLEAN" && ( ! -e "$RFS32REF/$IBMTTSLIB" || ! -e "$RFS32REF/$IBMTTSCONF") ]]; then
 	echo "No $RFS32REF/$IBMTTSLIB or $RFS32REF/$IBMTTSCONF"
 	HELP=1
 fi
@@ -99,7 +97,7 @@ SRCDIR="$BASE/src"
 ARCHDIR="$BASE/build/$ARCH"
 RELDIR="$ARCHDIR/release"
 RFSDIR="$ARCHDIR/rfs"
-export DESTDIR="$RFSDIR/opt/voxin"
+export DESTDIR="$RFSDIR/opt/oralux/voxin"
 RFS32="$DESTDIR/rfs32"
 DESTDIR_RFS32="$RFS32/usr"
 
@@ -165,21 +163,21 @@ fi
 # symlinks for a global install (to be adapted according to the distro)
 cd $RFSDIR
 mkdir -p usr/{bin,lib}
-ln -s ../../opt/voxin/rfs32/usr/bin/voxind usr/bin/voxind
-ln -s ../../opt/voxin/bin/voxin-say usr/bin/voxin-say
-ln -s ../../opt/voxin/lib/libvoxin.so."$VERMAJ" usr/lib/libibmeci.so
-ln -s ../../opt/voxin/lib/libvoxin.so."$VERMAJ" usr/lib/libvoxin.so."$VERMAJ"
+ln -s ../../opt/oralux/voxin/rfs32/usr/bin/voxind usr/bin/voxind
+ln -s ../../opt/oralux/voxin/bin/voxin-say usr/bin/voxin-say
+ln -s ../../opt/oralux/voxin/lib/libvoxin.so."$VERMAJ" usr/lib/libibmeci.so
+ln -s ../../opt/oralux/voxin/lib/libvoxin.so."$VERMAJ" usr/lib/libvoxin.so."$VERMAJ"
 # compat ibmtts clients
 mkdir -p opt/IBM/ibmtts/inc
-ln -s ../../../voxin/rfs32/opt/IBM/ibmtts/inc/eci.h opt/IBM/ibmtts/inc/eci.h
+ln -s ../../../oralux/voxin/rfs32/opt/IBM/ibmtts/inc/eci.h opt/IBM/ibmtts/inc/eci.h
 
 
 if [ -n "$RELEASE" ]; then
 	mkdir -p "$RELDIR"
 	fakeroot bash -c "\
-tar -C \"$RFSDIR\" -zcf \"$RELDIR/libvoxin$VERMAJ-$VERSION-$ARCH.tgz\" usr/lib/libibmeci.so usr/lib/libvoxin.so."$VERMAJ" opt/voxin/lib/libvoxin.so* && \
-tar -C \"$RFSDIR\" -zcf \"$RELDIR/voxind-$VERSION-all.tgz\" usr/bin/voxind opt/voxin/rfs32/usr/bin/voxind && \
-tar -C \"$RFSDIR\" -zcf \"$RELDIR/voxin-say-$VERSION-$ARCH.tgz\" usr/bin/voxin-say opt/voxin/bin/voxin-say && \
+tar -C \"$RFSDIR\" -zcf \"$RELDIR/libvoxin$VERMAJ-$VERSION-$ARCH.tgz\" usr/lib/libibmeci.so usr/lib/libvoxin.so."$VERMAJ" opt/oralux/voxin/lib/libvoxin.so* && \
+tar -C \"$RFSDIR\" -zcf \"$RELDIR/voxind-$VERSION-all.tgz\" usr/bin/voxind opt/oralux/voxin/rfs32/usr/bin/voxind && \
+tar -C \"$RFSDIR\" -zcf \"$RELDIR/voxin-say-$VERSION-$ARCH.tgz\" usr/bin/voxin-say opt/oralux/voxin/bin/voxin-say && \
 tar -C \"$RFSDIR\" -zcf \"$RELDIR/libvoxin$VERMAJ-dev-$VERSION-all.tgz\" opt/IBM/ibmtts/inc/eci.h
 "
 	printf "\nTarballs available in $RELDIR\n"	

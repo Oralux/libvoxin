@@ -9,7 +9,7 @@ getVersion
 ARCH=$(uname -m)
 ARCHDIR="$BASE/build/$ARCH"
 RFSDIR="$ARCHDIR/test/rfs"
-export DESTDIR="$RFSDIR/opt/voxin"
+export DESTDIR="$RFSDIR/opt/oralux/voxin"
 RFS32="$DESTDIR/rfs32"
 DESTDIR_RFS32="$RFS32/usr"
 
@@ -129,6 +129,6 @@ fi
 
 touch /tmp/libvoxin.ok
 rsync -av --delete "$ARCHDIR"/rfs/ "$RFSDIR"
-sed -i "s#=/opt/voxin/rfs32/#=$RFS32/#" "$RFS32"/eci.ini
+sed -i "s#=/opt/oralux/voxin/rfs32/#=$RFS32/#" "$RFS32"/eci.ini
 #sudo bash -c "echo 0 > /proc/sys/kernel/yama/ptrace_scope"
 

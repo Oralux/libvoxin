@@ -25,6 +25,7 @@ const char *pathname[MAX_TESTED_LANG] = {"/tmp/test_libvoxin_en.raw", "/tmp/test
 const int max_samples[MAX_TESTED_LANG] = {1024, 20000, 40000};
 ECIHand handle[MAX_TESTED_LANG];
 const enum ECILanguageDialect lang[MAX_TESTED_LANG] = {eciGeneralAmericanEnglish, eciStandardFrench, eciStandardGerman};
+const char * setVoiceCommand[MAX_TESTED_LANG] = {" `l1.0 `v2 ", " `l3.0 `v7 ", " `l4.0 `v2 "};
 
 char *quote[] = {
   "So long as there shall exist, by virtue of law and custom, decrees of "
@@ -117,7 +118,10 @@ int set_engine(int i)
   } else {
     buf = strdup(quote[i]);
   }
-  
+
+  eciSetParam(handle[i], eciInputType, 1);
+  eciAddText(handle[i], setVoiceCommand[i]);
+
   if (eciAddText(handle[i], buf) == ECIFalse) {
     res = __LINE__;
   }
