@@ -11,6 +11,8 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <string.h>
+#include <linux/limits.h>
 #include "eci.h"
 
 
@@ -45,6 +47,20 @@ enum ECICallbackReturn my_client_callback(ECIHand hEngine, enum ECIMessage Msg, 
   return eciDataProcessed;
 }
 
+// Retrieve the absolute pathname of the dictionary.  In this test,
+// the dictionary is supposed to be in the current working directory
+static char *absolutePath(ECIHand handle, char *filename)
+{
+#define PATH_DICT (2*PATH_MAX)
+	static char path[PATH_DICT];
+	*path = 0;
+	if (!getcwd(path, PATH_DICT))
+	  return NULL;
+	strncat(path, "/", 2*PATH_MAX);
+	strncat(path, filename, 2*PATH_MAX);
+	path[PATH_DICT-1] = 0;
+}
+
 int main(int argc, char **argv)
 {
   int res = 0;
@@ -75,9 +91,9 @@ int main(int argc, char **argv)
   ECIDictHand hDic1 = eciNewDict(handle);
   if (!hDic1)
     return __LINE__;
-  
-  if (eciLoadDict(handle, hDic1, eciMainDict, "main1.dct") != DictNoError)
-    return __LINE__;
+
+  if (eciLoadDict(handle, hDic1, eciMainDict, absolutePath(handle, "main1.dct")) != DictNoError)
+	return __LINE__;
   
   if (eciSetDict(handle, hDic1) != DictNoError)
     return __LINE__;

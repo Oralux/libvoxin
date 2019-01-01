@@ -15,6 +15,7 @@
 #include <time.h>
 #include <errno.h>
 #include <string.h>
+#include <linux/limits.h>
 #include "eci.h"
 
 enum lang_t {ENGLISH, FRENCH, MAX_LANG};
@@ -79,6 +80,20 @@ static void speak(ECIHand handle) {
 }
 
 
+// Retrieve the absolute pathname of the dictionary.  In this test,
+// the dictionary is supposed to be in the current working directory
+static char *absolutePath(ECIHand handle, char *filename)
+{
+#define PATH_DICT (2*PATH_MAX)
+	static char path[PATH_DICT];
+	*path = 0;
+	if (!getcwd(path, PATH_DICT))
+	  return NULL;
+	strncat(path, "/", 2*PATH_MAX);
+	strncat(path, filename, 2*PATH_MAX);
+	path[PATH_DICT-1] = 0;
+}
+
 int main(int argc, char** argv)
 {
   size_t len;
@@ -89,6 +104,8 @@ int main(int argc, char** argv)
   ECIDictHand hDic2;
   int fd = 0;
   int res = 0;
+#define PATH_DICT (2*PATH_MAX)
+  static char path[PATH_DICT];
 
   {
     struct stat buf;
@@ -128,11 +145,13 @@ int main(int argc, char** argv)
     res = __LINE__;
     goto exit0;
   }
-  if (eciLoadDict(handle[0], hDic1[0], eciMainDict, "main1.dct") != DictNoError) {
+
+  if (eciLoadDict(handle[0], hDic1[0], eciMainDict, absolutePath(handle[0], "main1.dct")) != DictNoError) {
     res = __LINE__;
     goto exit0;
   }
-  if (eciLoadDict(handle[0], hDic1[0], eciRootDict, "root1.dct") != DictNoError) {
+  
+  if (eciLoadDict(handle[0], hDic1[0], eciRootDict, absolutePath(handle[0], "root1.dct")) != DictNoError) {
     res = __LINE__;
     goto exit0;
   }
@@ -159,7 +178,7 @@ int main(int argc, char** argv)
     res = __LINE__;
     goto exit0;
   }
-  if (eciLoadDict(handle[1], hDic1[1], eciMainDict, "main1-fr.dct") != DictNoError) {
+  if (eciLoadDict(handle[1], hDic1[1], eciMainDict, absolutePath(handle[1], "main1-fr.dct")) != DictNoError) {
     res = __LINE__;
     goto exit0;
   }
@@ -206,7 +225,7 @@ int main(int argc, char** argv)
 	res = __LINE__;
 	goto exit0;
       }
-      if (eciLoadDict(handle[0], hDic2, eciMainDict, "main1-fr.dct") != DictNoError) {
+      if (eciLoadDict(handle[0], hDic2, eciMainDict, absolutePath(handle[0], "main1-fr.dct")) != DictNoError) {
 	res = __LINE__;
 	goto exit0;
       }

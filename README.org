@@ -1,24 +1,13 @@
 
 The libvoxin library eases the integration of voxin on 64 bits architectures.
 
-For info, [[https://github.com/Oralux/libvoxin-debian][libvoxin-debian]] provide helper scripts to build the libvoxin packages and some of its dependencies. 
-Below we detail how to compile libvoxin and test it. 
+This repository concerns the development of libvoxin.
+To build the voxin installer and its dependencies, please check instead the [[https://github.com/Oralux/voxin-installer][voxin-installer]] repository.
+
+Below we detail how to compile libvoxin and test it.
+By default, a fake libibmeci.so is provided.
 
 * Compil
-
-Firstly, install the voxin-libstdc++, voxin-rfs32 and voxin-viavoice packages which populates /opt/voxin/rfs32, the dedicated 32 bits directory:
-
-- the voxin-viavoice packages provide the ibmtts binaries,
-- voxin-libstdc++ and voxin-rfs32 provide standard 32 bits libraries.
-
-All these packages are included in voxin (>1.15).
-
-voxin-libstdc++ and voxin-rfs32 can be build from standard repositories, check for example [[https://github.com/Oralux/libvoxin-debian][libvoxin-debian]] .
-
-The voxin-viavoice packages include the same ibmtts binaries as previously. 
-The installation path has been changed (/opt/voxin/rfs32/ instead of / ).
-Consequently, eci.ini, the configuration file is now expected in /opt/voxin/rfs32/ and its pathnames must point to the installed binaries in the rfs32 directory.
-
 ** Build the libvoxin tarballs
  
 #+BEGIN_SRC shell
@@ -32,7 +21,7 @@ Consequently, eci.ini, the configuration file is now expected in /opt/voxin/rfs3
 
 ** Create a testing directory
 #+BEGIN_SRC shell
-./test.sh -b
+./test.sh -b file
 #+END_SRC
 
 ** Run test 1
@@ -45,40 +34,6 @@ Consequently, eci.ini, the configuration file is now expected in /opt/voxin/rfs3
 ./test.sh -d
 #+END_SRC
 
-* Minimal rfs32 root filesystem
-
-** standard 32 bits libraries
-
-These libraries can be built for example by [[https://buildroot.org][Buildroot]] (see its config in src/buildroot/).
-Or install the voxin-rfs32 package supplied by Oralux.
-The tree is basically :
-
-#+BEGIN_SRC shell
-tree rfs32
-
-rfs32
-├── lib
-│   ├── ld-2.23.so
-│   ├── ld-linux.so.2 -> ld-2.23.so
-│   ├── libc-2.23.so
-│   ├── libc.so.6 -> libc-2.23.so
-│   ├── libdl-2.23.so
-│   ├── libdl.so.2 -> libdl-2.23.so
-│   ├── libm-2.23.so
-│   ├── libm.so.6 -> libm-2.23.so
-│   ├── libpthread-2.23.so
-│   └── libpthread.so.0 -> libpthread-2.23.so
-├── lib32 -> lib
-└── usr
-    ├── bin
-    ├── lib
-    └── lib32 -> lib
-
-
-#+END_SRC
-
-** old libstdc++ library
-install voxin-libstdc++ provided by Oralux or check https://github.com/Oralux/libvoxin-debian
-
+* Test with TTS
 * Memo: version 
 The program version is stored in src/common/conf.h

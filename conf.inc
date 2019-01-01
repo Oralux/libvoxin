@@ -22,7 +22,7 @@ cleanup() {
 	esac	
 	rm -rf "$BASE/build"
 
-	for i in common libvoxin voxind test; do
+	for i in common libibmeci libvoxin voxind test; do
 		echo "Entering $i"
 		cd "$BASE/src/$i"
 		make clean
