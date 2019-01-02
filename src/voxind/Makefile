@@ -1,6 +1,6 @@
 BIN = main.o
 CFLAGS += -m32 -ggdb -DDEBUG -I../common -I../api
-LDFLAGS += -m32 -Wl,-rpath=lib:usr/lib:opt/IBM/ibmtts/lib -Wl,--dynamic-linker,./lib/ld-linux.so.2
+LDFLAGS += -m32 -Wl,--dynamic-linker,./lib/ld-linux.so.2
 CC ?= gcc
 STRIP ?= strip --strip-unneeded
 

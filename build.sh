@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/bash -ex
 
 BASE=$(dirname $(realpath "$0"))
 NAME=$(basename "$0")
@@ -51,7 +51,7 @@ while true; do
     -d|--debug) export DBG_FLAGS="-ggdb -DDEBUG"; export STRIP=test; shift;;
     -h|--help) HELP=1; shift;;
     -m|--mach) ARCH=$2; shift 2;;
-    -R|--release) RELEASE=1; shift;;
+    -r|--release) RELEASE=1; shift;;
     -t|--test) TEST=1; shift;;
     --) shift; break;;
     *) break;;
@@ -152,11 +152,10 @@ fi
 
 # symlinks for a global install (to be adapted according to the distro)
 cd $RFSDIR
-mkdir -p usr/{bin,lib,include/voxin}
+mkdir -p usr/{bin,lib,include}
 ln -s ../../$VOXINDIR/lib/libvoxin.so usr/lib/libibmeci.so
 ln -s ../../$VOXINDIR/lib/libvoxin.so usr/lib/libvoxin.so
-ln -s ../../$VOXINDIR/include/voxin.h usr/include/voxin/voxin.h
-ln -s ../../$VOXINDIR/include/eci.h usr/include/voxin/eci.h
+ln -s ../../$VOXINDIR/include usr/include/voxin
 ln -s ../../$VOXINDIR/bin/voxin-say usr/bin/voxin-say
 ln -s ../../../../var/opt/IBM/ibmtts/cfg/eci.ini $VOXINDIR/rfs32/eci.ini
 
@@ -166,7 +165,7 @@ if [ -n "$RELEASE" ]; then
 tar -C \"$RFSDIR\" \
 	   -Jcf \"$RELDIR/voxin-pkg_$VERMAJ_$VERSION.any.txz\" \
 	   usr/lib/libvoxin.so usr/lib/libibmeci.so \
-	   usr/include/voxin/eci.h usr/include/voxin/voxin.h \
+	   usr/include/voxin \
 	   usr/bin/voxin-say && \
 tar -C \"$RFSDIR\" \
 	   -Jcf \"$RELDIR/libibmeci-fake_$VERMAJ_$VERSION.any.txz\" \
