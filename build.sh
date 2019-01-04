@@ -80,6 +80,7 @@ export DESTDIR="$RFSDIR/$VOXINDIR"
 RFS32="$DESTDIR/rfs32"
 DESTDIR_RFS32="$RFS32/usr"
 IBMTTSDIR=$RFSDIR/opt/IBM/ibmtts
+DOCDIR=$DESTDIR/share/doc/libvoxin
 
 mkdir -p "$DESTDIR_RFS32"
 
@@ -150,6 +151,14 @@ if [ -n "$TEST" ]; then
 	make install
 fi
 
+buildLibVoxinTarball() {
+	fakeroot bash -c "\
+tar -C \"$RFSDIR\" \
+	   --exclude=libibmeci.so --exclude \"*.a\" \
+	   -Jcf \"$RELDIR/libvoxin_$VERMAJ_$VERSION.$ARCH.txz\" $VOXINDIR \
+"
+}
+
 # symlinks for a global install (to be adapted according to the distro)
 cd $RFSDIR
 mkdir -p usr/{bin,lib,include}
@@ -161,6 +170,14 @@ ln -s ../../../../var/opt/IBM/ibmtts/cfg/eci.ini $VOXINDIR/rfs32/eci.ini
 
 if [ -n "$RELEASE" ]; then
 	mkdir -p "$RELDIR"
+
+	# doc
+	mkdir -p $DOCDIR
+	cp -a "$BASE"/LICENSE "$DOCDIR"
+	touch "$DOCDIR"/list
+	buildLibVoxinTarball
+	tar -tf "$RELDIR/libvoxin_$VERMAJ_$VERSION.$ARCH.txz" > "$DOCDIR"/list
+
 	fakeroot bash -c "\
 tar -C \"$RFSDIR\" \
 	   -Jcf \"$RELDIR/voxin-pkg_$VERMAJ_$VERSION.any.txz\" \
@@ -169,19 +186,10 @@ tar -C \"$RFSDIR\" \
 	   usr/bin/voxin-say && \
 tar -C \"$RFSDIR\" \
 	   -Jcf \"$RELDIR/libibmeci-fake_$VERMAJ_$VERSION.any.txz\" \
-	   opt/IBM  && \
-tar -C \"$RFSDIR\" \
-	   --exclude=libibmeci.so --exclude \"*.a\" \
-	   -Jcf \"$RELDIR/libvoxin_$VERMAJ_$VERSION.$ARCH.txz\" $VOXINDIR \
+	   opt/IBM
 "
-
-#tar -C \"$RFSDIR\" -Jcf \"$RELDIR/voxin-update_$VERMAJ_$VERSION.$ARCH.txz\" $VOXINDIR/lib/libvoxin.so* $VOXINDIR/rfs32/usr/bin/voxind $VOXINDIR/bin/voxin-say && \
-	#tar -C \"$RFSDIR\" -Jcf \"$RELDIR/voxin-say_$VERSION.$ARCH.txz\" usr/bin/voxin-say && \
-
-
-	#tar -C \"$RFSDIR\" -Jcf \"$RELDIR/libvoxin$VERMAJ-dev_$VERSION.all.txz\" opt/IBM/ibmtts/inc/eci.h
-
-
+	buildLibVoxinTarball
+	
 	printf "\nTarballs available in $RELDIR\n"	
 fi
 
