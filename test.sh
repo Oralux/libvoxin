@@ -3,6 +3,7 @@
 BASE=$(dirname $(realpath "$0"))
 NAME=$(basename "$0")
 
+cd "$BASE"
 . ./conf.inc
 getVersion
 
@@ -137,20 +138,22 @@ if [ -n "$TEST" ]; then
 fi
 
 # BUILD
-#[ ! -d "$RFSDIR" ] && mkdir -p "$RFSDIR"
-rm -rf "$RFSDIR"
-mkdir -p "$RFSDIR" 
-
-touch /tmp/libvoxin.ok
-rsync -av --delete "$ARCHDIR"/rfs/ "$RFSDIR"
-
-for i in $(cat $BUILD); do
-	tar -C "$RFSDIR" -xf $i
-done
-
-ECI="$RFSDIR"/var/opt/IBM/ibmtts/cfg/eci.ini
-cat "$RFSDIR"/opt/IBM/ibmtts/etc/*.ini > "$ECI"
-sed -i "s#=/opt/#=$RFSDIR/opt/#" "$ECI"
+if [ -f "$BUILD" ]; then
+	#[ ! -d "$RFSDIR" ] && mkdir -p "$RFSDIR"
+	rm -rf "$RFSDIR"
+	mkdir -p "$RFSDIR" 
+	
+	touch /tmp/libvoxin.ok
+	rsync -av --delete "$ARCHDIR"/rfs/ "$RFSDIR"
+	
+	for i in $(cat "$BUILD"); do
+		tar -C "$RFSDIR" -xf $i
+	done
+	
+	ECI="$RFSDIR"/var/opt/IBM/ibmtts/cfg/eci.ini
+	cat "$RFSDIR"/opt/IBM/ibmtts/etc/*.ini > "$ECI"
+	sed -i "s#=/opt/#=$RFSDIR/opt/#" "$ECI"
+fi
 
 #sudo bash -c "echo 0 > /proc/sys/kernel/yama/ptrace_scope"
 

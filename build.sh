@@ -3,6 +3,7 @@
 BASE=$(dirname $(realpath "$0"))
 NAME=$(basename "$0")
 
+cd "$BASE"
 . ./conf.inc
 getVersion
 [ -z "$VERMAJ" ] && exit 1
