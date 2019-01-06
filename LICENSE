@@ -15,8 +15,7 @@ License: LGPL-2.1+
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  General Public License for more details.
  .
- On Debian systems, you can find the GNU Lesser General Public License
- version 2.1 in the file /usr/share/common-licenses/LGPL-2.1.
+ The GNU Lesser General Public License is copied in doc/LGPL.txt
 
 *------------------------------------------------------------
 Files: src/api/eci.h

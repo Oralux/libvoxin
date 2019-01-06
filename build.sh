@@ -174,7 +174,7 @@ if [ -n "$RELEASE" ]; then
 
 	# doc
 	mkdir -p $DOCDIR
-	cp -a "$BASE"/LICENSE "$DOCDIR"
+	cp -a "$BASE"/doc/LGPL.txt "$DOCDIR"
 	touch "$DOCDIR"/list
 	buildLibVoxinTarball
 	tar -tf "$RELDIR/libvoxin_$VERMAJ_$VERSION.$ARCH.txz" > "$DOCDIR"/list
