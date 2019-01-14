@@ -163,8 +163,8 @@ tar -C \"$RFSDIR\" \
 # symlinks for a global install (to be adapted according to the distro)
 cd $RFSDIR
 mkdir -p usr/{bin,lib,include}
-ln -s ../../$VOXINDIR/lib/libvoxin.so usr/lib/libibmeci.so
-ln -s ../../$VOXINDIR/lib/libvoxin.so usr/lib/libvoxin.so
+ln -s ../../$VOXINDIR/lib/libvoxin.so.$VERMAJ usr/lib/libibmeci.so
+ln -s ../../$VOXINDIR/lib/libvoxin.so.$VERMAJ usr/lib/libvoxin.so
 ln -s ../../$VOXINDIR/include usr/include/voxin
 ln -s ../../$VOXINDIR/bin/voxin-say usr/bin/voxin-say
 ln -s ../../../../var/opt/IBM/ibmtts/cfg/eci.ini $VOXINDIR/rfs32/eci.ini
@@ -181,7 +181,7 @@ if [ -n "$RELEASE" ]; then
 
 	fakeroot bash -c "\
 tar -C \"$RFSDIR\" \
-	   -Jcf \"$RELDIR/voxin-pkg_$VERMAJ_$VERSION.any.txz\" \
+	   -Jcf \"$RELDIR/libvoxin-pkg_$VERMAJ_$VERSION.any.txz\" \
 	   usr/lib/libvoxin.so usr/lib/libibmeci.so \
 	   usr/include/voxin \
 	   usr/bin/voxin-say && \
