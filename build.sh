@@ -181,12 +181,12 @@ if [ -n "$RELEASE" ]; then
 
 	fakeroot bash -c "\
 tar -C \"$RFSDIR\" \
-	   -Jcf \"$RELDIR/libvoxin-pkg_$VERMAJ_$VERSION.any.txz\" \
+	   -Jcf \"$RELDIR/libvoxin-pkg_$VERMAJ_$VERSION.all.txz\" \
 	   usr/lib/libvoxin.so usr/lib/libibmeci.so \
 	   usr/include/voxin \
 	   usr/bin/voxin-say && \
 tar -C \"$RFSDIR\" \
-	   -Jcf \"$RELDIR/libibmeci-fake_$VERMAJ_$VERSION.any.txz\" \
+	   -Jcf \"$RELDIR/libibmeci-fake_$VERMAJ_$VERSION.all.txz\" \
 	   opt/IBM
 "
 	buildLibVoxinTarball
