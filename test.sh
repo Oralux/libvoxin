@@ -42,7 +42,13 @@ Options:
 Example:
 # build the testing directory
 # in $RFSDIR
- $0 -b voxin-rfs32.txz voxin-viavoice.txz
+ $0 -b list
+
+## with for example, list containing:
+# /home/user1/test/voxin-rfs32.txz
+# /home/user1/test/voxin-viavoice-all_6.7-1.0-1.txz
+# /home/user1/test/voxin-viavoice-enu_6.7-1.0-1.txz
+
 
 # run test 1
  $0 -t 1

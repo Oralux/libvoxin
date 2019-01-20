@@ -131,7 +131,7 @@ extern "C" {
 	  dbg("%s\n", strerror(err));
 	  goto exit0;
 	}
-	
+
 	while(1) {
 	  char *s = fgets(line, MAXBUF, fd);
 	  int i;
@@ -141,10 +141,13 @@ extern "C" {
 		goto exit0;
 	  }
 
+	  dbg("/proc/self/maps: %s\n", s);
 	  // $rfs/opt/oralux/voxin-$ver/lib/libvoxin.so.$ver
 	  basename = strrchr(s, '/');
-	  if (!basename || (strncmp(basename+1, "libvoxin.so.", strlen("libvoxin.so."))))
+	  if (!basename || (strncmp(basename+1, "libvoxin.so.", strlen("libvoxin.so.")))) {
+		dbg("not match (1)\n");
 		continue;
+	  }
 	  libname = basename+1;
 	  libname[strlen(libname)-1] = 0; // remove last char (cr)
 	  *basename = 0;
@@ -153,20 +156,26 @@ extern "C" {
 		const char *path=VOXIN_DIR "/lib";
 		size_t len = strlen(s);
 		size_t ref = strlen(path);
+		dbg("len=%d, ref=%d\n", len, ref);
+		dbg("s='%s'\n", s);
+		dbg("path='%s'\n", path);
 		if (len < ref) {
+		  dbg("not match (2)\n");
 		  continue;
 		}
 		if (len == ref) {
 		  strcpy(line,"/");
 		} else {
-		  s[len-ref] = 0;
+		  s[len-ref+1] = 0;
 		  basename = strchr(s, '/');
-		  if (!basename)
+		  if (!basename) {
+			dbg("not match (3)\n");
 			continue;
-		  
+		  }
 		  bcopy(basename, line, strlen(basename)+1);
 		}
 		err = 0;
+		dbg("line=%s\n", line);
 		break;
 	  }	  
 	}
