@@ -163,11 +163,12 @@ tar -C \"$RFSDIR\" \
 # symlinks for a global install (to be adapted according to the distro)
 cd $RFSDIR
 mkdir -p usr/{bin,lib,include}
-ln -s ../../$VOXINDIR/lib/libvoxin.so.$VERMAJ usr/lib/libibmeci.so
-ln -s ../../$VOXINDIR/lib/libvoxin.so.$VERMAJ usr/lib/libvoxin.so
-ln -s ../../$VOXINDIR/include usr/include/voxin
-ln -s ../../$VOXINDIR/bin/voxin-say usr/bin/voxin-say
-ln -s ../../../../var/opt/IBM/ibmtts/cfg/eci.ini $VOXINDIR/rfs32/eci.ini
+ln -sf ../../$VOXINDIR/lib/libvoxin.so.$VERMAJ usr/lib/libibmeci.so
+ln -sf ../../$VOXINDIR/lib/libvoxin.so.$VERMAJ usr/lib/libvoxin.so
+ln -sf ../../$VOXINDIR/lib/libvoxin.so.$VERMAJ usr/lib/libvoxin.so.$VERMAJ
+ln -sf ../../$VOXINDIR/include usr/include/voxin
+ln -sf ../../$VOXINDIR/bin/voxin-say usr/bin/voxin-say
+ln -sf ../../../../var/opt/IBM/ibmtts/cfg/eci.ini $VOXINDIR/rfs32/eci.ini
 
 if [ -n "$RELEASE" ]; then
 	mkdir -p "$RELDIR"
@@ -182,8 +183,8 @@ if [ -n "$RELEASE" ]; then
 	fakeroot bash -c "\
 tar -C \"$RFSDIR\" \
 	   -Jcf \"$RELDIR/libvoxin-pkg_$VERMAJ_$VERSION.all.txz\" \
-	   usr/lib/libvoxin.so usr/lib/libibmeci.so \
-	   usr/include/voxin \
+	   usr/lib/libvoxin.so usr/lib/libvoxin.so.$VERMAJ \
+	   usr/lib/libibmeci.so usr/include/voxin \
 	   usr/bin/voxin-say && \
 tar -C \"$RFSDIR\" \
 	   -Jcf \"$RELDIR/libibmeci-fake_$VERMAJ_$VERSION.all.txz\" \
