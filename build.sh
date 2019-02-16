@@ -8,38 +8,7 @@ cd "$BASE"
 getVersion
 [ -z "$VERMAJ" ] && exit 1
 
-
-usage() {
-	echo "
-Usage: 
- $NAME [options]
-
-Build the libvoxin binaries (libvoxin, voxind, tests).
-
-Options: 
--c, --clean		   clean-up: delete the build directory and object files
--d, --debug        compile with debug symbols 
--h, --help         display this help 
--m, --mach <arch>  target architecture of libvoxin and tests
-		   		   possible value: i386; by default: current arch
--r, --release      build the tarballs in build/<arch>/release
--t, --test         build tests 
-
-Example:
-# compile libvoxin and voxind
- $0
-
-# compile libvoxin/voxind and build the tarballs
- $0 -r
-
-# compile libvoxin/voxind/tests with debug symbols
- $0 -dt
-
-" 
-
-}
-
-unset CC CFLAGS CLEAN DBG_FLAGS HELP ARCH RELEASE STRIP TEST 
+unset CC CFLAGS CLEAN DBG_FLAGS HELP ARCH RELEASE STRIP TEST SUFFIXDIR
 
 OPTIONS=`getopt -o cdhm:rt --long clean,debug,help,mach:,release,test \
              -n "$NAME" -- "$@"`
@@ -60,7 +29,7 @@ while true; do
 done
 
 case "$ARCH" in
-	x86|i386|i686) ARCH=i386;;	
+	x86|i386|i686) ARCH=i386; SUFFIXDIR=.i386;;	
 	*)
 		# [ -n "$DEB_HOST_ARCH" ] && ARCH="$DEB_HOST_ARCH"
 		ARCH=$(uname -m);;
@@ -152,22 +121,20 @@ if [ -n "$TEST" ]; then
 	make install
 fi
 
-buildLibVoxinTarball() {
-	fakeroot bash -c "\
-tar -C \"$RFSDIR\" \
-	   --exclude=libibmeci.so --exclude \"*.a\" \
-	   -Jcf \"$RELDIR/libvoxin_$VERMAJ_$VERSION.$ARCH.txz\" $VOXINDIR \
-"
-}
+
+if [ -n "$SUFFIXDIR" ]; then
+	mv "$DESTDIR"/lib "$DESTDIR"/lib"$SUFFIXDIR"
+	mv "$DESTDIR"/bin "$DESTDIR"/bin"$SUFFIXDIR"
+fi
 
 # symlinks for a global install (to be adapted according to the distro)
 cd $RFSDIR
 mkdir -p usr/{bin,lib,include}
-ln -sf ../../$VOXINDIR/lib/libvoxin.so.$VERMAJ usr/lib/libibmeci.so
-ln -sf ../../$VOXINDIR/lib/libvoxin.so.$VERMAJ usr/lib/libvoxin.so
-ln -sf ../../$VOXINDIR/lib/libvoxin.so.$VERMAJ usr/lib/libvoxin.so.$VERMAJ
+ln -sf ../../$VOXINDIR/lib$SUFFIXDIR/libvoxin.so.$VERMAJ usr/lib/libibmeci.so
+ln -sf ../../$VOXINDIR/lib$SUFFIXDIR/libvoxin.so.$VERMAJ usr/lib/libvoxin.so
+ln -sf ../../$VOXINDIR/lib$SUFFIXDIR/libvoxin.so.$VERMAJ usr/lib/libvoxin.so.$VERMAJ
 ln -sf ../../$VOXINDIR/include usr/include/voxin
-ln -sf ../../$VOXINDIR/bin/voxin-say usr/bin/voxin-say
+ln -sf ../../$VOXINDIR/bin$SUFFIXDIR/voxin-say usr/bin/voxin-say
 ln -sf ../../../../var/opt/IBM/ibmtts/cfg/eci.ini $VOXINDIR/rfs32/eci.ini
 
 if [ -n "$RELEASE" ]; then
