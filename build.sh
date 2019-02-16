@@ -102,7 +102,7 @@ DESTDIR="$DESTDIR_RFS32" CFLAGS="$CFLAGS -m32" LDFLAGS="-m32" make all
 DESTDIR="$DESTDIR_RFS32" make install
 
 make clean
-CFLAGS="$CFLAGS" LDFLAGS="$LDFLAGS" make all
+make all
 make install
 
 # libvoxin
