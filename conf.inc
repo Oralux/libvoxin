@@ -15,7 +15,7 @@ Options:
 -d, --debug        compile with debug symbols 
 -h, --help         display this help 
 -m, --mach <arch>  target architecture of libvoxin and tests
-		   		   possible value: i386; by default: current arch
+		   		   possible value: i686; by default: current arch
 -r, --release      build the tarballs in build/<arch>/release
 -t, --test         build tests 
 

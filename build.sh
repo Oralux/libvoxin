@@ -29,7 +29,7 @@ while true; do
 done
 
 case "$ARCH" in
-	x86|i386|i686) ARCH=i386; SUFFIXDIR=.i386;;	
+	x86|i386|i686) ARCH=i686; SUFFIXDIR=.i686;;	
 	*)
 		# [ -n "$DEB_HOST_ARCH" ] && ARCH="$DEB_HOST_ARCH"
 		ARCH=$(uname -m);;
@@ -57,7 +57,7 @@ mkdir -p "$DESTDIR_RFS32"
 export CFLAGS="$DBG_FLAGS"
 export CXXFLAGS="$DBG_FLAGS"
 unset LDFLAGS
-if [ "$ARCH" = "i386" ]; then
+if [ "$ARCH" = "i686" ]; then
 	export CFLAGS="$CFLAGS -m32"
 	export CXXFLAGS="$CXXFLAGS -m32"
 	export LDFLAGS="-m32"
@@ -128,7 +128,7 @@ if [ -n "$SUFFIXDIR" ]; then
 fi
 
 # symlinks for a global install (to be adapted according to the distro)
-cd $RFSDIR
+cd "$RFSDIR"
 mkdir -p usr/{bin,lib,include}
 ln -sf ../../$VOXINDIR/lib$SUFFIXDIR/libvoxin.so.$VERMAJ usr/lib/libibmeci.so
 ln -sf ../../$VOXINDIR/lib$SUFFIXDIR/libvoxin.so.$VERMAJ usr/lib/libvoxin.so
