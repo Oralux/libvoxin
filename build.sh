@@ -21,7 +21,7 @@ Options:
 -d, --debug        compile with debug symbols 
 -h, --help         display this help 
 -m, --mach <arch>  target architecture of libvoxin and tests
-		   		   possible value: x86; by default: current arch
+		   		   possible value: i386; by default: current arch
 -r, --release      build the tarballs in build/<arch>/release
 -t, --test         build tests 
 
@@ -89,9 +89,9 @@ export CFLAGS="$DBG_FLAGS"
 export CXXFLAGS="$DBG_FLAGS"
 unset LDFLAGS
 if [ "$ARCH" = "i386" ]; then
-	CFLAGS="$CFLAGS -m32"
-	CXXFLAGS="$CXXFLAGS -m32"
-	LDFLAGS="-m32"
+	export CFLAGS="$CFLAGS -m32"
+	export CXXFLAGS="$CXXFLAGS -m32"
+	export LDFLAGS="-m32"
 fi
 
 # libcommon
@@ -102,7 +102,7 @@ DESTDIR="$DESTDIR_RFS32" CFLAGS="$CFLAGS -m32" LDFLAGS="-m32" make all
 DESTDIR="$DESTDIR_RFS32" make install
 
 make clean
-make all
+CFLAGS="$CFLAGS" LDFLAGS="$LDFLAGS" make all
 make install
 
 # libvoxin

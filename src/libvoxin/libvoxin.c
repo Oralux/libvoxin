@@ -156,7 +156,7 @@ extern "C" {
 		const char *path=VOXIN_DIR "/lib";
 		size_t len = strlen(s);
 		size_t ref = strlen(path);
-		dbg("len=%d, ref=%d\n", len, ref);
+		dbg("len=%lu, ref=%lu\n", (long unsigned int)len, (long unsigned int)ref);
 		dbg("s='%s'\n", s);
 		dbg("path='%s'\n", path);
 		if (len < ref) {

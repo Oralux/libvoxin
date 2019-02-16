@@ -737,7 +737,7 @@ static int objUpdateHeaderWav()
   i = fwrite(&w, 1, sizeof(w), fd);
   // TODO
   if (i != sizeof(w)) {
-	err("%d written (%ld expected)", i, sizeof(w));
+	err("%d written (%ld expected)", i, (long int)sizeof(w));
   }
 
  exit0:

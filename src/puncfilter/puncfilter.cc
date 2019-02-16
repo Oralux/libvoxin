@@ -148,7 +148,7 @@ void puncFilter::setMode(const char* var)
 
 	if (inbytesleft) {
 		free(a_punctuation);
-		dbg("Failed to convert utf-8 to wchar_t, status=0x%lx, inbytesleft=%ld", status, inbytesleft);
+		dbg("Failed to convert utf-8 to wchar_t, status=0x%lx, inbytesleft=%ld", (long int)status, (long int)inbytesleft);
 	}
 	else {
 		my_mode = a_mode;
@@ -245,14 +245,14 @@ bool puncFilter::filterText(const char *msg_in_utf8, charset_t charset, const ch
 		       &outbuf, &outbytesleft);
 	
 	if (inbytesleft) {
-		dbg("Failed to convert utf-8 to wchar_t, status=0x%lx, inbytesleft=%ld",  status, inbytesleft);
+		dbg("Failed to convert utf-8 to wchar_t, status=0x%lx, inbytesleft=%ld",  (long unsigned int)status, (long int)inbytesleft);
 		a_status = false;
 		goto end_punct1;
 	}
 
 	bytes_out -= outbytesleft;
 
-	dbg("msg=%s, bytes_in=%ld, bytes_out=%ld", msg_in_utf8, bytes_in, bytes_out);
+	dbg("msg=%s, bytes_in=%ld, bytes_out=%ld", msg_in_utf8, (long int)bytes_in, (long int)bytes_out);
 	
 	w_total_src = bytes_out/sizeof(wchar_t);
 	convert_xml_predefined_entities(src, &w_total_src);
@@ -269,7 +269,7 @@ bool puncFilter::filterText(const char *msg_in_utf8, charset_t charset, const ch
 					   &outbuf, &outbytesleft);
 		
 		if (inbytesleft) {
-			dbg("Failed to convert from wchar_t, status=0x%lx, inbytesleft=%ld",  status, inbytesleft);
+			dbg("Failed to convert from wchar_t, status=0x%lx, inbytesleft=%ld", (long int)status, (long int)inbytesleft);
 			a_status = false;
 		} else {
 			my_filtered_text[bytes_out-outbytesleft] = 0;      
@@ -286,7 +286,7 @@ bool puncFilter::filterText(const char *msg_in_utf8, charset_t charset, const ch
 		list<wchar_t *>::iterator a_iterator = a_list.begin();
 		wchar_t *psrc = src;
 		int len = 0;
-		dbg("bytes_out=%ld, nb_of_punct=%d", bytes_out, nb_of_punct);
+		dbg("bytes_out=%lu, nb_of_punct=%d", (long int)bytes_out, nb_of_punct);
 		assert(bytes_out >= sizeof(wchar_t)*nb_of_punct);
 		int bytes_total_dest = (bytes_out-sizeof(wchar_t)*nb_of_punct) + nb_of_punct*BYTES_ANNOTATION_LENGTH;
 		wchar_t *pdest = NULL;
@@ -329,7 +329,7 @@ bool puncFilter::filterText(const char *msg_in_utf8, charset_t charset, const ch
 					   &outbuf, &outbytesleft);
 
 		if (inbytesleft) {
-			dbg("Failed to convert utf-8 , status=0x%lx, inbytesleft=%ld", status, inbytesleft);
+			dbg("Failed to convert utf-8 , status=0x%lx, inbytesleft=%ld", (long int)status, (long int)inbytesleft);
 			a_status = false;
 			goto end_punct1;
 		}
