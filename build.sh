@@ -8,7 +8,7 @@ cd "$BASE"
 getVersion
 [ -z "$VERMAJ" ] && exit 1
 
-unset CC CFLAGS CLEAN DBG_FLAGS HELP ARCH RELEASE STRIP TEST SUFFIXDIR
+unset CC CFLAGS CLEAN DBG_FLAGS HELP ARCH RELEASE STRIP TEST
 
 OPTIONS=`getopt -o cdhm:rt --long clean,debug,help,mach:,release,test \
              -n "$NAME" -- "$@"`
@@ -29,7 +29,7 @@ while true; do
 done
 
 case "$ARCH" in
-	x86|i386|i686) ARCH=i686; SUFFIXDIR=.i686;;	
+	x86|i386|i586|i686) ARCH=i686;;	
 	*)
 		# [ -n "$DEB_HOST_ARCH" ] && ARCH="$DEB_HOST_ARCH"
 		ARCH=$(uname -m);;
@@ -122,19 +122,14 @@ if [ -n "$TEST" ]; then
 fi
 
 
-if [ -n "$SUFFIXDIR" ]; then
-	mv "$DESTDIR"/lib "$DESTDIR"/lib"$SUFFIXDIR"
-	mv "$DESTDIR"/bin "$DESTDIR"/bin"$SUFFIXDIR"
-fi
-
 # symlinks for a global install (to be adapted according to the distro)
 cd "$RFSDIR"
 mkdir -p usr/{bin,lib,include}
-ln -sf ../../$VOXINDIR/lib$SUFFIXDIR/libvoxin.so.$VERMAJ usr/lib/libibmeci.so
-ln -sf ../../$VOXINDIR/lib$SUFFIXDIR/libvoxin.so.$VERMAJ usr/lib/libvoxin.so
-ln -sf ../../$VOXINDIR/lib$SUFFIXDIR/libvoxin.so.$VERMAJ usr/lib/libvoxin.so.$VERMAJ
+ln -sf ../../$VOXINDIR/lib/libvoxin.so.$VERMAJ usr/lib/libibmeci.so
+ln -sf ../../$VOXINDIR/lib/libvoxin.so.$VERMAJ usr/lib/libvoxin.so
+ln -sf ../../$VOXINDIR/lib/libvoxin.so.$VERMAJ usr/lib/libvoxin.so.$VERMAJ
 ln -sf ../../$VOXINDIR/include usr/include/voxin
-ln -sf ../../$VOXINDIR/bin$SUFFIXDIR/voxin-say usr/bin/voxin-say
+ln -sf ../../$VOXINDIR/bin/voxin-say usr/bin/voxin-say
 ln -sf ../../../../var/opt/IBM/ibmtts/cfg/eci.ini $VOXINDIR/rfs32/eci.ini
 
 if [ -n "$RELEASE" ]; then
