@@ -35,7 +35,7 @@ extern "C" {
     CHARSET_UCS_2,
     CHARSET_BIG_5,
     CHARSET_SJIS,
-    CHARSET_MAX = CHARSET_SJIS,
+    CHARSET_MAX,
   };
 
   void *puncfilter_create();
