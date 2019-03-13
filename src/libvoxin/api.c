@@ -773,7 +773,7 @@ extern "C" {
     struct api_t *api;
     struct msg_t header;
    
-    ENTER();
+    dbg("ENTER(%d,%d)", Param, iValue);  
 
     if (!IS_ENGINE(engine)) {
       err("LEAVE, args error");
@@ -1044,7 +1044,7 @@ extern "C" {
     struct engine_t *engine = (struct engine_t *)hEngine;
     struct msg_t header;
   
-    ENTER();
+    dbg("ENTER(%p,%d,%d)", hEngine, iVoiceFrom, iVoiceTo);  
 
     if (!IS_ENGINE(engine)) {
       err("LEAVE, args error");
