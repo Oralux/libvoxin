@@ -44,6 +44,7 @@ static const char *msg[] = {
   "cb_audio_index_reply",
   "cb_synthesis_break",  
   "exit",  
+  "add_tlv",  
   "max",
 };
 

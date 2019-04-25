@@ -7,6 +7,7 @@ extern "C" {
 
 #include <stdint.h>
 #include <stdio.h>
+#include "msg.h"
 
   // log enabled if this file exits
 #define ENABLE_LOG "/tmp/libvoxin.ok"
@@ -17,9 +18,16 @@ extern "C" {
   enum DebugLevel {LV_ERROR_LEVEL=0, LV_INFO_LEVEL=1, LV_DEBUG_LEVEL=2, LV_LOG_DEFAULT=LV_ERROR_LEVEL};
 
 #define log(level,fmt,...) if (DebugEnabled(level)) {DebugDisplayTime(); fprintf (myDebugFile, "%s: " fmt "\n", __func__, ##__VA_ARGS__);}
+#define log_bytes(level,label,bytes) if (DebugEnabled(level) && label && bytes && bytes->b) { \
+  DebugDisplayTime(); \
+  fprintf (myDebugFile, "%s: %s", __func__, label); /* unbuffered frpintf */ \
+  write (fileno(myDebugFile), bytes->b, bytes->len); \
+}
 #define err(fmt,...) log(LV_ERROR_LEVEL, fmt, ##__VA_ARGS__)
 #define msg(fmt,...) log(LV_INFO_LEVEL, fmt, ##__VA_ARGS__)
 #define dbg(fmt,...) log(LV_DEBUG_LEVEL, fmt, ##__VA_ARGS__)
+  // display msg_bytes_t
+#define dbg_bytes(label,bytes) {log_bytes(LV_DEBUG_LEVEL, label, bytes)}
 
 #define ENTER() dbg("ENTER")
 #define LEAVE() dbg("LEAVE")

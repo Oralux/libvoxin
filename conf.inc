@@ -3,6 +3,11 @@
 
 SRC=src/libvoxin
 
+LIBINOTE_URL=https://github.com/Oralux/libinote/archive
+#LIBINOTE_VERSION=1.0.0
+LIBINOTE_VERSION=
+LIBINOTE_SHA512=2eba214c50f69f7825f8984ed9ebb54fb0e298824d1b5203aba0567b8a5136306b98e9a572defb38ec4ebe0979ea5a224cf067c6c03c565f5e589ede4f721ad4
+
 usage() {
 	echo "
 Usage: 
@@ -67,3 +72,74 @@ tar -C \"$RFSDIR\" \
 "
 }
 
+# download, build and install libinote
+getLibinote() {
+	local workdir=$TMPDIR/libinote
+	local archive	
+	local archivep
+	local dev
+	local version
+	local pwd=$PWD
+	
+	if [ -n "$LIBINOTE_VERSION" ]; then
+		unset dev
+		version=$LIBINOTE_VERSION
+		archive=$version.tar.gz		
+	else
+		version=1.x.x
+		dev=1
+		archive=master.zip
+#TODO		[ -e "$DWLDIR"/$archive ] && mv "$DWLDIR"/$archive "$DWLDIR"/$archive.old
+	fi
+	archivep="$DWLDIR/$archive"
+	
+#TODO	rm -rf "$workdir"
+	mkdir -p "$workdir"
+	cd "$workdir"
+	
+	# download
+	if [ ! -e "$archivep" ]; then
+		wget -P "$DWLDIR" "$LIBINOTE_URL/$archive"
+		if [ ! -e "$archivep" ]; then
+			leave "$archivep not found" 1
+		fi
+	fi
+
+	if [ -n "$dev" ]; then
+		[ ! -d libinote-master ] && unzip "$archivep" || true
+	else
+		local a=$(sha512sum "$archivep" | cut -f1 -d" ")
+		if [ "$a" != "$LIBINOTE_SHA512" ]; then
+			echo "$archivep: sha512 mismatch !"
+			exit 1
+		fi
+		[ ! -d libinote-$version ] && tar -zxf "$archivep" || true
+	fi	
+	##
+
+	unlink current || true
+	if [ -n "$dev" ]; then
+		dir=libinote-master
+	else
+		dir=libinote-$version
+	fi
+
+	[ ! -d "$dir" ] && leave "Can't cd to $dir" 1
+	ln -sf "$dir" current
+	cd "$pwd"
+	return 0
+}
+
+buildLibinote() {
+	[ "$#" = 0 ] && return 1
+	local arch=$1
+	local destdir=$2
+	local withdbg=$3
+	local workdir=$TMPDIR/libinote/current
+	local flag
+	local pwd=$PWD
+
+	cd $workdir
+	[ -n "$withdbg" ] && flag=-d
+	./build.sh $flag -m "$arch" -i "$destdir"
+}

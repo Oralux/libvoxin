@@ -1,4 +1,4 @@
-#!/bin/bash -ex
+#!/bin/bash -e
 
 BASE=$(dirname $(realpath "$0"))
 NAME=$(basename "$0")
@@ -8,7 +8,7 @@ cd "$BASE"
 getVersion
 [ -z "$VERMAJ" ] && exit 1
 
-unset CC CFLAGS CLEAN DBG_FLAGS HELP ARCH RELEASE STRIP TEST
+unset CC CFLAGS CLEAN DBG_FLAGS HELP ARCH RELEASE STRIP TEST WITH_DBG
 
 OPTIONS=`getopt -o cdhm:rt --long clean,debug,help,mach:,release,test \
              -n "$NAME" -- "$@"`
@@ -18,7 +18,7 @@ eval set -- "$OPTIONS"
 while true; do
   case "$1" in
     -c|--clean) CLEAN=1; shift;;
-    -d|--debug) export DBG_FLAGS="-ggdb -DDEBUG"; export STRIP=test; shift;;
+    -d|--debug) WITH_DBG=1; export DBG_FLAGS="-ggdb -DDEBUG"; export STRIP=test; shift;;
     -h|--help) HELP=1; shift;;
     -m|--mach) ARCH=$2; shift 2;;
     -r|--release) RELEASE=1; shift;;
@@ -43,6 +43,8 @@ cleanup
 cd "$BASE"
 SRCDIR="$BASE/src"
 ARCHDIR="$BASE/build/$ARCH"
+TMPDIR=$BASE/build/tmp
+DWLDIR=$BASE/download
 RELDIR="$ARCHDIR/release"
 RFSDIR="$ARCHDIR/rfs"
 VOXINDIR=opt/oralux/voxin
@@ -63,6 +65,14 @@ if [ "$ARCH" = "i686" ]; then
 	export LDFLAGS="-m32"
 fi
 
+#libinote
+getLibinote
+buildLibinote $ARCH "$DESTDIR" "$WITH_DBG"
+buildLibinote i686 "$DESTDIR_RFS32" "$WITH_DBG"
+
+# add access to inote.h
+CFLAGS="$CFLAGS -I$DESTDIR/include"
+
 # libcommon
 echo "Entering common"
 cd "$SRCDIR"/common
@@ -75,11 +85,6 @@ make all
 make install
 
 # libvoxin
-echo "Entering puncfilter"
-cd "$SRCDIR"/puncfilter
-make clean
-make all
-
 echo "Entering libvoxin"
 cd "$SRCDIR"/libvoxin
 make clean

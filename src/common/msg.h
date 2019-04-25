@@ -51,6 +51,7 @@ enum msg_type {
   MSG_CB_AUDIO_INDEX_REPLY,
   MSG_CB_SYNTHESIS_BREAK,
   MSG_EXIT,
+  MSG_ADD_TLV,
   MSG_MAX
 };
 
@@ -157,5 +158,12 @@ struct msg_t {
 #define MAX_VERSION 20
 
 extern const char *msg_string(enum msg_type m);
+
+// generic type: bytes
+struct msg_bytes_t {
+  uint8_t *b;
+  size_t len;
+};
+#define min_size(a,b) ((a<b)?a:b)	
 
 #endif // _MSG_H

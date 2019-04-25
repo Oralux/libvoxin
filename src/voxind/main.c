@@ -200,6 +200,24 @@ static int unserialize(struct msg_t *msg, size_t *msg_length)
   msg->effective_data_length = 0; 
 
   switch(msg->func) {
+  case MSG_ADD_TLV:
+    if (msg->data[msg->effective_data_length-1] != 0) {
+      err("LEAVE, %s, data error, length=%d, <0x%x 0x%x 0x%x>", msg_string(msg->func), msg->effective_data_length, msg->data[msg->effective_data_length-3], msg->data[msg->effective_data_length-2], msg->data[msg->effective_data_length-1]);
+      msg->res = ECIFalse;
+    } else {
+      dbg("text=%s", (char*)msg->data);
+
+
+	  //TODO
+
+	  
+      msg->res = (uint32_t)eciAddText(engine->handle, msg->data);
+
+
+
+	}
+    break;
+
   case MSG_ADD_TEXT:
     if (msg->data[msg->effective_data_length-1] != 0) {
       err("LEAVE, %s, data error, length=%d, <0x%x 0x%x 0x%x>", msg_string(msg->func), msg->effective_data_length, msg->data[msg->effective_data_length-3], msg->data[msg->effective_data_length-2], msg->data[msg->effective_data_length-1]);

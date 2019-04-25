@@ -21,7 +21,16 @@ By default, a fake libibmeci.so is provided.
 
 ** Create a testing directory
 #+BEGIN_SRC shell
-./test.sh -b file
+./test.sh -b list
+
+# this 'list' file provides the paths to the necessary tarballs.
+# For example to test English and French, these paths would be:
+
+/home/user1/voxin-2.0/voxin-enu-2.0/packages/all/rfs_2.0.all.txz
+/home/user1/voxin-2.0/voxin-enu-2.0/packages/all/voxin-viavoice-all_6.7-1.0-1.txz
+/home/user1/voxin-2.0/voxin-enu-2.0/packages/all/voxin-viavoice-enu_6.7-1.0-1.txz
+/home/user1/voxin-2.0/voxin-fra-2.0/packages/all/voxin-viavoice-fra_6.7-1.0-1.txz
+
 #+END_SRC
 
 ** Run test 1

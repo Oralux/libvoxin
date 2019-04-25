@@ -6,7 +6,7 @@ STRIP ?= strip --strip-unneeded
 
 voxind: $(BIN)
 #	$(CC) -o $(@) $(^) $(LDFLAGS) -L$(DESTDIR)/lib -lcommon -L$(DESTDIR)/../$(IBMTTSDIR) -libmeci -letidev $(DESTDIR)/lib/libstdc++-libc6.2-2.so.3
-	$(CC) -o $(@) $(^) $(LDFLAGS) -L$(DESTDIR)/lib -lcommon -L$(IBMTTSDIR)/lib -libmeci
+	$(CC) -o $(@) $(^) $(LDFLAGS) -L$(DESTDIR)/lib -lcommon -linote -L$(IBMTTSDIR)/lib -libmeci
 	$(STRIP) $(@)
 
 all: voxind

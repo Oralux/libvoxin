@@ -44,11 +44,13 @@ Example:
 # in $RFSDIR
  $0 -b list
 
-## with for example, list containing:
-# /home/user1/test/voxin-rfs32.txz
-# /home/user1/test/voxin-viavoice-all_6.7-1.0-1.txz
-# /home/user1/test/voxin-viavoice-enu_6.7-1.0-1.txz
-
+# this 'list' file provides the paths to the necessary tarballs.
+# For example to test English and French, these paths would be:
+#
+# /home/user1/voxin-2.0/voxin-enu-2.0/packages/all/rfs_2.0.all.txz
+# /home/user1/voxin-2.0/voxin-enu-2.0/packages/all/voxin-viavoice-all_6.7-1.0-1.txz
+# /home/user1/voxin-2.0/voxin-enu-2.0/packages/all/voxin-viavoice-enu_6.7-1.0-1.txz
+# /home/user1/voxin-2.0/voxin-fra-2.0/packages/all/voxin-viavoice-fra_6.7-1.0-1.txz
 
 # run test 1
  $0 -t 1
@@ -127,10 +129,12 @@ if [ -n "$TEST" ]; then
 #		strace -s300 -tt -ff -o /tmp/voxind -p $(pidof voxind) &
 #		rm /tmp/test_voxind
 	elif [ -n "$GDB_LIBVOXIN" ]; then
-		gdb -ex 'set follow-fork-mode child' -ex 'b child' ./test$TEST
+		gdb -ex 'b inote_convert_text_to_tlv' ./test$TEST
+#		gdb -ex 'set follow-fork-mode child' -ex 'b child' ./test$TEST
 	elif [ -n "$GDB_VOXIND" ]; then
 		touch /tmp/test_voxind
 		./test$TEST &
+		sleep 2
 		gdb -p $(pidof voxind)
 		rm /tmp/test_voxind
 	else
@@ -149,11 +153,10 @@ if [ -f "$BUILD" ]; then
 	rm -rf "$RFSDIR"
 	mkdir -p "$RFSDIR" 
 	
-	touch /tmp/libvoxin.ok
+	touch /tmp/libvoxin.ok /tmp/libinote.ok
 	rsync -av --delete "$ARCHDIR"/rfs/ "$RFSDIR"
-	
 	for i in $(cat "$BUILD"); do
-		tar -C "$RFSDIR" -xf $i
+		tar --exclude "libvoxin.so*" --exclude "voxind*" -C "$RFSDIR" -xf $i
 	done
 	
 	ECI="$RFSDIR"/var/opt/IBM/ibmtts/cfg/eci.ini

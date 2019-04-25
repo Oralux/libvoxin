@@ -8,15 +8,13 @@ MIN=$(VERMIN)
 REV=$(VERMIC)
 
 BIN := api.o libvoxin.o
-#CFLAGS += $(DEBUG) -fPIC -I../api -I../common -Wno-pointer-to-int-cast 
-#CC ?= gcc
-PUNC = ../puncfilter/puncfilter.o
-CFLAGS += $(DEBUG) -fPIC -I../api -I../common -I../puncfilter -Wno-int-to-pointer-cast
-CC = g++
+CC ?= gcc
+CFLAGS += $(DEBUG) -fPIC -I../api -I../common -Wno-int-to-pointer-cast -Wall
+#CC = gcc
 STRIP ?= strip --strip-unneeded
 
 all: $(BIN)
-	$(CC) -shared -Wl,-soname,libvoxin.so.$(VERMAJ) -o $(SONAME).$(MIN).$(REV) -Wl,--version-script=libvoxin.ld $(^) $(LDFLAGS) -L$(DESTDIR)/lib -lcommon $(PUNC)
+	$(CC) -shared -Wl,-soname,libvoxin.so.$(VERMAJ) -o $(SONAME).$(MIN).$(REV) -Wl,--version-script=libvoxin.ld $(^) $(LDFLAGS) -L$(DESTDIR)/lib -lcommon -linote 
 	$(STRIP) $(SONAME).$(MIN).$(REV)
 
 clean:
