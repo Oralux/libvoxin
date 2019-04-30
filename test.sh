@@ -14,6 +14,38 @@ RFSDIR="$ARCHDIR/test/rfs"
 export DESTDIR="$RFSDIR/opt/oralux/voxin"
 RFS32="$DESTDIR/rfs32"
 DESTDIR_RFS32="$RFS32/usr"
+DWLDIR=$BASE/download
+
+# testFileUrl="http://abu.cnam.fr/cgi-bin/donner_unformated?nddp1"
+# testFileDest=$DWLDIR/nddp1.txt.iso-8859-1
+# file_utf_8=${testFileDest%.iso-8859-1}.utf-8
+# getFile() {
+# 	if [ ! -e "$file_utf_8" ]; then
+# 		wget -O - "$testFileUrl" | sed -e 's/[\r]//g' -e "/^$/d" > "$testFileDest"
+# 		iconv -f iso-8859-1 -t utf-8 -o "$file_utf_8" "$testFileDest"  
+# 	fi
+# }
+
+file_utf_8=$DWLDIR/text1.utf-8
+getFile() {
+	cat <<EOF>"$file_utf_8"
+So long as there shall exist, by virtue of law and custom, decrees of
+damnation pronounced by society, artificially creating hells amid the
+civilization of earth, and adding the element of human fate to divine
+destiny; so long as the three great problems of the century--the
+degradation of man through pauperism, the corruption of woman through
+hunger, the crippling of children through lack of light--are unsolved;
+so long as social asphyxia is possible in any part of the world;--in
+other words, and with a still wider significance, so long as ignorance
+and poverty exist on earth, books of the nature of Les Miserables
+cannot fail to be of use.
+ 
+HAUTEVILLE HOUSE, 1862.
+
+EOF
+
+}
+
 
 mkdir -p "$LOGDIR"
 
@@ -34,6 +66,7 @@ Options:
 -c, --clean         clean-up: delete the dedicated directory
 -g, --gdb           with gdb on libvoxin
 -G, --GDB           with gdb on voxind
+-p, --play          play file via voxin-say
 -s, --strace <log>  with strace using <log> as logfile prefix
                     by default the log files are created under build/log
 -S, --system        test using the libvoxin library installed system wide
@@ -68,9 +101,9 @@ Example:
 
 }
 
-unset ARCH BUILD CLEAN GDB_LIBVOXIN GDB_VOXIND HELP STRACE SYS TEST 
+unset ARCH BUILD CLEAN GDB_LIBVOXIN GDB_VOXIND HELP PLAY STRACE SYS TEST 
 
-OPTIONS=`getopt -o b:cgGhs:St: --long build:,clean,gdb,GDB,help,strace:,system,test: \
+OPTIONS=`getopt -o b:cgGhps:St: --long build:,clean,gdb,GDB,help,play,strace:,system,test: \
              -n "$NAME" -- "$@"`
 [ $? != 0 ] && usage && exit 1
 eval set -- "$OPTIONS"
@@ -82,6 +115,7 @@ while true; do
     -c|--delete) CLEAN=1; shift;;
     -g|--gdb) GDB_LIBVOXIN=1; shift;;
     -G|--GDB) GDB_VOXIND=1; shift;;
+    -p|--play) PLAY=1; TEST=1; shift;;
     -s|--strace) STRACE=$2; shift 2;;
     -S|--system) SYS=1; shift;;
     -t|--test) TEST=$2; shift 2;;
@@ -90,7 +124,7 @@ while true; do
   esac
 done
 
-[ -z "$BUILD" ] && [ -z "$CLEAN" ] && [ -z "$TEST" ] && HELP=1
+[ -z "$BUILD" ] && [ -z "$CLEAN" ] && [ -z "$TEST" ]  && HELP=1
 
 # 
 # /tmp/test_voxind: voxind waits the deletion of test_voxind to continue
@@ -106,7 +140,7 @@ if [ -n "$CLEAN" ]; then
 fi
 if [ -n "$TEST" ]; then
 	set +e
-	rm -f /tmp/test_libvoxin* /tmp/libvoxin.log.*
+	rm -f /tmp/test_libvoxin* /tmp/libvoxin.log.* /tmp/libinote.log.*
 	if [ -z "$SYS" ]; then
 #		export PATH="$RFSDIR"/usr/bin:$PATH
 		export LD_LIBRARY_PATH="$DESTDIR"/lib
@@ -135,11 +169,22 @@ if [ -n "$TEST" ]; then
 		touch /tmp/test_voxind
 		./test$TEST &
 		sleep 2
-		gdb -p $(pidof voxind)
+		gdb -ex 'b unserialize' -p $(pidof voxind)
 		rm /tmp/test_voxind
+	elif [ "$PLAY" ]; then
+		getFile
+		./voxin-say -f "$file_utf_8" -s 500 -w "$file_utf_8.$$.wav"		
+#		touch /tmp/test_voxind
+#		./voxin-say -f "$file_utf_8" -s 500 -w "$file_utf_8.$$.wav" &
+#		sleep 2
+#		gdb -ex 'b unserialize' -p $(pidof voxind)
+#		rm /tmp/test_voxind
+		
+##		gdb -ex "set args -f $file_utf_8 -s 500 -w $file_utf_8.$$.wav" ./voxin-say 
+#		echo "Wav File: $file_utf_8.$$.wav"
+#		aplay "$file_utf_8.$$.wav"
+		exit 0
 	else
-#		pushd "$DESTDIR"/bin
-#		"$DESTDIR"/bin/test"$TEST"
 		./test"$TEST"
 	fi
 	popd
