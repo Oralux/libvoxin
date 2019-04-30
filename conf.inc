@@ -93,7 +93,7 @@ getLibinote() {
 	fi
 	archivep="$DWLDIR/$archive"
 	
-#TODO	rm -rf "$workdir"
+	rm -rf "$workdir"
 	mkdir -p "$workdir"
 	cd "$workdir"
 	

@@ -1,5 +1,5 @@
 BIN = main.o
-CFLAGS += -m32 -ggdb -DDEBUG -I../common -I../api
+CFLAGS += -m32 -ggdb -DDEBUG -I../common -I../api -I$(DESTDIR)/include
 LDFLAGS += -m32 -Wl,--dynamic-linker,./lib/ld-linux.so.2
 CC ?= gcc
 STRIP ?= strip --strip-unneeded

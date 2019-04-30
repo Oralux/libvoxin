@@ -9,6 +9,7 @@
 #include "pipe.h"
 #include "debug.h"
 #include "eci.h"
+#include "inote.h"
 
 #define VOXIND_ID 0x05000A01 
 #define ENGINE_ID 0x15000A01 
@@ -27,7 +28,65 @@ struct engine_t {
   ECIHand handle;
   struct msg_t *cb_msg;
   size_t cb_msg_length;
+  inote_charset_t charset; // current charset
+  inote_cb_t cb;
+  uint8_t tlv_message_buffer[TLV_MESSAGE_LENGTH_MAX]; // tlv internal buffer
+  inote_slice_t tlv_message;
 };
+
+static inote_error add_text(inote_tlv_t *tlv, void *user_data) {
+  ENTER();
+
+  ECIHand handle = (ECIHand *)user_data;  
+  uint8_t *t = inote_tlv_get_value(tlv);
+  inote_error ret = INOTE_OK;
+
+  if (t && handle) {
+	uint8_t x = t[tlv->length];
+	t[tlv->length] = 0; // possible since (PIPE_MAX_BLOCK > TLV_MESSAGE_LENGTH_MAX)
+	dbg("length=%d, text=%s", tlv->length, t);
+	Boolean eci_res = (uint32_t)eciAddText(handle, t);
+	ret = (eci_res == ECITrue) ? INOTE_OK : INOTE_IO_ERROR;	
+	t[tlv->length] = x;
+  }
+  
+  return ret;
+}
+
+static void engine_init_buffers(struct engine_t *self) {
+  if (self) {
+	self->tlv_message.buffer = self->tlv_message_buffer;
+	self->tlv_message.end_of_buffer = self->tlv_message_buffer + sizeof(self->tlv_message_buffer);	  
+	self->tlv_message.length = 0;
+	self->cb.add_annotation = add_text;
+	self->cb.add_charset = add_text;
+	self->cb.add_punctuation = add_text;
+	self->cb.add_text = add_text;  
+	self->cb.user_data = self->handle;  
+  }
+}
+
+static struct engine_t *engine_create(void *handle)
+{
+  struct engine_t *self = NULL;
+  
+  ENTER();
+
+  if (!handle)
+	return NULL;
+  
+  self = (struct engine_t*)calloc(1, sizeof(*self));
+  if (self) {
+	self->id = ENGINE_ID;
+	self->handle = handle;
+	engine_init_buffers(self);
+  } else {
+	err("mem error (%d)", errno);
+  }
+
+  LEAVE();
+  return self;
+}
 
 static void my_exit()
 {
@@ -167,8 +226,7 @@ static int check_engine(struct engine_t *engine)
 static int unserialize(struct msg_t *msg, size_t *msg_length)
 {
   struct engine_t *engine = NULL;
-  size_t effective_msg_length = 0;
-  size_t allocated_msg_length = 0;
+  size_t length = 0;
 
   ENTER();
 
@@ -197,35 +255,29 @@ static int unserialize(struct msg_t *msg, size_t *msg_length)
   dbg("recv msg '%s', length=%d, engine=%p (#%d)", msg_string(msg->func), msg->effective_data_length, engine, msg->count); 
   
   msg->id = MSG_TO_APP_ID;
+  length = msg->effective_data_length;
   msg->effective_data_length = 0; 
 
   switch(msg->func) {
-  case MSG_ADD_TLV:
-    if (msg->data[msg->effective_data_length-1] != 0) {
-      err("LEAVE, %s, data error, length=%d, <0x%x 0x%x 0x%x>", msg_string(msg->func), msg->effective_data_length, msg->data[msg->effective_data_length-3], msg->data[msg->effective_data_length-2], msg->data[msg->effective_data_length-1]);
-      msg->res = ECIFalse;
-    } else {
-      dbg("text=%s", (char*)msg->data);
-
-
-	  //TODO
-
-	  
-      msg->res = (uint32_t)eciAddText(engine->handle, msg->data);
-
-
-
+  case MSG_ADD_TLV: {
+	if (!engine || (length > TLV_MESSAGE_LENGTH_MAX)) {
+	  msg->res = ECIFalse;	  
+	  break;
 	}
+	inote_slice_t *t = &(engine->tlv_message);
+	t->buffer = msg->data;
+	t->length = length;
+	t->charset = INOTE_CHARSET_UTF_8; // TODO;
+	t->end_of_buffer = t->buffer + t->length;
+	dbg("data len=%lu", (long unsigned int)t->length);
+	int ret = inote_convert_tlv_to_text(t, &(engine->cb));	
+	msg->res = (!ret) ? ECITrue : ECIFalse; 
+  }
     break;
 
   case MSG_ADD_TEXT:
-    if (msg->data[msg->effective_data_length-1] != 0) {
-      err("LEAVE, %s, data error, length=%d, <0x%x 0x%x 0x%x>", msg_string(msg->func), msg->effective_data_length, msg->data[msg->effective_data_length-3], msg->data[msg->effective_data_length-2], msg->data[msg->effective_data_length-1]);
-      msg->res = ECIFalse;
-    } else {
-      dbg("text=%s", (char*)msg->data);
-      msg->res = (uint32_t)eciAddText(engine->handle, msg->data);
-    }
+	dbg("text=%s", (char*)msg->data);
+	msg->res = (uint32_t)eciAddText(engine->handle, msg->data);
     break;
 
   case MSG_CLEAR_ERRORS:
@@ -286,34 +338,18 @@ static int unserialize(struct msg_t *msg, size_t *msg_length)
     msg->res = eciLoadDict(engine->handle, (char*)NULL + msg->args.ld.hDict, msg->args.ld.DictVol, msg->data);
     break;
 
-  case MSG_NEW: {
-    ECIHand h = eciNew();
-    if (h) {
-      engine = calloc(1, sizeof(struct engine_t));
-      if (engine) {
-	engine->id = ENGINE_ID;
-	engine->handle = h;
-      }
-    }
+  case MSG_NEW:
+	engine = engine_create(eciNew());
     msg->res = (uint32_t)engine;
-  }
     break;
 
   case MSG_NEW_DICT:
     msg->res = (uint32_t)eciNewDict(engine->handle);
     break;
 
-  case MSG_NEW_EX: {
-    ECIHand h = eciNewEx(msg->args.ne.Value);
-    if (h) {
-      engine = calloc(1, sizeof(struct engine_t));
-      if (engine) {
-	engine->id = ENGINE_ID;
-	engine->handle = h;
-      }
-    }
+  case MSG_NEW_EX:
+	engine = engine_create(eciNewEx(msg->args.ne.Value));
     msg->res = (uint32_t)engine;
-  }
     break;
     
   case MSG_PAUSE:
@@ -424,7 +460,8 @@ int main(int argc, char **argv)
 
   ENTER();
   BUILD_ASSERT(PIPE_MAX_BLOCK > MIN_MSG_SIZE);
-
+  BUILD_ASSERT(PIPE_MAX_BLOCK > TLV_MESSAGE_LENGTH_MAX);
+  
   /* memset(&act, 0, sizeof(act)); */
   /* sigemptyset(&act.sa_mask); */
   /* act.sa_flags = 0; */
