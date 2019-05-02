@@ -45,6 +45,7 @@ static inote_error add_text(inote_tlv_t *tlv, void *user_data) {
 	uint8_t x = t[tlv->length];
 	t[tlv->length] = 0; // possible since (PIPE_MAX_BLOCK > TLV_MESSAGE_LENGTH_MAX)
 	dbg("length=%d, text=%s", tlv->length, t);
+	dbgText(t, tlv->length);
 	Boolean eci_res = (uint32_t)eciAddText(handle, t);
 	ret = (eci_res == ECITrue) ? INOTE_OK : INOTE_IO_ERROR;	
 	t[tlv->length] = x;

@@ -46,7 +46,6 @@ EOF
 
 }
 
-
 mkdir -p "$LOGDIR"
 
 usage() {
@@ -166,6 +165,7 @@ if [ -n "$TEST" ]; then
 		gdb -ex 'b inote_convert_text_to_tlv' ./test$TEST
 #		gdb -ex 'set follow-fork-mode child' -ex 'b child' ./test$TEST
 	elif [ -n "$GDB_VOXIND" ]; then
+		#sudo bash -c "echo 0 > /proc/sys/kernel/yama/ptrace_scope"
 		touch /tmp/test_voxind
 		./test$TEST &
 		sleep 2
@@ -174,14 +174,16 @@ if [ -n "$TEST" ]; then
 	elif [ "$PLAY" ]; then
 		getFile
 		./voxin-say -f "$file_utf_8" -s 500 -w "$file_utf_8.$$.wav"		
+
 #		touch /tmp/test_voxind
 #		./voxin-say -f "$file_utf_8" -s 500 -w "$file_utf_8.$$.wav" &
 #		sleep 2
 #		gdb -ex 'b unserialize' -p $(pidof voxind)
 #		rm /tmp/test_voxind
 		
-##		gdb -ex "set args -f $file_utf_8 -s 500 -w $file_utf_8.$$.wav" ./voxin-say 
-#		echo "Wav File: $file_utf_8.$$.wav"
+#		gdb -ex "b eciAddText" -ex "b replayText" -ex "set args -f $file_utf_8 -s 500 -w $file_utf_8.$$.wav" ./voxin-say 
+
+		echo "Wav File: $file_utf_8.$$.wav"
 #		aplay "$file_utf_8.$$.wav"
 		exit 0
 	else
@@ -209,5 +211,4 @@ if [ -f "$BUILD" ]; then
 	sed -i "s#=/opt/#=$RFSDIR/opt/#" "$ECI"
 fi
 
-#sudo bash -c "echo 0 > /proc/sys/kernel/yama/ptrace_scope"
 

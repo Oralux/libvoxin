@@ -36,6 +36,7 @@ struct engine_t {
   uint8_t tlv_message_buffer[TLV_MESSAGE_LENGTH_MAX]; // tlv internal buffer
   inote_slice_t tlv_message;
   inote_state_t state;
+  uint8_t text_buffer[TEXT_LENGTH_MAX];  
 };
 
 #define ALLOCATED_MSG_LENGTH PIPE_MAX_BLOCK
@@ -443,6 +444,82 @@ Boolean eciSetOutputFilename(ECIHand hEngine, const void *pFilename)
   return eci_res;
 }
 
+// read bytes up to len or a zero terminator
+static size_t readBytes(const uint8_t *bytes, size_t len) {
+  const uint8_t *t, *tmax;
+  size_t ret = 0;
+
+  if (!bytes || !len)
+	return 0;
+
+  t = bytes;
+  tmax = t + len;
+  for (;(t< tmax) && *t; t++) {}
+
+  ret = t - bytes;
+  
+  dbg("new buffer(%p, len=%lu)", bytes, (long unsigned int)ret);  
+  return ret;
+}
+
+// copy src to dst
+// dst and dst_buffer: allocated by the caller
+static int copySlice(const inote_slice_t *src, inote_slice_t *dst, uint8_t *dst_buffer, size_t len) {
+  if (!src || !src->buffer || (src->end_of_buffer < src->buffer)
+	  || !dst || !dst_buffer)
+	return -1;  
+  memcpy(dst, src, sizeof(*dst));
+  dst->buffer = dst_buffer;
+  dst->length = len;
+  dst->end_of_buffer = dst->buffer + len;
+  memcpy(dst->buffer, src->buffer, len);  
+  return 0;
+}
+
+// replay the text to tlv conversion using the first/correct text segment
+// if skip_byte != 0 then replace the to-be-skipped byte by '?'
+// then replay the text up to the skipped byte (included)
+// otherwise replay the text except 'text left'
+//
+// text_left is updated with the remaining text
+static int replayText(struct engine_t *engine, inote_slice_t *text, int skip_byte, size_t *text_left) {
+  int ret = 0;
+  inote_slice_t slice;
+  inote_slice_t *t = NULL;  
+
+  if (!engine
+	  || !text || !text->buffer
+	  || !text->length || (text->length > TEXT_LENGTH_MAX)
+	  || !text_left || !*text_left || (*text_left > text->length)) {	
+	err("LEAVE, args error");
+	return -1;
+  }
+  
+  if (skip_byte) {
+	--*text_left;
+	size_t len = text->length - *text_left;
+	t = &slice;
+	copySlice(text, t, engine->text_buffer, len);
+	t->buffer[len-1] = '?';
+	dbg("replay text up to the '?' char (included) (text_left=%lu, skipped byte=0x%02x)", (long unsigned int)*text_left, text->buffer[len-1]);
+  } else {
+	t = text;
+	t->length = text->length - *text_left;
+	dbg("replay text up to %x byte (excluded) (text_left=%lu)", t->buffer[t->length + 1], *text_left);
+  }
+  
+  engine_init_buffers(engine);	
+  engine->tlv_message.charset = t->charset;
+
+  size_t text_left2 = 0;
+  inote_error status = inote_convert_text_to_tlv(engine->inote, t, &(engine->state), &(engine->tlv_message), &text_left2);
+  if (status) {
+	err("replay inote_convert_text_to_tlv: ret=%d", status);
+	ret = -1;
+  }
+  return ret;
+}
+
 
 Boolean eciAddText(ECIHand hEngine, ECIInputText pText)
 {
@@ -450,7 +527,6 @@ Boolean eciAddText(ECIHand hEngine, ECIInputText pText)
   struct engine_t *engine = (struct engine_t *)hEngine;
   struct msg_t header;
   inote_slice_t text;
-  size_t text_left = 0;
   struct api_t *api;
   int ret_process1 = 0;
 	
@@ -464,70 +540,67 @@ Boolean eciAddText(ECIHand hEngine, ECIInputText pText)
   api = engine->api;
   if (api_lock(api))
 	return ECIFalse;
-		
+
+  if (libvoxinDebugEnabled(LV_DEBUG_LEVEL)) {
+	dbgText(pText, strlen(pText));
+  }
+  
   engine_init_buffers(engine);	
 
   bool loop = true;
-  uint8_t *t = (uint8_t*)pText;
-  while(loop) {
-	uint8_t *t0 = t;
-	const uint8_t *tmax = t0+TEXT_LENGTH_MAX;
-	for (;(t<= tmax) && *t; t++)
-	  {}
-	size_t len = t - t0;
-	if (!len)
+  size_t text_left = 0;
+  uint8_t *t0, *t;
+  t0 = t = (uint8_t*)pText;
+
+  while(loop) {	
+	size_t len = readBytes(t, TEXT_LENGTH_MAX - text_left);
+	
+	t += len;
+	text.length = len + text_left;
+	if (!text.length) {
 	  break;
+	}
 	text.buffer = t0;
-	text.length = len;
 	//TODO	text.charset = engine->charset;
 	text.charset = INOTE_CHARSET_UTF_8; // TODO
 	text.end_of_buffer = t;
+	engine_init_buffers(engine);	
 	engine->tlv_message.charset = text.charset;
+	text_left = 0;
+
 	inote_error ret = inote_convert_text_to_tlv(engine->inote, &text, &(engine->state), &(engine->tlv_message), &text_left);
+
 	switch (ret) {
-	case INOTE_INVALID_MULTIBYTE: {
-	  int ret2 = 0;
-	  if (!text_left || (text_left > text.length)) {
-		err("text_left=%lu (length=%lu)", text_left, text.length);
-	  } else {
-		text.length -= (text_left-1); // skip one byte
-		t -= (text_left-1);
-		text.buffer = t;
-		ret2 = inote_convert_text_to_tlv(engine->inote, &text, &engine->state, &engine->tlv_message, &text_left);
-	  }
-	  loop = (!ret2);
-	}
+	case INOTE_OK:
 	  break;
-	case INOTE_INCOMPLETE_MULTIBYTE: {
-	  int ret2 = 0;
-	  if (!text_left || (text_left > text.length)) {
-		err("text_left=%lu (length=%lu)", text_left, text.length);
-	  } else {
-		text.length -= text_left; // replay starting from the unused text
-		t -= text_left;
-		text.buffer = t;
-		ret2 = inote_convert_text_to_tlv(engine->inote, &text, &engine->state, &engine->tlv_message, &text_left);
-	  }
-	  loop = (!ret2);
-	}
+	case INOTE_INVALID_MULTIBYTE:
+	  dbg("inote_convert_text_to_tlv: invalid multibyte");
+	  loop = (!replayText(engine, &text, 1, &text_left));
+	  break;
+	case INOTE_INCOMPLETE_MULTIBYTE:
+	  dbg("inote_convert_text_to_tlv: incomplete multibyte");
+	  loop = (!replayText(engine, &text, 0, &text_left));
 	  break;
 	default:
 	  loop = false;
 	  break;
 	}
+	
+	t0 = t - text_left;
 
-	{
+	if (loop && engine->tlv_message.length) {
 	  msg_set_header(&header, MSG_ADD_TLV, engine->handle);
 	  struct msg_bytes_t bytes;
 	  bytes.b = engine->tlv_message.buffer;
 	  bytes.len = engine->tlv_message.length;
 	  ret_process1 = process_func1(engine->api, &header, &bytes, &eci_res, false, false);
-	  if (ret_process1)
-		loop = false; // error, api unlocked
+	  if (ret_process1) 
+		loop = false; 
 	}
   }
-  
-  if (!ret_process1) {
+
+  // api already unlocked if process_func1 return val != 0
+  if (!ret_process1) { 
 	api_unlock(api);
   }
   
