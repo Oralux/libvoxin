@@ -31,7 +31,8 @@ struct engine_t {
   uint32_t nb_samples; // current number of samples in the user sample buffer
   uint32_t stop_required;
   void *inote; // inote handle
-  inote_charset_t charset; // current charset
+  inote_charset_t from_charset; // charset of the text supplied by the caller
+  inote_charset_t to_charset; // charset expected by the tts engine
   uint32_t state_expected_lang[MAX_LANG]; // state internal buffer 
   uint8_t tlv_message_buffer[TLV_MESSAGE_LENGTH_MAX]; // tlv internal buffer
   inote_slice_t tlv_message;
@@ -294,6 +295,7 @@ static void engine_init_buffers(struct engine_t *self) {
 	self->tlv_message.buffer = self->tlv_message_buffer;
 	self->tlv_message.end_of_buffer = self->tlv_message_buffer + sizeof(self->tlv_message_buffer);	  
 	self->tlv_message.length = 0;
+	self->tlv_message.charset = self->to_charset;	
 	self->state.expected_lang = self->state_expected_lang;
   }
 }
@@ -316,6 +318,9 @@ static struct engine_t *engine_create(uint32_t handle, struct api_t *api)
 	/* state.expected_lang[1] = FRENCH; */
 	/* state.max_expected_lang = MAX_LANG; */
 	self->state.annotation = 1; // TODO
+	// input text: by default ssml/utf-8 is expected 
+	self->state.ssml = 1;
+	self->from_charset = self->to_charset = INOTE_CHARSET_UTF_8;
   } else {
 	err("mem error (%d)", errno);
   }
@@ -354,12 +359,11 @@ static int getCurrentLanguage(struct engine_t *engine)
   if (!engine)
 	return 0;
 
-  engine->charset = INOTE_CHARSET_UNDEFINED;
   msg_set_header(&header, MSG_GET_PARAM, engine->handle);
   header.args.gp.Param = eciLanguageDialect;
   res = process_func1(engine->api, &header, NULL, &eci_res, false, false);
   if (!res) {
-	engine->charset = getCharset((enum ECILanguageDialect)eci_res);
+	engine->to_charset = getCharset((enum ECILanguageDialect)eci_res);
   }    
   return res;  
 }
@@ -509,7 +513,6 @@ static int replayText(struct engine_t *engine, inote_slice_t *text, int skip_byt
   }
   
   engine_init_buffers(engine);	
-  engine->tlv_message.charset = t->charset;
 
   size_t text_left2 = 0;
   inote_error status = inote_convert_text_to_tlv(engine->inote, t, &(engine->state), &(engine->tlv_message), &text_left2);
@@ -561,15 +564,13 @@ Boolean eciAddText(ECIHand hEngine, ECIInputText pText)
 	  break;
 	}
 	text.buffer = t0;
-	//TODO	text.charset = engine->charset;
-	text.charset = INOTE_CHARSET_UTF_8; // TODO
+	text.charset = engine->from_charset;
 	text.end_of_buffer = t;
 	engine_init_buffers(engine);	
-	engine->tlv_message.charset = text.charset;
 	text_left = 0;
 
 	inote_error ret = inote_convert_text_to_tlv(engine->inote, &text, &(engine->state), &(engine->tlv_message), &text_left);
-
+	
 	switch (ret) {
 	case INOTE_OK:
 	  break;
@@ -882,7 +883,7 @@ ECIHand eciNewEx(enum ECILanguageDialect Value)
   if (!process_func1(api, &header, NULL, &eci_res, false, true)) {
 	if (eci_res != 0) {
 	  engine = engine_create(eci_res, api);
-	  engine->charset = getCharset(Value);
+	  engine->to_charset = getCharset(Value);
 	}
 	api_unlock(api);
   }
@@ -910,7 +911,7 @@ int eciSetParam(ECIHand hEngine, enum ECIParam Param, int iValue)
   header.args.sp.iValue = iValue;
   if (!process_func1(engine->api, &header, NULL, &eci_res, false, true)) {
 	if (Param == eciLanguageDialect) {
-	  engine->charset = getCharset((enum ECILanguageDialect)iValue);
+	  engine->to_charset = getCharset((enum ECILanguageDialect)iValue);
 	}
 	api_unlock(engine->api);	      
   }

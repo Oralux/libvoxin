@@ -180,9 +180,9 @@ if [ -n "$TEST" ]; then
 #		sleep 2
 #		gdb -ex 'b unserialize' -p $(pidof voxind)
 #		rm /tmp/test_voxind
-		
-#		gdb -ex "b eciAddText" -ex "b replayText" -ex "set args -f $file_utf_8 -s 500 -w $file_utf_8.$$.wav" ./voxin-say 
 
+#		gdb -ex "b eciAddText" -ex "b replayText" -ex "set args -f $file_utf_8 -s 500 -w $file_utf_8.$$.wav" ./voxin-say
+		
 		echo "Wav File: $file_utf_8.$$.wav"
 #		aplay "$file_utf_8.$$.wav"
 		exit 0
