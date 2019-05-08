@@ -22,6 +22,8 @@
 static char tempbuf[MAX_CHAR+10];
 #define FILE_TEMPLATE "/tmp/voxin-say.XXXXXXXXXX"
 #define FILE_TEMPLATE_LENGTH 30
+#define MAX_LANG 100
+
 void usage()
 {
   fprintf(stderr, "Usage: voxin-say [OPTION]... [text]\n \
@@ -525,28 +527,24 @@ static int synthGetVoices(voice_t *list, int *nbVoices)
 	err = EINVAL;
 	goto exit0;
   }
-  max = *nbVoices;
-  if (max) {
-	voiceID = calloc(max, sizeof(voiceID));
-	if (!voiceID) {
-	  err = errno;
-	  goto exit0;
-	}
-  } else {
-	static enum ECILanguageDialect foo;
-	voiceID = &foo;
+  max = *nbVoices ? *nbVoices : MAX_LANG;
+  voiceID = calloc(max, sizeof(voiceID));
+  if (!voiceID) {
+	err = errno;
+	goto exit0;
   }
   if (eciGetAvailableLanguages(voiceID, nbVoices)) {
 	err = EINVAL;
 	goto exit0;
   }
 
-  for (i=0; i<max; i++) {
-	synthConvertVoiceID(voiceID[i], list+i);
+  if (list) {
+	for (i=0; i<*nbVoices; i++) {
+	  synthConvertVoiceID(voiceID[i], list+i);
+	}
   }
-  
  exit0:
-  if (max && voiceID) {
+  if (voiceID) {
 	free(voiceID);
   }
   if (err) {
@@ -791,6 +789,7 @@ static int objFlushWav()
 
 static int objList()
 {
+  ENTER();
   int err = 0;  
   voice_t *list = NULL;
   int nbVoices = 0;
