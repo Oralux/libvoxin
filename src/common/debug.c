@@ -12,6 +12,7 @@ FILE *libvoxinDebugFile = NULL;
 static enum libvoxinDebugLevel myDebugLevel = LV_ERROR_LEVEL;
 FILE *libvoxinDebugText = NULL;
 static size_t debugTextCount = 0; // number of bytes written to libvoxinDebugText
+static int checkEnableCount = 0;
 
 static int createDebugFile(const char *filename, FILE **fdi) {
   FILE *fd = NULL;
@@ -71,10 +72,19 @@ static void DebugFileInit()
 #define MAX_FILENAME 40
   char filename[MAX_FILENAME+1];
 
-  if (snprintf(filename, MAX_FILENAME, LIBVOXINLOG, getpid()) >= MAX_FILENAME)
+  if (checkEnableCount)
 	return;
-
-  fd = fopen(ENABLE_LOG, "r");
+  
+  checkEnableCount = 1;
+  
+  char *home = getenv("HOME");
+  if (!home)
+	return;
+  
+  if (snprintf(filename, MAX_FILENAME, "%s/%s", home, ENABLE_LOG) >= MAX_FILENAME)
+	return;
+  
+  fd = fopen(filename, "r");
   if (!fd)
     return;
   
@@ -86,11 +96,15 @@ static void DebugFileInit()
   }
   fclose(fd);
   
+  if (snprintf(filename, MAX_FILENAME, LIBVOXINLOG, getpid()) >= MAX_FILENAME)
+	return;
+  
   if (createDebugFile(filename, &libvoxinDebugFile))
 	return;
   
   if (snprintf(filename, MAX_FILENAME, LIBVOXINLOG ".txt", getpid()) >= MAX_FILENAME)
 	return;
+  
   debugTextCount = 0;
   createDebugFile(filename, &libvoxinDebugText);
 }
@@ -99,13 +113,15 @@ void libvoxinDebugFinish()
 {
   deleteDebugFile(&libvoxinDebugFile);  
   debugTextCount = 0;
-  deleteDebugFile(&libvoxinDebugText);  
+  deleteDebugFile(&libvoxinDebugText);
+  checkEnableCount = 0;
 }
 
 int libvoxinDebugEnabled(enum libvoxinDebugLevel level)
 {
-  if (!libvoxinDebugFile)
-    DebugFileInit();
+	if (!libvoxinDebugFile) {
+	  DebugFileInit();
+	}
 
   return (libvoxinDebugFile && (level <= myDebugLevel)); 
 }

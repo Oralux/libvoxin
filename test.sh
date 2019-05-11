@@ -127,7 +127,7 @@ done
 
 # 
 # /tmp/test_voxind: voxind waits the deletion of test_voxind to continue
-# /tmp/libvoxin.ok : enable libvoxin/voxind logs
+# $HOME/libvoxin.ok : enable libvoxin/voxind logs
 # /tmp/libvoxin.log.pid: libvoxin/voxind strace logs
 # /tmp/test_libvoxin.{raw,wav}: resulting audio files
 #
@@ -200,7 +200,7 @@ if [ -f "$BUILD" ]; then
 	rm -rf "$RFSDIR"
 	mkdir -p "$RFSDIR" 
 	
-	touch /tmp/libvoxin.ok /tmp/libinote.ok
+	touch $HOME/libvoxin.ok $HOME/libinote.ok
 	rsync -av --delete "$ARCHDIR"/rfs/ "$RFSDIR"
 	for i in $(cat "$BUILD"); do
 		tar --exclude "libvoxin.so*" --exclude "voxind*" -C "$RFSDIR" -xf $i

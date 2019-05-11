@@ -9,8 +9,9 @@ extern "C" {
 #include <stdio.h>
 #include "msg.h"
 
-  // log enabled if this file exits
-#define ENABLE_LOG "/tmp/libvoxin.ok"
+  
+  // log enabled if this file exits under $HOME
+#define ENABLE_LOG "libvoxin.ok"
 
   // log level; first byte equals to a digit in DebugLevel (default 
 #define LIBVOXINLOG "/tmp/libvoxin.log.%d"
