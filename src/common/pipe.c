@@ -181,7 +181,8 @@ int pipe_dup2(struct pipe_t *p, int index, int new_fd)
 {
   int res = 0;
 
-  ENTER();
+  // No call to any (debug) function opening descriptors (e.g. descr 3
+  // is going to be used)
   
   if (!p) {
     return EINVAL;

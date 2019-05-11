@@ -257,9 +257,9 @@ static int child(struct libvoxin_t *the_obj)
 	goto exit;
   }
 
-  pipe_dup2(the_obj->pipe_command, PIPE_SOCKET_CHILD_INDEX, PIPE_COMMAND_FILENO);
-
   libvoxinDebugFinish();
+  close(PIPE_COMMAND_FILENO);
+  pipe_dup2(the_obj->pipe_command, PIPE_SOCKET_CHILD_INDEX, PIPE_COMMAND_FILENO);
   fdwalk (close_cb, (void*)PIPE_COMMAND_FILENO);
   
   if (setenv("LD_LIBRARY_PATH", libraryPath, 1)) {
