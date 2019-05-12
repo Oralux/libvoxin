@@ -12,6 +12,7 @@
 #include "libvoxin.h"
 #include "conf.h"
 #include "msg.h"
+#include "no_pipe.h"
 #include "debug.h"
 
 #define IBMTTS_RO "opt/IBM/ibmtts"
@@ -22,6 +23,14 @@
 #define VOXIND "usr/bin/voxind"
 #define MAXBUF 4096
 
+typedef int (*t_pipe_create)(struct pipe_t **px);
+typedef int (*t_pipe_delete)(struct pipe_t **px);
+typedef int (*t_pipe_restore)(struct pipe_t **px, int fd);
+typedef int (*t_pipe_dup2)(struct pipe_t *p, int index, int new_fd);
+typedef int (*t_pipe_close)(struct pipe_t *p, int index);
+typedef int (*t_pipe_read)(struct pipe_t *p, void *buf, ssize_t *len);
+typedef int (*t_pipe_write)(struct pipe_t *p, void *buf, ssize_t *len);
+
 struct libvoxin_t {
   uint32_t id;
   uint32_t msg_count;
@@ -29,6 +38,13 @@ struct libvoxin_t {
   pid_t child;
   struct pipe_t *pipe_command;
   uint32_t stop_required;
+  t_pipe_create _pipe_create;
+  t_pipe_delete _pipe_delete;
+  t_pipe_restore _pipe_restore;
+  t_pipe_dup2 _pipe_dup2;
+  t_pipe_close _pipe_close;
+  t_pipe_read _pipe_read;
+  t_pipe_write _pipe_write;
 };
   
 static void my_exit(struct libvoxin_t *the_obj)
@@ -41,7 +57,7 @@ static void my_exit(struct libvoxin_t *the_obj)
   msg.id = MSG_EXIT;
   
   dbg("send exit msg");
-  res = pipe_write(the_obj->pipe_command, &msg, &l);
+  res = the_obj->_pipe_write(the_obj->pipe_command, &msg, &l);
   if (res) {
 	dbg("write error (%d)", res);
   }
@@ -259,7 +275,7 @@ static int child(struct libvoxin_t *the_obj)
 
   libvoxinDebugFinish();
   close(PIPE_COMMAND_FILENO);
-  pipe_dup2(the_obj->pipe_command, PIPE_SOCKET_CHILD_INDEX, PIPE_COMMAND_FILENO);
+  the_obj->_pipe_dup2(the_obj->pipe_command, PIPE_SOCKET_CHILD_INDEX, PIPE_COMMAND_FILENO);
   fdwalk (close_cb, (void*)PIPE_COMMAND_FILENO);
   
   if (setenv("LD_LIBRARY_PATH", libraryPath, 1)) {
@@ -299,6 +315,11 @@ static int daemon_start(struct libvoxin_t *the_obj)
   if (!the_obj)
 	return EINVAL;
 
+#ifdef NO_PIPE
+  the_obj->child = 0;  
+  return 0;
+#endif
+  
   parent_pid = getpid();
   child_pid = fork();
   switch(child_pid) {
@@ -309,7 +330,8 @@ static int daemon_start(struct libvoxin_t *the_obj)
 	if (getppid() != parent_pid) {
 	  exit(0);
 	}
-	pipe_close(the_obj->pipe_command, PIPE_SOCKET_PARENT);
+
+	the_obj->_pipe_close(the_obj->pipe_command, PIPE_SOCKET_PARENT);
 	exit(child(the_obj));
     
 	break;
@@ -318,7 +340,7 @@ static int daemon_start(struct libvoxin_t *the_obj)
 	break;
   default:
 	the_obj->child = child_pid;
-	pipe_close(the_obj->pipe_command, PIPE_SOCKET_CHILD_INDEX);
+	the_obj->_pipe_close(the_obj->pipe_command, PIPE_SOCKET_CHILD_INDEX);
 	break;
   }
 
@@ -333,6 +355,8 @@ static int daemon_stop(struct libvoxin_t *the_obj)
   if (!the_obj)
 	return EINVAL;
 
+/* #ifdef NO_PIPE */
+/* #endif */
   if (!the_obj->child) { // TODO
   }
   
@@ -356,7 +380,25 @@ int libvoxin_create(libvoxin_handle_t *i)
   if (!the_obj)
 	return errno;
 
-  res = pipe_create(&the_obj->pipe_command);
+#ifdef NO_PIPE
+  the_obj->_pipe_create = no_pipe_create;
+  the_obj->_pipe_delete = no_pipe_delete;
+  the_obj->_pipe_restore = no_pipe_restore;
+  the_obj->_pipe_dup2 = no_pipe_dup2;
+  the_obj->_pipe_close = no_pipe_close;
+  the_obj->_pipe_read = no_pipe_read;
+  the_obj->_pipe_write = no_pipe_write;
+#else
+  the_obj->_pipe_create = pipe_create;
+  the_obj->_pipe_delete = pipe_delete;
+  the_obj->_pipe_restore = pipe_restore;
+  the_obj->_pipe_dup2 = pipe_dup2;
+  the_obj->_pipe_close = pipe_close;
+  the_obj->_pipe_read = pipe_read;
+  the_obj->_pipe_write = pipe_write;
+#endif
+  res = the_obj->_pipe_create(&the_obj->pipe_command);
+  
   if (res)    
 	goto exit0;
 
@@ -370,7 +412,7 @@ int libvoxin_create(libvoxin_handle_t *i)
  exit0:
   if (res) {
 	daemon_stop(the_obj);
-	pipe_delete(&the_obj->pipe_command);
+	the_obj->_pipe_delete(&the_obj->pipe_command);
   }
 
   LEAVE();
@@ -399,7 +441,7 @@ int libvoxin_delete(libvoxin_handle_t *i)
 
   res = daemon_stop(the_obj);
   if (!res) {
-	res = pipe_delete(&the_obj->pipe_command);
+	res = the_obj->_pipe_delete(&the_obj->pipe_command);
 	if (res)    
 	  goto exit0;
   }
@@ -439,14 +481,14 @@ int libvoxin_call_eci(libvoxin_handle_t i, struct msg_t *msg)
   msg->count = ++p->msg_count;
   dbg("send msg '%s', length=%d (#%d)",msg_string((enum msg_type)(msg->func)), msg->effective_data_length, msg->count);  
   ssize_t s = effective_msg_length;
-  res = pipe_write(p->pipe_command, msg, &s);
+  res = p->_pipe_write(p->pipe_command, msg, &s);
   if (res)
 	goto exit0;
 
   effective_msg_length = allocated_msg_length;
   memset(msg, 0, MSG_HEADER_LENGTH);
   s = effective_msg_length;
-  res = pipe_read(p->pipe_command, msg, &s);
+  res = p->_pipe_read(p->pipe_command, msg, &s);
   if (!res && (s >= 0)) {
 	effective_msg_length = (size_t)s;
 	if (!msg_string((enum msg_type)(msg->func))
@@ -467,3 +509,4 @@ int libvoxin_call_eci(libvoxin_handle_t i, struct msg_t *msg)
   dbg("LEAVE(res=0x%x)",res);  
   return res;
 }
+

@@ -14,6 +14,7 @@
 struct pipe_t {
   int sv[2]; /* socketpair descriptors (0=PARENT, 1=CHILD)*/
   int ind; /* sv[ind] current valid descriptor */
+  void *priv;
 };
 
 extern int pipe_create(struct pipe_t **px);

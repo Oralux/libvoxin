@@ -1,6 +1,6 @@
 # version
 VERSION ?= 0.0.1
-LIBS=-L$(DESTDIR)/lib -lvoxin -lcommon
+LIBS=-L$(DESTDIR)/lib -lvoxin -lcommon -ldl
 CFLAGS += -DVERSION='"$(VERSION)"' -I../api -I../common
 STRIP ?= strip --strip-unneeded
 

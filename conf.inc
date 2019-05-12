@@ -21,6 +21,7 @@ Options:
 -h, --help         display this help 
 -m, --mach <arch>  target architecture of libvoxin and tests
 		   		   possible value: i686; by default: current arch
+-n, --no-pipe      for test: load libvoxind instead of launching voxind
 -r, --release      build the tarballs in build/<arch>/release
 -t, --test         build tests 
 
