@@ -42,7 +42,7 @@ Options:
 Example:
 # build the testing directory
 # in $RFSDIR
- $0 -b list
+ $0 -b src/list
 
 ## with for example, list containing:
 # /home/user1/test/voxin-rfs32.txz
@@ -151,9 +151,14 @@ if [ -f "$BUILD" ]; then
 	
 	touch /tmp/libvoxin.ok
 	rsync -av --delete "$ARCHDIR"/rfs/ "$RFSDIR"
-	
+
+	if [ -n "$BUILD" ]; then
+		t=$(readlink -e "$BUILD") || leave "Error: the list file does not exist (-b $BUILD)" 1
+		BUILD=$t
+	fi
 	for i in $(cat "$BUILD"); do
-		tar -C "$RFSDIR" -xf $i
+		tarball=$(eval echo $i)
+		tar -C "$RFSDIR" -xf $tarball
 	done
 	
 	ECI="$RFSDIR"/var/opt/IBM/ibmtts/cfg/eci.ini

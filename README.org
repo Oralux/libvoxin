@@ -21,7 +21,7 @@ By default, a fake libibmeci.so is provided.
 
 ** Create a testing directory
 #+BEGIN_SRC shell
-./test.sh -b file
+./test.sh -b src/list
 #+END_SRC
 
 ** Run test 1
