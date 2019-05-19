@@ -241,6 +241,7 @@ extern "C" {
 	  goto exit;
 	}
 
+	dbg("cd %s\n", buf);
 	/* // voxind path */
 	/* len = snprintf(buf, MAXBUF, "%s/%s", voxinRoot, VOXIND); */
 	/* if (len >= MAXBUF) { */
@@ -258,7 +259,7 @@ extern "C" {
 	  dbg("path too long\n");
 	  goto exit;
 	}
-
+	dbg("LD_LIBRARY_PATH=%s\n", libraryPath);
 	pipe_dup2(the_obj->pipe_command, PIPE_SOCKET_CHILD_INDEX, PIPE_COMMAND_FILENO);
 
 	DebugFileFinish();
