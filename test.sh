@@ -74,7 +74,7 @@ Options:
 Example:
 # build the testing directory
 # in $RFSDIR
- $0 -b list
+ $0 -b src/list
 
 # this 'list' file provides the paths to the necessary tarballs.
 # For example to test English and French, these paths would be:
@@ -202,8 +202,14 @@ if [ -f "$BUILD" ]; then
 	
 	touch $HOME/libvoxin.ok $HOME/libinote.ok
 	rsync -av --delete "$ARCHDIR"/rfs/ "$RFSDIR"
+
+	if [ -n "$BUILD" ]; then
+		t=$(readlink -e "$BUILD") || leave "Error: the list file does not exist (-b $BUILD)" 1
+		BUILD=$t
+	fi
 	for i in $(cat "$BUILD"); do
-		tar --exclude "libvoxin.so*" --exclude "voxind*" -C "$RFSDIR" -xf $i
+		tarball=$(eval echo $i)
+		tar --exclude "libvoxin.so*" --exclude "voxind*" -C "$RFSDIR" -xf $tarball
 	done
 	
 	ECI="$RFSDIR"/var/opt/IBM/ibmtts/cfg/eci.ini
