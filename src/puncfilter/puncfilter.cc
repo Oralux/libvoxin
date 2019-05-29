@@ -52,11 +52,11 @@ static const int charset_nb_bytes[] = {
 
 static const char* charset_name[] = {
 	NULL,
-	"ISO-8859-1//TRANSLIT",
-	"GBK//TRANSLIT",
-	"UCS2//TRANSLIT",
-	"BIG5//TRANSLIT",
-	"SJIS//TRANSLIT",
+	"ISO-8859-1//IGNORE",
+	"GBK//IGNORE",
+	"UCS2//IGNORE",
+	"BIG5//IGNORE",
+	"SJIS//IGNORE",
 };
 
 static void convert_xml_predefined_entities(wchar_t *src, int *nb_wchar);

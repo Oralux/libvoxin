@@ -3,6 +3,6 @@
 
 #define VERMAJ 1
 #define VERMIN 3
-#define VERMIC 5
+#define VERMIC 6
 
 #endif // _CONF_H
