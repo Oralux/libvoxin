@@ -481,8 +481,8 @@ static int copySlice(const inote_slice_t *src, inote_slice_t *dst, uint8_t *dst_
 }
 
 // replay the text to tlv conversion using the first/correct text segment
-// if skip_byte != 0 then replace the to-be-skipped byte by '?'
-// then replay the text up to the skipped byte (included)
+// if skip_byte != 0 then replace the to-be-skipped byte by the space
+// character then replay the text up to the skipped byte (included)
 // otherwise replay the text except 'text left'
 //
 // text_left is updated with the remaining text
@@ -504,8 +504,8 @@ static int replayText(struct engine_t *engine, inote_slice_t *text, int skip_byt
 	size_t len = text->length - *text_left;
 	t = &slice;
 	copySlice(text, t, engine->text_buffer, len);
-	t->buffer[len-1] = '?';
-	dbg("replay text up to the '?' char (included) (text_left=%lu, skipped byte=0x%02x)", (long unsigned int)*text_left, text->buffer[len-1]);
+	t->buffer[len-1] = ' ';
+	dbg("replay text up to the space char (included) (text_left=%lu, skipped byte=0x%02x)", (long unsigned int)*text_left, text->buffer[len-1]);
   } else {
 	t = text;
 	t->length = text->length - *text_left;
