@@ -63,6 +63,7 @@ Options:
                     voxin-viavoice-all.txz,...)
                     <file> contains one tarball per line 
 -c, --clean         clean-up: delete the dedicated directory
+-f, --freq			play raw audio as 22050Hz (11025Hz by default)
 -g, --gdb           with gdb on libvoxin
 -G, --GDB           with gdb on voxind
 -p, --play          play file via voxin-say
@@ -101,8 +102,9 @@ Example:
 }
 
 unset ARCH BUILD CLEAN GDB_LIBVOXIN GDB_VOXIND HELP PLAY STRACE SYS TEST 
+FREQ=11025
 
-OPTIONS=`getopt -o b:cgGhps:St: --long build:,clean,gdb,GDB,help,play,strace:,system,test: \
+OPTIONS=`getopt -o b:cfgGhps:St: --long build:,clean,freq,gdb,GDB,help,play,strace:,system,test: \
              -n "$NAME" -- "$@"`
 [ $? != 0 ] && usage && exit 1
 eval set -- "$OPTIONS"
@@ -112,6 +114,7 @@ while true; do
     -h|--help) HELP=1; shift;;
     -b|--build) BUILD=$2; shift;;
     -c|--delete) CLEAN=1; shift;;
+    -f|--freq) FREQ=22050; shift;;
     -g|--gdb) GDB_LIBVOXIN=1; shift;;
     -G|--GDB) GDB_VOXIND=1; shift;;
     -p|--play) PLAY=1; TEST=1; shift;;
@@ -190,7 +193,7 @@ if [ -n "$TEST" ]; then
 		./test"$TEST"
 	fi
 	popd
-	src/test/play.sh 	
+	src/test/play.sh $FREQ 	
 	exit 0
 fi
 

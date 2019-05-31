@@ -53,7 +53,7 @@ static struct api_t my_api = {0, PTHREAD_MUTEX_INITIALIZER, PTHREAD_MUTEX_INITIA
 
 static inote_charset_t getCharset(enum ECILanguageDialect lang)
 {
-  inote_charset_t charset = INOTE_CHARSET_UNDEFINED;
+  inote_charset_t charset = INOTE_CHARSET_UTF_8; // default for other engine
   if ((lang <= eciStandardItalian)
 	  || (lang == eciBrazilianPortuguese)
 	  || (lang == eciStandardFinnish)) {
@@ -83,7 +83,7 @@ static inote_charset_t getCharset(enum ECILanguageDialect lang)
 	charset = INOTE_CHARSET_SJIS; // 1 or 2 bytes
 	break;
   default:
-	err("unexpected value:%d", lang);
+	dbg("unexpected eci value:%x", lang);
 	break;
   }
   return charset;
