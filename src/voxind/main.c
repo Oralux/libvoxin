@@ -35,6 +35,11 @@ struct engine_t {
   inote_slice_t tlv_message;
 };
 
+#define ENGINE_INDEX 0xEA61AE00 
+#define ENGINE_MAX_NB 1
+static struct engine_t *engines[ENGINE_MAX_NB];
+
+
 static inote_error add_text(inote_tlv_t *tlv, void *user_data) {
   ENTER();
 
@@ -165,7 +170,7 @@ static enum ECICallbackReturn my_callback(ECIHand hEngine, enum ECIMessage Msg, 
   allocated_msg_length = engine->cb_msg_length;
 
   if (effective_msg_length > allocated_msg_length) {
-    err("LEAVE, %s samples size error (%d > %d)", msgType, effective_msg_length, allocated_msg_length);
+    err("LEAVE, %s samples size error (%ld > %ld)", msgType, effective_msg_length, allocated_msg_length);
     return eciDataAbort;
   }
   
@@ -241,7 +246,7 @@ static void set_output_buffer(struct voxind_t *v, struct engine_t *engine, struc
   }
 
   engine->cb_msg_length = len;
-  dbg("create cb msg, data=%p, effective_data_length=%d", engine->cb_msg->data, data_len);
+  dbg("create cb msg, data=%p, effective_data_length=%ld", engine->cb_msg->data, data_len);
   msg->res = (uint32_t)eciSetOutputBuffer(engine->handle, msg->args.sob.nb_samples, (short*)engine->cb_msg->data);  
 }
 
@@ -252,6 +257,7 @@ static int check_engine(struct engine_t *engine)
 
 static int unserialize(struct msg_t *msg, size_t *msg_length)
 {
+  uint32_t engine_index = -1;
   struct engine_t *engine = NULL;
   size_t length = 0;
 
@@ -262,7 +268,17 @@ static int unserialize(struct msg_t *msg, size_t *msg_length)
     return EINVAL;
   }
 
-  engine = (struct engine_t*)msg->engine;
+  engine_index = msg->engine;
+  if (engine_index) {
+	engine_index -= ENGINE_INDEX;
+	if (engine_index >= ENGINE_MAX_NB) {
+	  msg("recv erroneous engine"); 
+	  return 0;
+	}
+  }
+
+  engine = engines[engine_index];
+  
   if ((*msg_length < MIN_MSG_SIZE)
       || (msg->id != MSG_TO_ECI_ID)
       || !msg_string(msg->func)
@@ -366,8 +382,14 @@ static int unserialize(struct msg_t *msg, size_t *msg_length)
     break;
 
   case MSG_NEW:
-	engine = engine_create(eciNew());
-    msg->res = (uint32_t)engine;
+	if (*engines) {
+	  err("error: max number of engines allocated");
+	  return 0; // only one engine at the moment
+	}
+	*engines = engine_create(eciNew());
+	// index + ENGINE_INDEX (0 considered as error)
+	engine_index = *engines ? ENGINE_INDEX : 0;
+    msg->res = engine_index;
     break;
 
   case MSG_NEW_DICT:
@@ -375,8 +397,13 @@ static int unserialize(struct msg_t *msg, size_t *msg_length)
     break;
 
   case MSG_NEW_EX:
-	engine = engine_create(eciNewEx(msg->args.ne.Value));
-    msg->res = (uint32_t)engine;
+	if (*engines) {
+	  err("error: max number of engines allocated");	  
+	  return 0; // only one engine at the moment
+	}
+	*engines = engine_create(eciNewEx(msg->args.ne.Value));
+	engine_index = *engines ? ENGINE_INDEX : 0;
+    msg->res = engine_index;
     break;
     
   case MSG_PAUSE:
