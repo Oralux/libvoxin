@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 #include <string.h>
 #include <signal.h>
+#include <endian.h>
 #include "msg.h"
 #include "pipe.h"
 #include "debug.h"
@@ -121,24 +122,50 @@ static enum ECICallbackReturn my_callback(ECIHand hEngine, enum ECIMessage Msg, 
   int res;
   uint32_t func_sav;
   struct engine_t *engine = (struct engine_t*)pData;
+  static const char* msgString[] = {
+	"eciWaveformBuffer",
+	"eciPhonemeBuffer",
+	"eciIndexReply",
+	"eciPhonemeIndexReply",
+	"eciWordIndexReply",
+	"eciStringIndexReply",
+	"eciAudioIndexReply",
+	"eciSynthesisBreak"};
+  const char *msgType;
 
   ENTER();
-
+  
   if (!engine || !engine->cb_msg) {
     err("LEAVE, args error");
     return eciDataAbort;
   }
-  
-  if ((Msg < eciWaveformBuffer) || (Msg > eciSynthesisBreak)) {
+
+  switch(Msg) {
+  case eciWaveformBuffer:
+	engine->cb_msg->effective_data_length = 2*lParam;  
+	break;
+  case eciPhonemeBuffer:
+	engine->cb_msg->effective_data_length = lParam;  
+	break;
+  case eciIndexReply:
+  case eciPhonemeIndexReply:
+  case eciWordIndexReply:
+  case eciStringIndexReply:
+  case eciSynthesisBreak:
+	engine->cb_msg->effective_data_length = sizeof(uint32_t);
+	engine->cb_msg->args.cb.lParam = htole32(lParam);
+  break;
+  default:
     err("LEAVE, unknown eci message (%d)", Msg);
-    return eciDataAbort;
+    return eciDataAbort;	
   }
 
+  msgType = msgString[Msg];
+  effective_msg_length = MSG_HEADER_LENGTH + engine->cb_msg->effective_data_length;
   allocated_msg_length = engine->cb_msg_length;
-  effective_msg_length = MSG_HEADER_LENGTH + 2*lParam;
 
   if (effective_msg_length > allocated_msg_length) {
-    err("LEAVE, samples size error (%d > %d)", effective_msg_length, allocated_msg_length);
+    err("LEAVE, %s samples size error (%d > %d)", msgType, effective_msg_length, allocated_msg_length);
     return eciDataAbort;
   }
   
@@ -151,8 +178,7 @@ static enum ECICallbackReturn my_callback(ECIHand hEngine, enum ECIMessage Msg, 
   ++engine->cb_msg->count;
     
   engine->cb_msg->res = 0;
-  engine->cb_msg->effective_data_length = 2*lParam;
-  dbg("send cb msg '%s', length=%d, engine=%p (#%d)",msg_string(engine->cb_msg->func),
+  dbg("%s send cb msg '%s', length=%d, engine=%p (#%d)", msgType, msg_string(engine->cb_msg->func),
       engine->cb_msg->effective_data_length, engine, engine->cb_msg->count);
   res = pipe_write(my_voxind->pipe_command, engine->cb_msg, &effective_msg_length);
   if (res) {

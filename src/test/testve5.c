@@ -1,6 +1,4 @@
-/*
-  eciSynchronize
- */
+// eciSynchronize: nominal sequence + insert index/marker
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -21,18 +19,24 @@
 static short my_samples[MAX_SAMPLES];
 
 
-const char* vh_quote = "So long as there shall exist, by virtue of law and custom, decrees of "
-  "damnation pronounced by society, artificially creating hells amid the "
-  "civilization of earth, and adding the element of human fate to divine "
-  "destiny; so long as the three great problems of the century--the "
-  "degradation of man through pauperism, the corruption of woman through "
-  "hunger, the crippling of children through lack of light--are unsolved; "
-  "so long as social asphyxia is possible in any part of the world;--in "
-  "other words, and with a still wider significance, so long as ignorance "
-  "and poverty exist on earth, books of the nature of Les Miserables cannot "
-  "fail to be of use."
-  " "
-  "HAUTEVILLE HOUSE, 1862.";
+const char* vh_quote[] = {
+  "in ",
+  "other ",
+  "words, ",
+  "and ",
+  "with ",
+  "a ",
+  "still ",
+  "wider ",
+  "significance ",
+  ", ",
+  "so long as ignorance and poverty exist on earth, ",
+  "books of the nature of Les Miserables cannot fail to be of use.",
+  " ",
+  "HAUTEVILLE HOUSE, 1862."
+};
+
+#define MAX_VH_QUOTE (sizeof(vh_quote)/sizeof(*vh_quote))
 
 typedef struct {
   int fd;
@@ -46,22 +50,23 @@ enum ECICallbackReturn my_client_callback(ECIHand hEngine, enum ECIMessage Msg, 
 
   if (data_cb && (Msg == eciWaveformBuffer))
     {
-      ssize_t len = write(data_cb->fd, my_samples, 2*lParam);
+	  write(data_cb->fd, my_samples, 2*lParam);
     }
   return eciDataProcessed;
 }
 
 int main(int argc, char** argv)
 {
-  uint8_t *buf;
-  size_t len;
+  /* uint8_t *buf; */
+  /* size_t len; */
+  int i;
   
-  {
-    struct stat buf;
-    while (!stat(TEST_DBG, &buf)) {
-      sleep(1);
-    }
-  }
+  /* { */
+  /*   struct stat buf; */
+  /*   while (!stat(TEST_DBG, &buf)) { */
+  /*     sleep(1); */
+  /*   } */
+  /* } */
 
   
   ECIHand handle = eciNew();
@@ -76,11 +81,22 @@ int main(int argc, char** argv)
 
   if (eciSetOutputBuffer(handle, MAX_SAMPLES, my_samples) == ECIFalse)
     return __LINE__;
-  
+   
   //  eciSetOutputFilename(handle, PATHNAME_RAW_DATA);
 
-  if (eciAddText(handle, vh_quote) == ECIFalse)
-    return __LINE__;
+
+  for (i=0; i<MAX_VH_QUOTE; i++) {
+    if (!eciInsertIndex(handle, i*10000))
+      return __LINE__;
+
+    if (eciAddText(handle, vh_quote[i]) == ECIFalse)
+      return __LINE__;    
+  }
+  /* if (eciSynthesize(handle) == ECIFalse) */
+  /*   return __LINE__; */
+
+  if (!eciInsertIndex(handle, 0))
+	return __LINE__;
 
   if (eciSynthesize(handle) == ECIFalse)
     return __LINE__;
@@ -91,6 +107,5 @@ int main(int argc, char** argv)
   if (eciDelete(handle) != NULL)
     return __LINE__;
   
- exit0:
   return 0;
 }

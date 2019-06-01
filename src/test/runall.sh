@@ -4,3 +4,5 @@ while [ "$i" -le "9" ]; do
     ./run.sh $@ $i
     i=$((i+1))
 done
+
+./run.sh $@ testve5

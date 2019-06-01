@@ -123,6 +123,10 @@ struct msg_load_dict_t {
   uint32_t DictVol;
 } __attribute__ ((packed));
 
+struct msg_callback_t {
+  uint32_t lParam;
+} __attribute__ ((packed));
+
 union args_t {
   struct msg_get_param_t gp;
   struct msg_set_param_t sp;
@@ -138,6 +142,7 @@ union args_t {
   struct msg_set_dict_t sd;
   struct msg_delete_dict_t dd;
   struct msg_load_dict_t ld;
+  struct msg_callback_t cb;
 } __attribute__ ((packed));
 
 struct msg_t {

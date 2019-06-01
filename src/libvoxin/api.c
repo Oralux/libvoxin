@@ -4,13 +4,14 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <pthread.h>
+#include <unistd.h>
+#include <endian.h>
 #include "eci.h"
 #include "debug.h"
 #include "conf.h"
 #include "libvoxin.h"
 #include "msg.h"
 #include "inote.h"
-#include <unistd.h>
 
 #define FILTER_SSML 1
 #define FILTER_PUNC 2
@@ -665,19 +666,43 @@ static Boolean synchronize(struct engine_t *engine, enum msg_type type)
 	  break;
 
 	m->res = eciDataAbort;
+
+	int lParam = -1;
 	if (engine->cb && engine->samples
 		&& (m->effective_data_length <= 2*engine->nb_samples)) {
 	  ECICallback cb = (ECICallback)engine->cb;
 	  enum ECIMessage Msg = (enum ECIMessage)(m->func - MSG_CB_WAVEFORM_BUFFER + eciWaveformBuffer);
-	  dbg("call user callback, handle=0x%x, msg=%s, #samples=%d",
-		  engine->handle, msg_string((enum msg_type)(m->func)), m->effective_data_length/2);	  
-	  memcpy(engine->samples, m->data, m->effective_data_length);
-	  m->res = (enum ECICallbackReturn)cb((ECIHand)((char*)NULL+engine->handle), Msg, m->effective_data_length/2, engine->data_cb);
-	} else {
+
+	  switch(Msg) {
+	  case eciWaveformBuffer:
+		lParam = m->effective_data_length/2;
+		memcpy(engine->samples, m->data, m->effective_data_length);
+		break;
+	  case eciPhonemeBuffer:
+		lParam = m->effective_data_length;
+		memcpy(engine->samples, m->data, m->effective_data_length);
+		break;
+	  case eciIndexReply:
+	  case eciPhonemeIndexReply:
+	  case eciWordIndexReply:
+	  case eciStringIndexReply:
+	  case eciSynthesisBreak:
+		lParam = le32toh(m->args.cb.lParam);
+		break;
+	  default:
+		err("unknown eci message (%d)", Msg);
+	  }
+	  if (lParam != -1) {
+		dbg("call user callback, handle=0x%x, msg=%s, lParam=%d",
+			engine->handle, msg_string((enum msg_type)(m->func)), lParam);
+		m->res = (enum ECICallbackReturn)cb((ECIHand)((char*)NULL+engine->handle), Msg, lParam, engine->data_cb);
+	  }
+	}
+	if(lParam == -1) {
 	  err("error callback, handle=0x%x, msg=%s, #samples=%d",
 		  engine->handle, msg_string((enum msg_type)(m->func)), m->effective_data_length/2);
 	}
-
+	
 	dbg("res user callback=%d", m->res);
 	if (engine->stop_required) {
 	  m->res = eciDataAbort;

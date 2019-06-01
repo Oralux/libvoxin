@@ -16,7 +16,6 @@
 #include "eci.h"
 
 
-#define PATHNAME_RAW_DATA "/tmp/test_libvoxin.raw"
 #define TEST_DBG "/tmp/test_libvoxin.dbg"
 
 //#define MAX_SAMPLES 20000
