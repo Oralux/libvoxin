@@ -19,8 +19,10 @@
 #define IBMTTS_CFG "var/opt/IBM/ibmtts/cfg"
 #define VOXIN_DIR "/opt/oralux/voxin"
 #define RFS32 VOXIN_DIR "/rfs32"
-// VOXIND: relative path to voxind when current working directory is RFS32
+// VOXIND: relative path when current working directory is RFS32
 #define VOXIND "usr/bin/voxind"
+// VOXIND_NVE: relative path when current working directory is VOXIN_DIR/bin
+#define VOXIND_NVE "bin/voxind-nve"
 #define MAXBUF 4096
 
 typedef int (*t_pipe_create)(struct pipe_t **px);
@@ -45,6 +47,7 @@ struct libvoxin_t {
   t_pipe_close _pipe_close;
   t_pipe_read _pipe_read;
   t_pipe_write _pipe_write;
+  uint32_t with_eci;
 };
   
 static void my_exit(struct libvoxin_t *the_obj)
@@ -218,6 +221,7 @@ static int child(struct libvoxin_t *the_obj)
   int res = 0;
   char *voxinRoot = NULL;
   char *libraryPath = NULL;
+  char *binPath = NULL;
   char *buf = NULL;
   int len;
 	
@@ -228,48 +232,49 @@ static int child(struct libvoxin_t *the_obj)
 	goto exit;
   }
 
-  libraryPath = (char *)calloc(1, MAXBUF);
-  if (!libraryPath) {
-	res = errno;
-	goto exit;
-  }
-
   buf = (char *)calloc(1, MAXBUF);
   if (!buf) {
 	res = errno;
 	goto exit;
   }
 
-  // Change current directory to RFS32
-  // Note: eci.ini is expected to be accessible in the current
-  // working directory
-  // 
-  len = snprintf(buf, MAXBUF, "%s/%s", voxinRoot, RFS32);
-  if (len >= MAXBUF) {
-	dbg("path too long\n");
-	goto exit;
+  if (the_obj->with_eci) {
+	binPath = VOXIND;
+	// LD_LIBRARY_PATH
+	libraryPath = (char *)calloc(1, MAXBUF);
+	if (!libraryPath) {
+	  res = errno;
+	  goto exit;
+	}
+	len = snprintf(libraryPath,
+				   MAXBUF,
+				   "%s/%s/lib:%s" VOXIN_DIR "/rfs32/lib:%s" VOXIN_DIR "/rfs32/usr/lib",
+				   voxinRoot, IBMTTS_RO,
+				   voxinRoot, voxinRoot);
+	if (len >= MAXBUF) {
+	  dbg("path too long\n");
+	  goto exit;
+	}
+	// Change current directory to RFS32
+	// Note: eci.ini is expected to be accessible in the current
+	// working directory
+	// 
+	len = snprintf(buf, MAXBUF, "%s/%s", voxinRoot, RFS32);
+	if (len >= MAXBUF) {
+	  dbg("path too long\n");
+	  goto exit;
+	}	
+  } else {
+	binPath = VOXIND_NVE;
+	len = snprintf(buf, MAXBUF, "%s/bin", voxinRoot);
+	if (len >= MAXBUF) {
+	  dbg("path too long\n");
+	  goto exit;
+	}
   }
-
+  
   if (chdir(buf)) {
 	res = errno;
-	goto exit;
-  }
-
-  /* // voxind path */
-  /* len = snprintf(buf, MAXBUF, "%s/%s", voxinRoot, VOXIND); */
-  /* if (len >= MAXBUF) { */
-  /*   dbg("path too long\n"); */
-  /*   goto exit; */
-  /* } */
-
-  // LD_LIBRARY_PATH
-  len = snprintf(libraryPath,
-				 MAXBUF,
-				 "%s/%s/lib:%s" VOXIN_DIR "/rfs32/lib:%s" VOXIN_DIR "/rfs32/usr/lib",
-				 voxinRoot, IBMTTS_RO,
-				 voxinRoot, voxinRoot);
-  if (len >= MAXBUF) {
-	dbg("path too long\n");
 	goto exit;
   }
 
@@ -278,13 +283,13 @@ static int child(struct libvoxin_t *the_obj)
   the_obj->_pipe_dup2(the_obj->pipe_command, PIPE_SOCKET_CHILD_INDEX, PIPE_COMMAND_FILENO);
   fdwalk (close_cb, (void*)PIPE_COMMAND_FILENO);
   
-  if (setenv("LD_LIBRARY_PATH", libraryPath, 1)) {
+  if (libraryPath && setenv("LD_LIBRARY_PATH", libraryPath, 1)) {
 	res = errno;
 	goto exit;
   }
 
   // launch voxind
-  if (execl(VOXIND, VOXIND, NULL) == -1) {
+  if (execl(binPath, binPath, NULL) == -1) {
 	res = errno;
   }
 
@@ -365,7 +370,7 @@ static int daemon_stop(struct libvoxin_t *the_obj)
 }
 
 
-int libvoxin_create(libvoxin_handle_t *i)
+int libvoxin_create(libvoxin_handle_t *i, uint32_t with_eci)
 {
   static int once = 0;
   int res = 0;
@@ -380,6 +385,7 @@ int libvoxin_create(libvoxin_handle_t *i)
   if (!the_obj)
 	return errno;
 
+  the_obj->with_eci = with_eci;
 #ifdef NO_PIPE
   the_obj->_pipe_create = no_pipe_create;
   the_obj->_pipe_delete = no_pipe_delete;
@@ -387,7 +393,7 @@ int libvoxin_create(libvoxin_handle_t *i)
   the_obj->_pipe_dup2 = no_pipe_dup2;
   the_obj->_pipe_close = no_pipe_close;
   the_obj->_pipe_read = no_pipe_read;
-  the_obj->_pipe_write = no_pipe_write;
+  the_obj->_pipe_write = no_pipe_write;  
 #else
   the_obj->_pipe_create = pipe_create;
   the_obj->_pipe_delete = pipe_delete;

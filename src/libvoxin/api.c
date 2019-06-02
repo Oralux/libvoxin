@@ -125,8 +125,8 @@ static int api_create(struct api_t *api) {
 	res = errno;
 	goto exit0;
   }
-  
-  res = libvoxin_create(&api->my_instance);
+
+  res = libvoxin_create(&api->my_instance, 1); // with_eci = 0 (TODO)
 
  exit0:
   if (res) {
