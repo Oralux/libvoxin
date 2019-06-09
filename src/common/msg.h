@@ -52,6 +52,7 @@ enum msg_type {
   MSG_CB_SYNTHESIS_BREAK,
   MSG_EXIT,
   MSG_ADD_TLV,
+  MSG_VOX_GET_VOICES,
   MSG_MAX
 };
 
@@ -59,6 +60,27 @@ enum msg_type {
 struct msg_get_available_languages_t {
   uint32_t nb;
   uint32_t languages[MSG_LANG_INFO_MAX];
+} __attribute__ ((packed));
+
+#define MSG_VOX_STR_MAX 128
+struct msg_vox_t {
+  uint32_t id;
+  char name[MSG_VOX_STR_MAX];
+  char lang[MSG_VOX_STR_MAX];
+  char variant[MSG_VOX_STR_MAX];
+  uint32_t rate;
+  uint32_t  size;
+  char charset[MSG_VOX_STR_MAX];
+  uint32_t gender;
+  uint32_t age;
+  char multilang[MSG_VOX_STR_MAX];
+  char quality[MSG_VOX_STR_MAX];
+} __attribute__ ((packed));
+
+#define MSG_VOX_LIST_MAX 30
+struct msg_vox_get_voices_t {
+  uint32_t nb;
+  struct msg_vox_t voices[MSG_VOX_LIST_MAX];
 } __attribute__ ((packed));
 
 struct msg_set_param_t {

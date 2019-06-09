@@ -45,6 +45,7 @@ static const char *msg[] = {
   "cb_synthesis_break",  
   "exit",  
   "add_tlv",  
+  "vox_get_voices",  
   "max",
 };
 

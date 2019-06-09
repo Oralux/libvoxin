@@ -39,6 +39,43 @@ struct engine_t {
 #define ENGINE_MAX_NB 1
 static struct engine_t *engines[ENGINE_MAX_NB];
 
+// eciLocale, eciLocales from speech-dispatcher (ibmtts.c)
+typedef struct _eciLocale {
+	char *name;
+	char *lang;
+	char *dialect;
+	enum ECILanguageDialect langID;
+	char *charset;
+} eciLocale;
+
+static eciLocale eciLocales[] = { // +1 for a null element
+	{"American_English", "en", "US", eciGeneralAmericanEnglish, "ISO-8859-1"},
+	{"British_English", "en", "GB", eciBritishEnglish, "ISO-8859-1"},
+	{"Castilian_Spanish", "es", "ES", eciCastilianSpanish, "ISO-8859-1"},
+	{"Mexican_Spanish", "es", "MX", eciMexicanSpanish, "ISO-8859-1"},
+	{"French", "fr", "FR", eciStandardFrench, "ISO-8859-1"},
+	{"Canadian_French", "ca", "FR", eciCanadianFrench, "ISO-8859-1"},
+	{"German", "de", "DE", eciStandardGerman, "ISO-8859-1"},
+	{"Italian", "it", "IT", eciStandardItalian, "ISO-8859-1"},
+	{"Mandarin_Chinese", "zh", "CN", eciMandarinChinese, "GBK"},
+	{"Mandarin_Chinese GB", "zh", "CN_GB", eciMandarinChineseGB, "GBK"},
+	{"Mandarin_Chinese PinYin", "zh", "CN_PinYin", eciMandarinChinesePinYin,"GBK"},
+	{"Mandarin_Chinese UCS", "zh", "CN_UCS", eciMandarinChineseUCS, "UCS2"},
+	{"Taiwanese_Mandarin", "zh", "TW", eciTaiwaneseMandarin, "BIG5"},
+	{"Taiwanese_Mandarin Big 5", "zh", "TW_Big5", eciTaiwaneseMandarinBig5,"BIG5"},
+	{"Taiwanese_Mandarin ZhuYin", "zh", "TW_ZhuYin",eciTaiwaneseMandarinZhuYin, "BIG5"},
+	{"Taiwanese_Mandarin PinYin", "zh", "TW_PinYin",eciTaiwaneseMandarinPinYin, "BIG5"},
+	{"Taiwanese_Mandarin UCS", "zh", "TW_UCS", eciTaiwaneseMandarinUCS, "UCS2"},
+	{"Brazilian_Portuguese", "pt", "BR", eciBrazilianPortuguese, "ISO-8859-1"},
+	{"Japanese", "ja", "JP", eciStandardJapanese, "SJIS"},
+	{"Japanese_SJIS", "ja", "JP_SJIS", eciStandardJapaneseSJIS, "SJIS"},
+	{"Japanese_UCS", "ja", "JP_UCS", eciStandardJapaneseUCS, "UCS2"},
+	{"Finnish", "fi", "FI", eciStandardFinnish, "ISO-8859-1"},
+	{NULL, 0, NULL}	
+};
+
+#define MAX_NB_OF_LANGUAGES (sizeof(eciLocales)/sizeof(eciLocales[0]) - 1)
+
 
 static inote_error add_text(inote_tlv_t *tlv, void *user_data) {
   ENTER();
@@ -170,7 +207,7 @@ static enum ECICallbackReturn my_callback(ECIHand hEngine, enum ECIMessage Msg, 
   allocated_msg_length = engine->cb_msg_length;
 
   if (effective_msg_length > allocated_msg_length) {
-    err("LEAVE, %s samples size error (%ld > %ld)", msgType, effective_msg_length, allocated_msg_length);
+    err("LEAVE, %s samples size error (%ld > %ld)", msgType, (long int)effective_msg_length, (long int)allocated_msg_length);
     return eciDataAbort;
   }
   
@@ -246,7 +283,7 @@ static void set_output_buffer(struct voxind_t *v, struct engine_t *engine, struc
   }
 
   engine->cb_msg_length = len;
-  dbg("create cb msg, data=%p, effective_data_length=%ld", engine->cb_msg->data, data_len);
+  dbg("create cb msg, data=%p, effective_data_length=%ld", engine->cb_msg->data, (long int)data_len);
   msg->res = (uint32_t)eciSetOutputBuffer(engine->handle, msg->args.sob.nb_samples, (short*)engine->cb_msg->data);  
 }
 
@@ -478,6 +515,51 @@ static int unserialize(struct msg_t *msg, size_t *msg_length)
     dbg("version=%s", msg->data);
     break;
     
+  case MSG_VOX_GET_VOICES: {
+    struct msg_vox_get_voices_t *data = (struct msg_vox_get_voices_t *)msg->data;
+	uint32_t languages[MSG_VOX_LIST_MAX];
+	uint32_t nb;
+    BUILD_ASSERT(MSG_HEADER_LENGTH + sizeof(struct msg_vox_get_voices_t) <= PIPE_MAX_BLOCK);
+    nb = MSG_VOX_LIST_MAX;
+	data->nb = 0;
+    msg->res = eciGetAvailableLanguages(languages, &nb);
+
+	memset(languages, 0, sizeof(languages));
+    dbg("nb=%d, msg->res=%d", nb, msg->res);
+	
+	if (!msg->res && nb) {
+	  int i;
+	  for (i=0; i<nb; i++) {
+		int j;
+		dbg("languages[%d]=0x%0x", i, languages[i]);
+		for (j=0; j<MAX_NB_OF_LANGUAGES; j++) {
+		  dbg("eciLocales[%d].langID=0x%0x", j, eciLocales[j].langID);
+		  if (languages[i] != eciLocales[j].langID)
+			continue;
+		  
+		  struct msg_vox_t *vox = data->voices + data->nb;
+		  eciLocale *eci = eciLocales+j;		  
+		  data->nb++;
+
+		  vox->id = eci->langID;		  
+		  strncpy(vox->name, eci->name, MSG_VOX_STR_MAX);
+		  strncpy(vox->lang, eci->lang, MSG_VOX_STR_MAX);
+		  strncpy(vox->variant, eci->dialect, MSG_VOX_STR_MAX);
+		  vox->rate = 11025;
+		  vox->size = 16;
+		  strncpy(vox->charset, eci->charset, MSG_VOX_STR_MAX);
+		  /* gender, age, multilang, quality */
+		  break;
+		}
+	  }
+	}
+	
+	msg->res = 0;	
+    msg->effective_data_length = sizeof(struct msg_vox_get_voices_t);
+    dbg("nb voices=%d, msg->res=%d", data->nb, msg->res);
+  }
+    break;
+
   default:
     msg->res = ECIFalse;
     break;

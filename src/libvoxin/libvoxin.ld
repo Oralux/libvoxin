@@ -1,4 +1,4 @@
 {
-global: eci*;
+global: eci*; vox*;
 local: *;
 };

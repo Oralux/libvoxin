@@ -6,7 +6,7 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <endian.h>
-#include "eci.h"
+#include "voxin.h"
 #include "debug.h"
 #include "conf.h"
 #include "libvoxin.h"
@@ -51,6 +51,9 @@ struct api_t {
 };
 
 static struct api_t my_api = {0, PTHREAD_MUTEX_INITIALIZER, PTHREAD_MUTEX_INITIALIZER, NULL};
+
+static vox_t vox_list[MSG_VOX_LIST_MAX];
+static int vox_list_nb;
 
 static inote_charset_t getCharset(enum ECILanguageDialect lang)
 {
@@ -1345,3 +1348,66 @@ Boolean ECIFNDECLARE eciSetOutputDevice(ECIHand hEngine, int iDevNum)
   return eci_res;
 }
 
+int voxGetVoices(vox_t *list, int *nbVoices) {
+  struct msg_t header;
+  struct api_t *api = &my_api;
+  int res = 1;
+  
+  if (!nbVoices) {
+	err("LEAVE, args error");
+	return 1;
+  }
+
+  dbg("ENTER(%p,%d)", list, *nbVoices);
+  
+  if (!vox_list_nb) {
+	msg_set_header(&header, MSG_VOX_GET_VOICES, 0);
+	if (!process_func1(api, &header, NULL, &res, false, true)) {
+	  struct msg_vox_get_voices_t *data = (struct msg_vox_get_voices_t *)api->msg->data;
+	  msg("nb voices=%d", data->nb);
+	  if (data->nb <= MSG_VOX_LIST_MAX) {
+		int i;
+		res =  0;
+		vox_list_nb = data->nb;
+		for (i=0; i<data->nb; i++) {
+		  vox_list[i].id = data->voices[i].id;
+		  strncpy(vox_list[i].name, data->voices[i].name, MSG_VOX_STR_MAX);
+		  strncpy(vox_list[i].lang, data->voices[i].lang, MSG_VOX_STR_MAX);
+		  strncpy(vox_list[i].variant, data->voices[i].variant, MSG_VOX_STR_MAX);
+		  vox_list[i].rate = data->voices[i].rate;
+		  vox_list[i].size = data->voices[i].size;
+		  strncpy(vox_list[i].variant, data->voices[i].variant, MSG_VOX_STR_MAX);
+		  vox_list[i].gender = data->voices[i].gender;
+		  vox_list[i].age = data->voices[i].age;
+		  strncpy(vox_list[i].multilang, data->voices[i].multilang, MSG_VOX_STR_MAX);
+		  strncpy(vox_list[i].quality, data->voices[i].quality, MSG_VOX_STR_MAX);
+
+		  msg("id[%d]=0x%x", i, data->voices[i].id);
+		}
+	  }	
+	  api_unlock(api);	
+	}
+  }
+
+  if (*nbVoices > vox_list_nb) {
+	*nbVoices = vox_list_nb;
+  }
+  
+  if (list) {
+	memcpy(list, vox_list, *nbVoices * sizeof(*list));
+	return 0;
+  }
+
+  return res;
+}
+
+int voxString(vox_t *v, char *s, size_t len) {
+  //  ENTER();
+  snprintf(s, len, "0x%0x, n=%s, l=%s, v=%s, r=%d, s=%d, c=%s, g=%s, a=%s, q=%s",
+		   v->id, v->name, v->lang, v->variant,
+		   v->rate, v->size, v->charset,
+		   (v->gender==voxFemale) ? "Female" : "Male",
+		   (v->age == voxAdult) ? "Adult" : "???",
+		   v->quality ? v->quality : "null");
+  s[len-1] = 0;
+}
