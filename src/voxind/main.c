@@ -542,12 +542,22 @@ static int unserialize(struct msg_t *msg, size_t *msg_length)
 		  data->nb++;
 
 		  vox->id = eci->langID;		  
+
 		  strncpy(vox->name, eci->name, MSG_VOX_STR_MAX);
+		  vox->name[MSG_VOX_STR_MAX-1] = 0;
+
 		  strncpy(vox->lang, eci->lang, MSG_VOX_STR_MAX);
+		  vox->lang[MSG_VOX_STR_MAX-1] = 0;
+
 		  strncpy(vox->variant, eci->dialect, MSG_VOX_STR_MAX);
+		  vox->variant[MSG_VOX_STR_MAX-1] = 0;
+
 		  vox->rate = 11025;
 		  vox->size = 16;
+
 		  strncpy(vox->charset, eci->charset, MSG_VOX_STR_MAX);
+		  vox->charset[MSG_VOX_STR_MAX-1] = 0;
+
 		  /* gender, age, multilang, quality */
 		  break;
 		}

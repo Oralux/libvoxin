@@ -1348,7 +1348,7 @@ Boolean ECIFNDECLARE eciSetOutputDevice(ECIHand hEngine, int iDevNum)
   return eci_res;
 }
 
-int voxGetVoices(vox_t *list, int *nbVoices) {
+int voxGetVoices(vox_t *list, unsigned int *nbVoices) {
   struct msg_t header;
   struct api_t *api = &my_api;
   int res = 1;
@@ -1372,17 +1372,29 @@ int voxGetVoices(vox_t *list, int *nbVoices) {
 		for (i=0; i<data->nb; i++) {
 		  vox_list[i].id = data->voices[i].id;
 		  strncpy(vox_list[i].name, data->voices[i].name, MSG_VOX_STR_MAX);
+		  vox_list[i].name[MSG_VOX_STR_MAX-1] = 0;
+
 		  strncpy(vox_list[i].lang, data->voices[i].lang, MSG_VOX_STR_MAX);
+		  vox_list[i].lang[MSG_VOX_STR_MAX-1] = 0;
+		  
 		  strncpy(vox_list[i].variant, data->voices[i].variant, MSG_VOX_STR_MAX);
+		  vox_list[i].variant[MSG_VOX_STR_MAX-1] = 0;
+		  
 		  vox_list[i].rate = data->voices[i].rate;
 		  vox_list[i].size = data->voices[i].size;
-		  strncpy(vox_list[i].variant, data->voices[i].variant, MSG_VOX_STR_MAX);
+		  strncpy(vox_list[i].charset, data->voices[i].charset, MSG_VOX_STR_MAX);
+		  vox_list[i].charset[MSG_VOX_STR_MAX-1] = 0;
+		  
 		  vox_list[i].gender = data->voices[i].gender;
 		  vox_list[i].age = data->voices[i].age;
 		  strncpy(vox_list[i].multilang, data->voices[i].multilang, MSG_VOX_STR_MAX);
+		  vox_list[i].multilang[MSG_VOX_STR_MAX-1] = 0;
+		  
 		  strncpy(vox_list[i].quality, data->voices[i].quality, MSG_VOX_STR_MAX);
-
-		  msg("id[%d]=0x%x", i, data->voices[i].id);
+		  vox_list[i].quality[MSG_VOX_STR_MAX-1] = 0;
+		  
+		  //		  msg("data[%d]=id=0x%x, name=%s, lang=%s, variant=%s, charset=%s", i, data->voices[i].id, data->voices[i].name, data->voices[i].lang, data->voices[i].variant, data->voices[i].charset);
+		  dbg("vox[%d]=id=0x%x, name=%s, lang=%s, variant=%s, charset=%s", i, vox_list[i].id, vox_list[i].name, vox_list[i].lang, vox_list[i].variant, vox_list[i].charset);
 		}
 	  }	
 	  api_unlock(api);	
@@ -1410,4 +1422,5 @@ int voxString(vox_t *v, char *s, size_t len) {
 		   (v->age == voxAdult) ? "Adult" : "???",
 		   v->quality ? v->quality : "null");
   s[len-1] = 0;
+  return 0;
 }

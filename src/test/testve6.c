@@ -49,10 +49,9 @@ int main(int argc, char** argv)
 
   enum {NB_VOICES=30};
   vox_t list[NB_VOICES];
-  int nbVoices = NB_VOICES;
-  int res = voxGetVoices(list, &nbVoices);
+  unsigned int nbVoices = NB_VOICES;
+  voxGetVoices(list, &nbVoices);
   
-  const vox_t *v;
   int i;
   uint32_t id_compact = 0;
   uint32_t id_high = 0;
