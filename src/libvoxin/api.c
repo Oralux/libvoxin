@@ -927,7 +927,7 @@ int eciSetParam(ECIHand hEngine, enum ECIParam Param, int iValue)
   struct engine_t *engine = (struct engine_t *)hEngine;
   struct msg_t header;
    
-  dbg("ENTER(%d,%d)", Param, iValue);  
+  dbg("ENTER(%d,0x%0x)", Param, iValue);  
 
   if (!IS_ENGINE(engine)) {
 	err("LEAVE, args error");
@@ -1371,7 +1371,11 @@ int voxGetVoices(vox_t *list, unsigned int *nbVoices) {
 		vox_list_nb = data->nb;
 		for (i=0; i<data->nb; i++) {
 		  vox_list[i].id = data->voices[i].id;
-		  strncpy(vox_list[i].name, data->voices[i].name, MSG_VOX_STR_MAX);
+		  // concatenate the quality field to the name (whithout
+		  // spaces for sd!) to distinguish them (speech clients have
+		  // no quality attribute)
+		  //		  strncpy(vox_list[i].name, data->voices[i].name, MSG_VOX_STR_MAX);
+		  snprintf(vox_list[i].name, MSG_VOX_STR_MAX, "%s-%s", data->voices[i].name, data->voices[i].quality);
 		  vox_list[i].name[MSG_VOX_STR_MAX-1] = 0;
 
 		  strncpy(vox_list[i].lang, data->voices[i].lang, MSG_VOX_STR_MAX);
