@@ -1,15 +1,7 @@
 #include <stdlib.h>
 #include <stdint.h>
-/* #include <string.h> */
-/* #include <errno.h> */
-/* #include <stdbool.h> */
-/* #include <pthread.h> */
 #include "voxin.h"
 #include "debug.h"
-/* #include "conf.h" */
-/* #include "libvoxin.h" */
-/* #include "msg.h" */
-/* #include <unistd.h> */
 
 
 ECIHand eciNew(void)

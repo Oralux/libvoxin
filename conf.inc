@@ -4,9 +4,10 @@
 SRC=src/libvoxin
 
 LIBINOTE_URL=https://github.com/Oralux/libinote/archive
-#LIBINOTE_VERSION=1.0.0
-LIBINOTE_VERSION=
-LIBINOTE_SHA512=2eba214c50f69f7825f8984ed9ebb54fb0e298824d1b5203aba0567b8a5136306b98e9a572defb38ec4ebe0979ea5a224cf067c6c03c565f5e589ede4f721ad4
+# LIBINOTE_VERSION indicates the git tag of libinote to use; if unset, the HEAD is chosen 
+LIBINOTE_VERSION=1.0.0
+#LIBINOTE_VERSION=
+LIBINOTE_SHA512=ac90891cb0d64d020553be53af27ba6140b979543c75ce6d37246e1e8fc1813866dfdb4caaadcfa0268e1eb32a315d66ff2aba905959185bb9a3726a0b1677d3
 
 usage() {
 	echo "
@@ -42,11 +43,11 @@ Example:
 getVersion() {
 	local value
 	local i
-	for i in VERMAJ VERMIN VERMIC; do
-		value=$(awk "/$i/{print \$3}" src/common/conf.h)
+	for i in LIBVOXIN_VERSION_MAJOR LIBVOXIN_VERSION_MINOR LIBVOXIN_VERSION_PATCH; do
+		value=$(awk "/$i/{print \$3}" src/api/voxin.h)
 		eval export $i=$value
 	done
-	export VERSION=$VERMAJ.$VERMIN.$VERMIC
+	export VERSION=$LIBVOXIN_VERSION_MAJOR.$LIBVOXIN_VERSION_MINOR.$LIBVOXIN_VERSION_PATCH
 }
 
 cleanup() {
@@ -69,7 +70,7 @@ buildLibVoxinTarball() {
 	fakeroot bash -c "\
 tar -C \"$RFSDIR\" \
 	   --exclude=libibmeci.so --exclude \"*.a\" \
-	   -Jcf \"$RELDIR/libvoxin_$VERMAJ_$VERSION.$ARCH.txz\" $VOXINDIR \
+	   -Jcf \"$RELDIR/libvoxin_$VERSION.$ARCH.txz\" $VOXINDIR \
 "
 }
 

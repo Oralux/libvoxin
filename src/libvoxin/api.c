@@ -8,7 +8,6 @@
 #include <endian.h>
 #include "voxin.h"
 #include "debug.h"
-#include "conf.h"
 #include "libvoxin.h"
 #include "msg.h"
 #include "inote.h"

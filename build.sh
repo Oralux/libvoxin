@@ -6,7 +6,7 @@ NAME=$(basename "$0")
 cd "$BASE"
 . ./conf.inc
 getVersion
-[ -z "$VERMAJ" ] && exit 1
+[ -z "$LIBVOXIN_VERSION_MAJOR" ] && exit 1
 
 unset ARCH CC CFLAGS CLEAN DBG_FLAGS HELP NO_PIPE RELEASE STRIP TEST WITH_DBG
 
@@ -139,9 +139,9 @@ fi
 # symlinks for a global install (to be adapted according to the distro)
 cd "$RFSDIR"
 mkdir -p usr/{bin,lib,include}
-ln -sf ../../$VOXINDIR/lib/libvoxin.so.$VERMAJ usr/lib/libibmeci.so
-ln -sf ../../$VOXINDIR/lib/libvoxin.so.$VERMAJ usr/lib/libvoxin.so
-ln -sf ../../$VOXINDIR/lib/libvoxin.so.$VERMAJ usr/lib/libvoxin.so.$VERMAJ
+ln -sf ../../$VOXINDIR/lib/libvoxin.so.$LIBVOXIN_VERSION_MAJOR usr/lib/libibmeci.so
+ln -sf ../../$VOXINDIR/lib/libvoxin.so.$LIBVOXIN_VERSION_MAJOR usr/lib/libvoxin.so
+ln -sf ../../$VOXINDIR/lib/libvoxin.so.$LIBVOXIN_VERSION_MAJOR usr/lib/libvoxin.so.$LIBVOXIN_VERSION_MAJOR
 ln -sf ../../$VOXINDIR/include usr/include/voxin
 ln -sf ../../$VOXINDIR/bin/voxin-say usr/bin/voxin-say
 ln -sf ../../../../var/opt/IBM/ibmtts/cfg/eci.ini $VOXINDIR/rfs32/eci.ini
@@ -154,16 +154,16 @@ if [ -n "$RELEASE" ]; then
 	cp -a "$BASE"/doc/LGPL.txt "$DOCDIR"
 	touch "$DOCDIR"/list
 	buildLibVoxinTarball
-	tar -tf "$RELDIR/libvoxin_$VERMAJ_$VERSION.$ARCH.txz" > "$DOCDIR"/list
+	tar -tf "$RELDIR/libvoxin_$VERSION.$ARCH.txz" > "$DOCDIR"/list
 
 	fakeroot bash -c "\
 tar -C \"$RFSDIR\" \
-	   -Jcf \"$RELDIR/libvoxin-pkg_$VERMAJ_$VERSION.all.txz\" \
-	   usr/lib/libvoxin.so usr/lib/libvoxin.so.$VERMAJ \
+	   -Jcf \"$RELDIR/libvoxin-pkg_$VERSION.all.txz\" \
+	   usr/lib/libvoxin.so usr/lib/libvoxin.so.$LIBVOXIN_VERSION_MAJOR \
 	   usr/lib/libibmeci.so usr/include/voxin \
 	   usr/bin/voxin-say && \
 tar -C \"$RFSDIR\" \
-	   -Jcf \"$RELDIR/libibmeci-fake_$VERMAJ_$VERSION.all.txz\" \
+	   -Jcf \"$RELDIR/libibmeci-fake_$VERSION.all.txz\" \
 	   opt/IBM
 "
 	buildLibVoxinTarball

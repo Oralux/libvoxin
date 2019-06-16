@@ -45,4 +45,4 @@ By default, a fake libibmeci.so is provided.
 
 * Test with TTS
 * Memo: version 
-The program version is stored in src/common/conf.h
+The program version is stored in src/api/voxin.h

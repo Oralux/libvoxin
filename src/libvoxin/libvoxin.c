@@ -10,7 +10,6 @@
 #include <sys/types.h>
 #include <dirent.h>
 #include "libvoxin.h"
-#include "conf.h"
 #include "msg.h"
 #include "no_pipe.h"
 #include "debug.h"

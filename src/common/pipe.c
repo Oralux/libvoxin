@@ -5,7 +5,6 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include "pipe.h"
-#include "conf.h"
 #include "debug.h"
 
 static int pipe_alloc(struct pipe_t **px)

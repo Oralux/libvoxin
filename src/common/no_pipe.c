@@ -1,11 +1,7 @@
-//#include <unistd.h>
 #include <stdlib.h>
 #include <errno.h>
-//#include <string.h>
-//#include <sys/types.h>
 #include <dlfcn.h>
 #include "no_pipe.h"
-//#include "conf.h"
 #include "debug.h"
 
 extern int voxind_read(void *buf, ssize_t *len);

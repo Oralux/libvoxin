@@ -1,11 +1,11 @@
 # version
-VERMAJ ?= 0
-VERMIN ?= 0
-VERMIC ?= 1
+LIBVOXIN_VERSION_MAJOR ?= 0
+LIBVOXIN_VERSION_MINOR ?= 0
+LIBVOXIN_VERSION_PATCH ?= 1
 
-SONAME=libvoxin.so.$(VERMAJ)
-MIN=$(VERMIN)
-REV=$(VERMIC)
+SONAME=libvoxin.so.$(LIBVOXIN_VERSION_MAJOR)
+MIN=$(LIBVOXIN_VERSION_MINOR)
+REV=$(LIBVOXIN_VERSION_PATCH)
 
 BIN := api.o libvoxin.o
 CC ?= gcc
@@ -14,7 +14,7 @@ CFLAGS += $(DEBUG) -fPIC -I../api -I../common -Wno-int-to-pointer-cast -Wall
 STRIP ?= strip --strip-unneeded
 
 all: $(BIN)
-	$(CC) -shared -Wl,-soname,libvoxin.so.$(VERMAJ) -o $(SONAME).$(MIN).$(REV) -Wl,--version-script=libvoxin.ld $(^) $(LDFLAGS) -L$(DESTDIR)/lib -lcommon -linote 
+	$(CC) -shared -Wl,-soname,libvoxin.so.$(LIBVOXIN_VERSION_MAJOR) -o $(SONAME).$(MIN).$(REV) -Wl,--version-script=libvoxin.ld $(^) $(LDFLAGS) -L$(DESTDIR)/lib -lcommon -linote 
 	$(STRIP) $(SONAME).$(MIN).$(REV)
 
 clean:
