@@ -24,6 +24,9 @@ By default, a fake libibmeci.so is provided.
 ./test.sh -b list
 
 # this 'list' file provides the paths to the necessary tarballs.
+# the common tarballs (*all*, *voxind*) are expected to be placed 
+# at the beginning of the list
+
 # For example to test English and French, these paths would be:
 
 /home/user1/voxin-2.0/voxin-enu-2.0/packages/all/rfs_2.0.all.txz

@@ -6,7 +6,7 @@
 
 #define LIBVOXIN_VERSION_MAJOR 1
 #define LIBVOXIN_VERSION_MINOR 4
-#define LIBVOXIN_VERSION_PATCH 0
+#define LIBVOXIN_VERSION_PATCH 1
 
 typedef enum {voxFemale, voxMale} voxGender;
 typedef enum {voxAdult, voxChild, voxSenior} voxAge;
