@@ -529,7 +529,7 @@ static int replayText(struct engine_t *engine, inote_slice_t *text, int skip_byt
 
 Boolean eciAddText(ECIHand hEngine, ECIInputText pText)
 {
-  Boolean eci_res = ECIFalse;
+  Boolean eci_res = ECITrue;
   struct engine_t *engine = (struct engine_t *)hEngine;
   struct msg_t header;
   inote_slice_t text;
@@ -1374,7 +1374,8 @@ int voxGetVoices(vox_t *list, unsigned int *nbVoices) {
 		  // spaces for sd!) to distinguish them (speech clients have
 		  // no quality attribute)
 		  //		  strncpy(vox_list[i].name, data->voices[i].name, MSG_VOX_STR_MAX);
-		  snprintf(vox_list[i].name, MSG_VOX_STR_MAX, "%s-%s", data->voices[i].name, data->voices[i].quality);
+		  //		  snprintf(vox_list[i].name, MSG_VOX_STR_MAX, "%s-%s", data->voices[i].name, data->voices[i].quality);
+		  snprintf(vox_list[i].name, MSG_VOX_STR_MAX, "%s", data->voices[i].name);
 		  vox_list[i].name[MSG_VOX_STR_MAX-1] = 0;
 
 		  strncpy(vox_list[i].lang, data->voices[i].lang, MSG_VOX_STR_MAX);
