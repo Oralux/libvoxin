@@ -1370,13 +1370,9 @@ int voxGetVoices(vox_t *list, unsigned int *nbVoices) {
 		vox_list_nb = data->nb;
 		for (i=0; i<data->nb; i++) {
 		  vox_list[i].id = data->voices[i].id;
-		  // concatenate the quality field to the name (whithout
-		  // spaces for sd!) to distinguish them (speech clients have
-		  // no quality attribute)
-		  //		  strncpy(vox_list[i].name, data->voices[i].name, MSG_VOX_STR_MAX);
-		  //		  snprintf(vox_list[i].name, MSG_VOX_STR_MAX, "%s-%s", data->voices[i].name, data->voices[i].quality);
-		  snprintf(vox_list[i].name, MSG_VOX_STR_MAX, "%s %s", data->voices[i].name, data->voices[i].quality);
-		  vox_list[i].name[MSG_VOX_STR_MAX-1] = 0;
+
+		  strncpy(vox_list[i].name, data->voices[i].name, MSG_VOX_STR_MAX);
+		  vox_list[i].lang[MSG_VOX_STR_MAX-1] = 0;
 
 		  strncpy(vox_list[i].lang, data->voices[i].lang, MSG_VOX_STR_MAX);
 		  vox_list[i].lang[MSG_VOX_STR_MAX-1] = 0;
