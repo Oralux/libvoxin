@@ -25,15 +25,16 @@ typedef struct {
 } tts_t;
 
 typedef struct {
-  int fd;
+  void *wav;
+  int part;
   tts_t *tts;
 } data_cb_t;
 
 static enum ECICallbackReturn my_client_callback(ECIHand hEngine, enum ECIMessage Msg, long lParam, void *pData) {
   data_cb_t *data_cb = (data_cb_t *)pData;
 
-  if (data_cb && data_cb->fd && data_cb->tts && (Msg == eciWaveformBuffer)) {
-	ssize_t len = write(data_cb->fd, data_cb->tts->samples, 2*lParam);
+  if (data_cb && data_cb->tts && (Msg == eciWaveformBuffer)) {
+	wavfileWriteData(data_cb->wav, data_cb->part, (uint8_t*)data_cb->tts->samples, 2*lParam);
   }
   return eciDataProcessed;
 }
@@ -160,14 +161,14 @@ int ttsSetVoice(void *handle, unsigned int id) {
   return res;
 }
 
-int ttsInit(void *handle, FILE *fdo) {
+int ttsInit(void *handle, void *wav, int part) {
   ENTER();
 
   tts_t *self = handle;
   static data_cb_t data_cb;
   int err = 0;
 
-  if (!self || !fdo) {
+  if (!self || !wav) {
 	err = EINVAL;
 	goto exit0;
   }
@@ -181,11 +182,8 @@ int ttsInit(void *handle, FILE *fdo) {
 	return EIO;
   }
 
-  data_cb.fd = fileno(fdo);
-  if (data_cb.fd == -1) {
-	err = errno;
-	goto exit0;
-  }
+  data_cb.wav = wav;
+  data_cb.part = part;
   data_cb.tts = self;
 
   // enable dictionaries

@@ -60,7 +60,7 @@ typedef struct {
   void *text;
   region_t region;
   void *tts;
-  void *wav[MAX_JOBS];
+  void *wav;
   int jobs;
 } obj_t;
 
@@ -73,36 +73,6 @@ typedef struct {
    - if quality is unset (empty), it is set to "none"
 */
 
-static int copyFile(const char *filename, FILE *dest)
-{
-  int size = 1;
-  int err=0;
-  FILE *src = NULL;
-
-  if (!filename || !dest) {
-	err = EINVAL;
-	goto exit0;
-  }
-
-  src = fopen(filename, "r");
-  if (!src) {
-	err = errno;
-	goto exit0;
-  }
-  
-  while(size) {
-	// TODO checks
-	size = fread(tempbuf, 1, MAX_CHAR, src);
-	fwrite(tempbuf, 1, size, dest);
-  }
-  fclose(src);
-  
- exit0:
-  if (err) {
-	err("%s", strerror(err));
-  }
-  return err;
-}
 
 // text: 16 char min
 static int synthSay(void *tts, char *text)
@@ -130,76 +100,9 @@ static void sentenceCreate(const char *s)
   }  
 }
 
-static int objUpdateHeaderWav(obj_t *self) {
-  long wavSize = 0;
-  int i;
-  int err = 0;
-
-  ENTER();
-  
-  for (i=0; i<self->jobs; i++) {
-	size_t s = 0;
-	err = wavfileGetDataSize(self->wav+i, &s);
-	if (err)
-	  goto exit0;	  
-	wavSize += s;
-  }
-
-  err = wavfileSetHeader(&self->wav, wavSize, ttsGetRate(self->tts));
-  
- exit0:
-  return err;
-}
-
-static int objFlushWav(obj_t *self) {
-  int i;
-  int err = 0;
-  FILE *fdo = NULL;
-
-  ENTER();
-
-  for (i=0; i<self->jobs; i++) {
-	wavfileClose(self->wav[i]);
-  }
-
-  set output a la création : soit stdout si fifo ou wav0 sinon (hormis le 1er elt 0)
-  
-  if (wavfileIsFifo(self->wav[0])) {
-	fdo = stdout;
-	wavfileCopy(self->wav[0], fdo);
-  } else if (self->jobs > 1) {
-	fdo = fopen(self->wav[0].filename, "a");
-  } else {
-	goto exit0;
-  }
-
-  for (i=1; i<self->jobs; i++) {
-	wavfileCopy(self->wav[i], fdo);
-  }
-  
- exit0:
-  if ((fdo != stdout) && fdo) {
-	fclose(fdo);
-  }
-  if (err) {
-	err("%s", strerror(err));
-  }  
-  return err;
-}
-
-static int objSayText(obj_t *self, region_t r, char* output, int withWavHeader) {
+static int objSayText(obj_t *self, region_t r, int job) {
   long length = 0;
   int err = 0;  
-  
-  if (!output) {
-	err = EINVAL;
-	goto exit0;
-  }
-  
-  if (self->wav[0].fd) {
-	fclose(self->wav[0].fd);
-	self->wav[0].fd = NULL;
-  }
   
   if (self->text.fd) {
 	fclose(self->text.fd);
@@ -208,10 +111,8 @@ static int objSayText(obj_t *self, region_t r, char* output, int withWavHeader) 
 
   self->region.begin = r.begin;
   self->region.end = r.end;
-  self->wav[0].filename = output;
-  self->withWavHeader = withWavHeader;
   
-  msg("[%d] begin=%ld, end=%ld [%s] ", getpid(), r.begin, r.end, output);
+  msg("[%d] begin=%ld, end=%ld", getpid(), r.begin, r.end);
 
   self->text.fd = fopen(self->text.filename, "r");    
   if (!self->text.fd) {
@@ -224,19 +125,8 @@ static int objSayText(obj_t *self, region_t r, char* output, int withWavHeader) 
 	goto exit0;
   }
 
-  self->wav[0].fd = fopen(self->wav[0].filename, "w");
-  if (!self->wav[0].fd) {
-	err = errno;
-	goto exit0;
-  }
-  if (self->withWavHeader) {
-	wav_header_t w;
-	memset(&w, 0, sizeof(w));
-	fwrite(&w, 1, sizeof(w), self->wav[0].fd);
-  }
-  
   if (!self->tts) {
-	if (ttsInit(self->tts, self->wav[0].fd)) {
+	if (ttsInit(self->tts, self->wav, job)) {
 	  err = EIO;
 	  goto exit0;
 	}
@@ -268,10 +158,6 @@ static int objSayText(obj_t *self, region_t r, char* output, int withWavHeader) 
 	char *s = strerror(err);
 	err("%s", s);
   }
-  if (self->wav[0].fd) {
-	fclose(self->wav[0].fd);
-	self->wav[0].fd = NULL;
-  }  
   if (self->text.fd) {
 	fclose(self->text.fd);
 	self->text.fd = NULL;
@@ -288,7 +174,7 @@ static int objSay(obj_t *self) {
   r.begin = r.end = 0;
   r0.begin = r0.end = 0;
     
-  if (!self->text.filename || !self->jobs || (self->jobs > MAX_JOBS) || !self->wav[0].filename) {
+  if (!self->text.filename || !self->jobs || (self->jobs > MAX_JOBS) || !self->wav) {
 	err = EINVAL;
 	goto exit0;
   }
@@ -316,25 +202,17 @@ static int objSay(obj_t *self) {
 	  r0.end = r.end;
 	  continue;
 	}
-	if (self->wav[i].filename) {
-	  free(self->wav[i].filename);
-	}
-	self->wav[i].filename = (char*)malloc(strlen(self->wav[0].filename) + strlen(fmt) + 10);
-	if (!self->wav[i].filename) {
-	  err = errno;
-	  goto exit0;
-	}
-	sprintf((char *)self->wav[i].filename, fmt, self->wav[0].filename, i);
-	self->wav[i].temporary = 1;
 	pid[i] = fork();
 	if (!pid[i]) {	  
-	  err = selfSayText(r, self->wav[i].filename, 0);
+	  err = objSayText(self, r, i);
 	  exit(err);
 	}	
-	msg("[%d] child pid=%d, begin=%ld, end=%ld [%s] ", getpid(), pid[i], self->region.begin, self->region.end, (self->wav[i].filename) ? self->wav[i].filename : "null");	  
+	msg("[%d] child pid=%d, begin=%ld, end=%ld",
+		getpid(), pid[i],
+		self->region.begin, self->region.end);	  
   }
 
-  err = objSayText(r0, self->wav[0].filename, self->withWavHeader);
+  err = objSayText(self, r0, 0);
 
   for (i=1; i < self->jobs; i++) {
 	int status;
@@ -348,11 +226,7 @@ static int objSay(obj_t *self) {
 	}
   }
 	
-  err = objUpdateHeaderWav();
-  if (err) {
-	goto exit0;
-  }
-  err = objFlushWav();
+  err = wavfileFlush(self->wav);
 	
  exit0:
   return err;
@@ -365,17 +239,19 @@ static obj_t *objCreate(char *input, char *output, int jobs, char *voiceName, in
   if (!self)
 	return NULL;
 
-  self->ttsCreate(voiceName, speed);
-  
-  self->text = textfileCreate(input);
-  if (!self->text
+  self->tts = ttsCreate(voiceName, speed);
+  if (!self->tts)
 	goto exit0;
-  self->wav[0] = wavfileCreate(output, true);
-  if (!self->wav[0])
+
+  self->text = textfileCreate(input);
+  if (!self->text)
+	goto exit0;
+
+  self->wav = wavfileCreate(output, jobs, ttsGetRate(self->tts));
+  if (!self->wav)
 	goto exit0;
 	
   self->jobs = jobs;
-  self->tts = ttsCreate(voiceName, speed);
 
   if (self->text.filename) {
 	struct stat statbuf;
@@ -421,20 +297,8 @@ static void objDelete()
 	free(self->text.filename);
 	self->text.filename = NULL;
   }
-  
-  for (i=0; i<MAX_JOBS; i++) {
-	if (self->wav[i].fd) {
-	  fclose(self->wav[i].fd);
-	  self->wav[i].fd = NULL;
-	}
-	if (self->wav[i].filename) {
-	  if (self->wav[i].temporary) {
-		unlink(self->wav[i].filename);
-	  }
-	  free(self->wav[i].filename);
-	  self->wav[i].filename = NULL;
-	}
-  }
+
+  wavfileDelete(self->wav);
   
   if (self->tts->handle) {
 	eciDelete(self->tts->handle);

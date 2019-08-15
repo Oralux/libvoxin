@@ -1,6 +1,6 @@
 # version
 VERSION ?= 0.0.1
-BIN=tts.o file.o voxin-say.o
+BIN=tts.o file.o textfile.o wavfile.o voxin-say.o
 LIBS=-L$(DESTDIR)/lib -lvoxin -lcommon -ldl
 CFLAGS += -g -DVERSION='"$(VERSION)"' -I../api -I../common
 #STRIP ?= strip --strip-unneeded
