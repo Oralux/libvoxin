@@ -10,14 +10,13 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#include "file.h"
+#include "textfile.h"
+#include "wavfile.h"
 #include "tts.h"
 #include "debug.h"
 
 #define MAX_JOBS 32
 static char tempbuf[MAX_CHAR+10];
-#define FILE_TEMPLATE "/tmp/voxin-say.XXXXXXXXXX"
-#define FILE_TEMPLATE_LENGTH 30
 #define MAX_LANG 100
 
 void usage()
@@ -57,29 +56,11 @@ OPTIONS :\n\
 }
 
 
-typedef struct __attribute__((__packed__)) {
-  char chunkID[4];
-  uint32_t chunkSize;
-  char format[4];
-  char subChunk1ID[4];
-  uint32_t subChunk1Size;
-  uint16_t audioFormat;
-  uint16_t numChannels;
-  uint32_t sampleRate;
-  uint32_t byteRate;
-  uint16_t blockAlign;
-  uint16_t bitsPerSample;
-  char subChunk2ID[4];
-  uint32_t subChunk2Size;
-} wav_header_t;
-
 typedef struct {
   void *text;
   region_t region;
   void *tts;
   void *wav[MAX_JOBS];
-  int withWavHeader;
-  wav_header_t w;
   int jobs;
 } obj_t;
 
@@ -91,51 +72,6 @@ typedef struct {
    same name but distinct qualities
    - if quality is unset (empty), it is set to "none"
 */
-
-static void objSetWavHeader(obj_t *self, uint32_t wavSize) {
-  uint32_t rawSize = 0;
-  //  voice_t v;
-  int index;
-  wav_header_t *w;
-
-  if (!self || !self->tts) {
-	return;
-  }
-
-  w = &self->w;
-  if (wavSize < sizeof(*w)) {
-	wavSize = sizeof(*w);
-  }
-
-  rawSize = wavSize - sizeof(*w);
-
-  // code expected to run on little endian arch
-  strcpy(w->chunkID, "RIFF");
-  w->chunkSize = wavSize - 8;
-  strcpy(w->format, "WAVE");
-  strcpy(w->subChunk1ID, "fmt ");
-
-  w->subChunk1Size = 16; // pcm
-  w->audioFormat = 1; // pcm
-  w->numChannels = 1;
-  w->sampleRate = ttsGetRate(self->tts);
-  w->bitsPerSample = 16;
-  w->byteRate = w->sampleRate*w->numChannels*(w->bitsPerSample/8);
-
-  w->blockAlign = w->numChannels*(w->bitsPerSample/8);
-  strcpy(w->subChunk2ID, "data");
-  w->subChunk2Size = rawSize;
- 
-  
-  /* 00000000  52 49 46 46 78 22 10 00  57 41 56 45 66 6d 74 20  |RIFFx"..WAVEfmt | */
-  /* 00000010  10 00 00 00 01 00 01 00  11 2b 00 00 22 56 00 00  |.........+.."V..| */
-  /* 00000020  02 00 10 00 64 61 74 61  54 22 10 00 85 ff ea ff  |....dataT"......| */
-
-  /* <4:"RIFF">     <4:riffsize>             <8:"WAVEfmt "> */
-  /* <4:0x00000010> <2:0x0001> <2:0x0001>    <4:0x00002b11> <4:00005622> */
-  /* <2:0x0002> <2:0x0010> <4:"data"> <4:dataSize> */
-  
-}
 
 static int copyFile(const char *filename, FILE *dest)
 {
@@ -168,133 +104,6 @@ static int copyFile(const char *filename, FILE *dest)
   return err;
 }
 
-static int getTempFilename(char **filename)
-{
-  int err = 0;
-  
-  if (!filename) {
-	err = EINVAL;
-	goto exit0;	  	
-  }
-  if (*filename) {
-	free(*filename);
-  }
-  *filename = malloc(FILE_TEMPLATE_LENGTH);
-  if (!*filename) {
-	err = errno;
-	goto exit0;	  
-  }
-  strcpy(*filename, FILE_TEMPLATE);
-  if (mkstemp(*filename) == -1) {
-	err = errno;
-	goto exit0;	  
-  }
-
- exit0:
-  if (err) {
-	char *s = strerror(err);
-	err("%s", s);
-	fprintf(stderr,"Error: %s\n", s);
-	if (filename && *filename) {
-	  free(*filename);
-	  *filename = NULL;
-	}
-  }
-  return err;
-}
-
-static int checkInput(char **filename, int *temporary)
-{
-  struct stat statbuf;	
-  int err = 0;
-
-  if (!filename || !temporary) {
-	err = EINVAL;
-	goto exit0;	  
-  }
-  
-  if (!*filename) {
-	FILE *fd;
-	if (!*tempbuf) {
-	  strcpy(tempbuf, "Hello World!");
-	}
-	err = getTempFilename(filename);
-	if (err) {
-	  goto exit0;
-	}
-	fd = fopen(*filename, "w");
-	if (fd) {
-	  fwrite(tempbuf, 1, strnlen(tempbuf, MAX_CHAR), fd);
-	  fclose(fd);	  
-	  *temporary = 1;
-	} else {
-	  err = errno;
-	  goto exit0;
-	}
-  }
-
-  if (stat(*filename, &statbuf) == -1) {
-	err = errno;
-  }
-  
- exit0:
-  if (err) {
-	char *s = strerror(err);
-	err("%s", s);
-  }
-  return err;
-}
-
-static int checkOutput(char **filename, int *fifo)
-{
-  struct stat statbuf;	
-  int err = 0;
-
-  if (!filename || !fifo) {
-	err = EINVAL;
-	goto exit0;	  
-  }
-
-  *fifo = 0;
-  if (*filename) {
-	FILE *fdo = fopen(*filename, "w");
-	if (!fdo)  {
-	  err = errno;
-	  goto exit0;	  
-	}
-	fclose(fdo);
-	return 0;
-  }
-
-  if (fstat(STDOUT_FILENO, &statbuf)) {
-	err = errno;
-	goto exit0;	  
-  }
-  
-  if (S_ISREG(statbuf.st_mode)) {
-	*filename = realpath("/proc/self/fd/1", NULL);
-	if (!*filename) {
-	  err = errno;
-	  goto exit0;	  
-	}
-  } else if (S_ISFIFO(statbuf.st_mode)) {
-	err = getTempFilename(filename);
-	if (err) {
-	  goto exit0;	  
-	}
-	*fifo = 1;
-  } else {
-	err = EINVAL;
-  }
-
- exit0:
-  if (err) {
-	char *s = strerror(err);
-	err("%s", s);
-  }
-  return err;
-}
-
 // text: 16 char min
 static int synthSay(void *tts, char *text)
 {
@@ -321,53 +130,24 @@ static void sentenceCreate(const char *s)
   }  
 }
 
-
 static int objUpdateHeaderWav(obj_t *self) {
   long wavSize = 0;
-  struct stat statbuf;
   int i;
   int err = 0;
-  FILE *fd = NULL;
 
   ENTER();
   
   for (i=0; i<self->jobs; i++) {
-	if (!self->wav[i].filename) {
-	  err = EINVAL;
+	size_t s = 0;
+	err = wavfileGetDataSize(self->wav+i, &s);
+	if (err)
 	  goto exit0;	  
-	}
-	if (stat(self->wav[i].filename, &statbuf)) {
-	  err = errno;
-	  goto exit0;	  
-	}
-	wavSize += statbuf.st_size;
+	wavSize += s;
   }
 
-  objSetWavHeader(&w, wavSize);
+  err = wavfileSetHeader(&self->wav, wavSize, ttsGetRate(self->tts));
   
-  if (self->wav[0].fd) {
-	fclose(self->wav[0].fd);
-  }
-  
-  fd = fopen(self->wav[0].filename, "r+");
-  if (!fd) {
-	err = errno;
-	goto exit0;	  
-  }
-  
-  i = fwrite(&w, 1, sizeof(w), fd);
-  // TODO
-  if (i != sizeof(w)) {
-	err("%d written (%ld expected)", i, (long int)sizeof(w));
-  }
-
  exit0:
-  if (fd) {
-	fclose(fd);
-  }
-  if (err) {
-	err("%s", strerror(err));
-  }  
   return err;
 }
 
@@ -379,15 +159,14 @@ static int objFlushWav(obj_t *self) {
   ENTER();
 
   for (i=0; i<self->jobs; i++) {
-	if (self->wav[i].fd) {
-	  fclose(self->wav[i].fd);
-	  self->wav[i].fd = NULL;
-	}
+	wavfileClose(self->wav[i]);
   }
 
-  if (self->wav[0].temporary) {
+  set output a la création : soit stdout si fifo ou wav0 sinon (hormis le 1er elt 0)
+  
+  if (wavfileIsFifo(self->wav[0])) {
 	fdo = stdout;
-	copyFile(self->wav[0].filename, fdo);
+	wavfileCopy(self->wav[0], fdo);
   } else if (self->jobs > 1) {
 	fdo = fopen(self->wav[0].filename, "a");
   } else {
@@ -395,7 +174,7 @@ static int objFlushWav(obj_t *self) {
   }
 
   for (i=1; i<self->jobs; i++) {
-	copyFile(self->wav[i].filename, fdo);
+	wavfileCopy(self->wav[i], fdo);
   }
   
  exit0:
@@ -579,7 +358,7 @@ static int objSay(obj_t *self) {
   return err;
 }
 
-static obj_t *objCreate(char *input, char *output, int withWavHeader, int jobs, char *voiceName, int speed) {
+static obj_t *objCreate(char *input, char *output, int jobs, char *voiceName, int speed) {
   ENTER();
 
   obj_t *self = calloc(1, sizeof(*self));
@@ -588,22 +367,15 @@ static obj_t *objCreate(char *input, char *output, int withWavHeader, int jobs, 
 
   self->ttsCreate(voiceName, speed);
   
-  self->text.filename = input;
-  self->wav[0].filename = output;
-  self->withWavHeader = withWavHeader;
+  self->text = textfileCreate(input);
+  if (!self->text
+	goto exit0;
+  self->wav[0] = wavfileCreate(output, true);
+  if (!self->wav[0])
+	goto exit0;
+	
   self->jobs = jobs;
   self->tts = ttsCreate(voiceName, speed);
-
-  
-  err = checkOutput(&self->wav[0].filename, &self->wav[0].temporary);
-  if (err) {
-	goto exit0;
-  }
-
-  err = checkInput(&self->text.filename, &self->text.temporary);
-  if (err) {
-	goto exit0;
-  }
 
   if (self->text.filename) {
 	struct stat statbuf;
@@ -774,16 +546,16 @@ int main(int argc, char *argv[])
 	goto exit0;
   }
 
-  err = objCreate(input, output, 1, jobs, voice, voiceName, speed);
-  if (err) {
+  obj_t *self = objCreate(input, output, jobs, voice, voiceName, speed);
+  if (!self) {
 	usage();
 	goto exit0;
   }
 
-  objSay();
+  objSay(self);
   
  exit0:
-  objDelete();
+  objDelete(self);
 
   if (err) {
 	char *s = strerror(err);
