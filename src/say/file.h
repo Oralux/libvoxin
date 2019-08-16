@@ -22,7 +22,7 @@ typedef struct {
 file_t *fileCreate(const char *filename, int mode, bool fifo);
 int fileDelete(file_t *self);
 int fileRead(file_t *handle, uint8_t *data, size_t len);
-int fileWrite(file_t *handle, uint8_t *data, size_t len);
-int fileAppend(file_t *self, file_t *src);
+int fileWrite(file_t *handle, const uint8_t *data, size_t len);
+int fileCat(file_t *self, file_t *src);
 
 #endif

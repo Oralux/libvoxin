@@ -58,7 +58,6 @@ OPTIONS :\n\
 
 typedef struct {
   void *text;
-  region_t region;
   void *tts;
   void *wav;
   int jobs;
@@ -91,37 +90,13 @@ static int synthSay(void *tts, char *text)
   return err;
 }
 
-static void sentenceCreate(const char *s)
-{
-  *tempbuf = 0;
-  if (s) {
-  	strncpy(tempbuf, s, MAX_CHAR);	  
-	tempbuf[MAX_CHAR] = 0;
-  }  
-}
-
-static int objSayText(obj_t *self, region_t r, int job) {
+static int objSayText(obj_t *self, int job) {
+  ENTER();
   long length = 0;
   int err = 0;  
   
-  if (self->text.fd) {
-	fclose(self->text.fd);
-	self->text.fd = NULL;
-  }
-
-  self->region.begin = r.begin;
-  self->region.end = r.end;
-  
-  msg("[%d] begin=%ld, end=%ld", getpid(), r.begin, r.end);
-
-  self->text.fd = fopen(self->text.filename, "r");    
-  if (!self->text.fd) {
-	err = errno;
-	goto exit0;
-  }
-
-  if (fseek(self->text.fd, self->region.begin, SEEK_SET) == -1) {
-	err = errno;
+  if (!self) {
+	err = EINVAL;
 	goto exit0;
   }
 
@@ -134,34 +109,16 @@ static int objSayText(obj_t *self, region_t r, int job) {
   
   length = 1;
   while(length) {
-	err = sentenceGet(self->text, self->region, &length);
+	err = textfileSentenceGet(self->text, job, &length);
 	if (err) {	  
 	  break;
 	}	
   	if (!length) {
-  	  if (feof(self->text.fd)) {
-  		err=0;
-  		break;
-  	  } else if (ferror(self->text.fd)) {
-  		err("file error: %s", self->text.filename);
-		err = EIO;
-  		break;
-  	  }
-  	} else {
 	  synthSay(&self->tts, tempbuf);
 	}
-	self->region.begin += length;
   }
 
  exit0:
-  if (err) {
-	char *s = strerror(err);
-	err("%s", s);
-  }
-  if (self->text.fd) {
-	fclose(self->text.fd);
-	self->text.fd = NULL;
-  }
   return err;
 }
 
@@ -170,49 +127,23 @@ static int objSay(obj_t *self) {
   pid_t pid[MAX_JOBS];
   int i = 0;
   int err = 0;
-  region_t r, r0;
-  r.begin = r.end = 0;
-  r0.begin = r0.end = 0;
     
-  if (!self->text.filename || !self->jobs || (self->jobs > MAX_JOBS) || !self->wav) {
+  if (!self->text || !self->jobs || (self->jobs > MAX_JOBS) || !self->wav) {
 	err = EINVAL;
 	goto exit0;
   }
 	
-  if (self->region.end < self->jobs) {
-	self->jobs = 1;
-  }
-	  
-  partlen = self->region.end/self->jobs;
-
-  for (i=0; i<self->jobs; i++) {
-	const char* fmt = "%s.part%d.raw";
-	r.begin = r.end;
-	if (i == self->jobs-1) {
-	  r.end = self->region.end;
-	} else {
-	  r.end = r.begin + partlen;
-	  if (sentenceGetPosPrevious(self->text, &r, obj->text.fd) == -1) {
-		err = EINVAL;
-		goto exit0;
-	  }
-	}
-	if (!i) {
-	  r0.begin = 0;
-	  r0.end = r.end;
-	  continue;
-	}
+  for (i=1; i<self->jobs; i++) {
 	pid[i] = fork();
 	if (!pid[i]) {	  
-	  err = objSayText(self, r, i);
+	  err = objSayText(self, i);
 	  exit(err);
 	}	
-	msg("[%d] child pid=%d, begin=%ld, end=%ld",
-		getpid(), pid[i],
-		self->region.begin, self->region.end);	  
+	msg("[%d] child pid=%d, job=%d",
+		getpid(), pid[i], i);	  
   }
 
-  err = objSayText(self, r0, 0);
+  err = objSayText(self, 0);
 
   for (i=1; i < self->jobs; i++) {
 	int status;
@@ -232,7 +163,16 @@ static int objSay(obj_t *self) {
   return err;
 }
 
-static obj_t *objCreate(char *input, char *output, int jobs, char *voiceName, int speed) {
+static void objDelete(obj_t *self) {
+  ENTER();
+  if (!self)
+	return;
+  textfileDelete(self->text);
+  ttsDelete(self->tts);
+  wavfileDelete(self->wav);  
+}
+
+static obj_t *objCreate(const char *input, const char *output, int jobs, const char *voiceName, int speed, const char *sentence) {
   ENTER();
 
   obj_t *self = calloc(1, sizeof(*self));
@@ -243,7 +183,7 @@ static obj_t *objCreate(char *input, char *output, int jobs, char *voiceName, in
   if (!self->tts)
 	goto exit0;
 
-  self->text = textfileCreate(input);
+  self->text = textfileCreate(input, &jobs, sentence);
   if (!self->text)
 	goto exit0;
 
@@ -252,65 +192,19 @@ static obj_t *objCreate(char *input, char *output, int jobs, char *voiceName, in
 	goto exit0;
 	
   self->jobs = jobs;
-
-  if (self->text.filename) {
-	struct stat statbuf;
-	if (self->text.fd) {
-	  fclose(self->text.fd);
-	}
-	self->text.fd = fopen(self->text.filename, "r");
-	if (!self->text.fd) {
-	  err = errno;
-	  goto exit0;
-	}
-	if (stat(self->text.filename, &statbuf) == -1) {
-	  err = errno;
-	  goto exit0;	  
-	}
-	self->region.begin = 0;
-	self->region.end = statbuf.st_size;
-  }
+  return self;
 
  exit0:
-  if (err) {
-	char *s = strerror(err);
-	err("%s", s);
-	fprintf(stderr,"Error: %s\n", s);
-  }
-  return err;
-}
-
-static void objDelete()
-{
-  int i;
-
-  ENTER();
-  
-  if (self->text.fd) {
-	fclose(self->text.fd);
-	self->text.fd = NULL;
-  }
-  if (self->text.filename) {
-	if (self->text.temporary) {
-	  unlink(self->text.filename);
-	}
-	free(self->text.filename);
-	self->text.filename = NULL;
-  }
-
-  wavfileDelete(self->wav);
-  
-  if (self->tts->handle) {
-	eciDelete(self->tts->handle);
-  }
+  objDelete(self);
+  return NULL;
 }
 
 int main(int argc, char *argv[])
 {
   int debug = 0;
   int help = 0;
-  char *input = NULL;
-  char *output = NULL;
+  char *inputfile = NULL;
+  char *outputfile = NULL;
   int jobs = 1;
   int speed = SPEED_UNDEFINED;
   int opt;
@@ -319,23 +213,24 @@ int main(int argc, char *argv[])
   int err = EINVAL;
   int list = 0;
   char *voiceName = NULL;
+  char *sentence = NULL;  
  
   ENTER();
  
   while ((opt = getopt(argc, argv, "df:hj:l:Ls:S:w:")) != -1) {
     switch (opt) {
     case 'w':
-	  if (output) {
-		free(output);
+	  if (outputfile) {
+		free(outputfile);
 	  }
-      output = strdup(optarg);
+      outputfile = strdup(optarg);
       break;
       
     case 'f':
-	  if (input) {
-		free(input);
+	  if (inputfile) {
+		free(inputfile);
 	  }
-	  input = strdup(optarg);	  
+	  inputfile = strdup(optarg);	  
       break;
 
     case 'j':
@@ -393,34 +288,43 @@ int main(int argc, char *argv[])
 	goto exit0;
   }
 
-  if (list) {
-	voicePrintList(voice);
-	err = 0;
-	goto exit0;
-  }
-  
-  {
-	const char *s =  (optind == argc-1) ? argv[optind] : NULL;  
-	sentenceCreate(s);
-  }
+  sentence = (optind == argc-1) ? strdup(argv[optind]) : NULL;  
   
   if ((jobs <= 0) || (jobs > MAX_JOBS)) {
 	err = EINVAL;
-	err("jobs=%d (limit=1..%d)", self->jobs, MAX_JOBS);
+	err("jobs=%d (limit=1..%d)", jobs, MAX_JOBS);
 	goto exit0;
   }
 
-  obj_t *self = objCreate(input, output, jobs, voice, voiceName, speed);
+  obj_t *self = objCreate(inputfile, outputfile, jobs, voiceName, speed, sentence);
   if (!self) {
 	usage();
 	goto exit0;
   }
 
+  if (list) {
+	ttsPrintList(self->tts);
+	err = 0;
+	goto exit0;
+  }
+  
   objSay(self);
   
  exit0:
   objDelete(self);
 
+  if (inputfile)
+	free(inputfile);
+
+  if (outputfile)
+	free(outputfile);
+
+  if (voiceName)
+	free(voiceName);
+
+  if (sentence)
+	free(sentence);
+    
   if (err) {
 	char *s = strerror(err);
 	err("%s", s);

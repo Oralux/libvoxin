@@ -1,13 +1,8 @@
 #ifndef TEXTFILE_H
 #define TEXTFILE_H
 
-typedef struct {
-  long begin;
-  long end;
-} region_t;
-
-void *textfileCreate(const char *filename);
+void *textfileCreate(const char *inputfile, unsigned int *number_of_parts, const char *sentence);
 int textfileDelete(void *handle);
-int textfileSentenceGetPosPrevious(void *handle, region_t *r);
+int textfileSentenceGet(void *handle, unsigned int part, long *length);
 
 #endif

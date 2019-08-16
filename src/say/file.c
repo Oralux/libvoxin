@@ -15,6 +15,7 @@
 static char tempbuf[MAX_CHAR+10];
 
 static int fileClose(file_t *self) {
+  ENTER();
   int res = 0;
   if (!self)
 	return 0;
@@ -27,14 +28,18 @@ static int fileClose(file_t *self) {
 }
 
 static int fileOpen(file_t *self, int mode) {
+  ENTER();
   int err = 0;
   if (!self) {
 	return EINVAL;
   }
 
+  if (self->fifo) {
+	self->fd = (self->mode & FILE_READABLE) ? stdin : stdout;
+	return 0;
+  }
+
   if (self->fd) {
-	if (self->fifo)
-	  return 0;
 	if ((self->mode & mode) & (FILE_READABLE|FILE_WRITABLE)) {
 	  if (!(self->mode & FILE_APPEND))
 		rewind(self->fd);
@@ -45,11 +50,6 @@ static int fileOpen(file_t *self, int mode) {
 	}	
   }
   
-  if (self->fifo) {
-	self->fd = (self->mode & FILE_READABLE) ? stdin : stdout;
-	return 0;
-  }
-
   char *m;
   if (mode & FILE_READABLE)
 	m = "r";
@@ -61,7 +61,8 @@ static int fileOpen(file_t *self, int mode) {
   return (!self->fd) ? 0 : errno;
 }
 
-static int fileGetTemp(file_t *self) {
+static int fileGetTemp(file_t *self, int mode) {
+  ENTER();
   int err = 0;
   int fd = -1;
 
@@ -79,7 +80,7 @@ static int fileGetTemp(file_t *self) {
   }
   self->len = 0;
   self->fifo = false;
-  self->mode = FILE_READABLE;
+  self->mode = mode;
   self->unlink = true;
 	  
   self->filename = malloc(FILE_TEMPLATE_LENGTH);
@@ -118,30 +119,37 @@ static int fileGetTemp(file_t *self) {
 }
 
 file_t *fileCreate(const char *filename, int mode, bool fifo) {
+  ENTER();
   file_t *self = calloc(1, sizeof(*self));
 
   if (!self)
 	return NULL;
 
+  self->mode = mode;  
+
   if (filename) {
 	self->filename = strdup(filename);
-	if (!self->filename) {
+	if (!self->filename)
 	  goto exit0;
-	}
   } else if (fifo) {
 	self->fifo = true;
-  } else if (fileGetTemp(self)) {
+  } else if (fileGetTemp(self, mode))
+	goto exit0;
+
+  if (!self->fd) {
+	if (fileOpen(self, mode))
 	  goto exit0;
   }
 
-  self->mode = mode;  
   return self;
+
  exit0:
-	  free(self);
-	  return NULL;
+  fileDelete(self);
+  return NULL;
 }
 
 int fileDelete(file_t *self) {
+  ENTER();
   int res = -1;
   if (!self)
 	return 0;
@@ -156,7 +164,7 @@ int fileDelete(file_t *self) {
   return res;
 }
 
-int fileWrite(file_t *self, uint8_t *data, size_t len) {
+int fileWrite(file_t *self, const uint8_t *data, size_t len) {
   int res = EINVAL;
   if (self && self->fd && (self->mode & FILE_WRITABLE)) {
 	res = EIO;
@@ -180,9 +188,8 @@ int fileRead(file_t *self, uint8_t *data, size_t len) {
   return res;
 }
 
-
-
-int fileAppend(file_t *self, file_t *src) {
+int fileCat(file_t *self, file_t *src) {
+  ENTER();
   int err=0;
   FILE *fdout = NULL;
   size_t size;

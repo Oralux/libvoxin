@@ -23,7 +23,7 @@ rate : the speech rate in Hertz which will be copied in the header (e.g. rate = 
 
 */
 
-void *wavfileCreate(const char *output, size_t number_of_parts, uint32_t rate);
+void *wavfileCreate(const char *outputfile, size_t number_of_parts, uint32_t rate);
 
 int wavfileDelete(void *handle);
 

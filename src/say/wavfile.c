@@ -107,7 +107,7 @@ int wavfileDelete(void *handle) {
   return 0;
 }
 
-void *wavfileCreate(const char *output, size_t number_of_parts, uint32_t rate) {
+void *wavfileCreate(const char *outputfile, size_t number_of_parts, uint32_t rate) {
   ENTER();
 
   wavfile_t *self = calloc(1, sizeof(*self));
@@ -120,23 +120,19 @@ void *wavfileCreate(const char *output, size_t number_of_parts, uint32_t rate) {
 
   self->header.sampleRate = rate;
   
-  { // check output
+  { // check outputfile
 	struct stat statbuf;
-	if (output) {
-	  FILE *fdo = fopen(output, "w");
-	  if (fdo)  {
-		fclose(fdo);
-		self->output = fileCreate(output, true, false);
-	  }
+	if (outputfile) {
+	  self->output = fileCreate(outputfile, FILE_WRITABLE, false);
 	} else if (fstat(STDOUT_FILENO, &statbuf)) {
 	  // no action
 	} else if (S_ISREG(statbuf.st_mode)) {
-	  output = realpath("/proc/self/fd/1", NULL);
-	  if (output) {
-		self->output = fileCreate(output, true, false);
+	  outputfile = realpath("/proc/self/fd/1", NULL);
+	  if (outputfile) {
+		self->output = fileCreate(outputfile, FILE_WRITABLE, false);
 	  }
 	} else if (S_ISFIFO(statbuf.st_mode)) {
-	  self->output = fileCreate(NULL, true, true);
+	  self->output = fileCreate(NULL, FILE_WRITABLE, true);
 	}
   }
 
@@ -149,7 +145,7 @@ void *wavfileCreate(const char *output, size_t number_of_parts, uint32_t rate) {
 	goto exit0;
 
   for (i=0; i<number_of_parts; i++) {
-	self->part[i] = fileCreate(NULL, true, false);
+	self->part[i] = fileCreate(NULL, FILE_WRITABLE, false);
 	if (!self->part[i])
 	  goto exit0;
   }
@@ -198,7 +194,7 @@ int wavfileFlush(void *handle) {
   }
   
   for (i=0; i<self->number_of_parts; i++) {
-	if (fileAppend(self->output, self->part[i])) {
+	if (fileCat(self->output, self->part[i])) {
 	  return EIO;	
 	}
   }
