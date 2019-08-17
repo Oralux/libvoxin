@@ -16,8 +16,6 @@
 #include "debug.h"
 
 #define MAX_JOBS 32
-static char tempbuf[MAX_CHAR+10];
-#define MAX_LANG 100
 
 void usage()
 {
@@ -73,23 +71,6 @@ typedef struct {
 */
 
 
-// text: 16 char min
-static int synthSay(void *tts, char *text)
-{
-  int err = EINVAL;
-  ENTER();
-  msg("[%d] ENTER %s", getpid(), __func__);
-
-  if (!tts || !text) {
-	return EINVAL;
-  }
-
-  ttsSay(tts, text);
-
- exit0:  
-  return err;
-}
-
 static int objSayText(obj_t *self, int job) {
   ENTER();
   long length = 0;
@@ -100,23 +81,19 @@ static int objSayText(obj_t *self, int job) {
 	goto exit0;
   }
 
-  if (!self->tts) {
-	if (ttsInit(self->tts, self->wav, job)) {
-	  err = EIO;
-	  goto exit0;
-	}
-  }
+  err = ttsSetOutput(self->tts, self->wav, job);
+  if (err)
+	goto exit0;
   
-  length = 1;
-  while(length) {
-	err = textfileSentenceGet(self->text, job, &length);
-	if (err) {	  
+  length = 0;
+  do {
+	const char *sentence = NULL;
+	err = textfileGetNextSentences(self->text, job, &length, &sentence);
+	if (err)
 	  break;
-	}	
-  	if (!length) {
-	  synthSay(&self->tts, tempbuf);
-	}
-  }
+  	if (length)
+	  ttsSay(self->tts, sentence);
+  } while(length);
 
  exit0:
   return err;
@@ -188,9 +165,8 @@ static obj_t *objCreate(const char *input, const char *output, int jobs, const c
 	goto exit0;
 
   self->wav = wavfileCreate(output, jobs, ttsGetRate(self->tts));
-  if (!self->wav)
-	goto exit0;
-	
+  // self->wav can be NULL (e.g. if only the list of voices is required)
+
   self->jobs = jobs;
   return self;
 
@@ -210,11 +186,12 @@ int main(int argc, char *argv[])
   int opt;
   int temporaryOutput = 0;
   int fifo = 0;
-  int err = EINVAL;
+  int err = 0;
   int list = 0;
   char *voiceName = NULL;
   char *sentence = NULL;  
- 
+  obj_t *self = NULL;
+	
   ENTER();
  
   while ((opt = getopt(argc, argv, "df:hj:l:Ls:S:w:")) != -1) {
@@ -296,7 +273,7 @@ int main(int argc, char *argv[])
 	goto exit0;
   }
 
-  obj_t *self = objCreate(inputfile, outputfile, jobs, voiceName, speed, sentence);
+  self = objCreate(inputfile, outputfile, jobs, voiceName, speed, sentence);
   if (!self) {
 	usage();
 	goto exit0;

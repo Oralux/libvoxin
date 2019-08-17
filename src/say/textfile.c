@@ -34,17 +34,40 @@ typedef struct {
 #define MAX_CHAR 10240
 static char tempbuf[MAX_CHAR+10];
 
-static input_t *getInput(textfile_t *self, size_t part) {
+static int inputDelete(input_t *self) {
+  ENTER();
+  int err;
+  if (!self)
+	return 0;
+
+  err = fileDelete(self->file);
+  if (err)
+	goto exit0;
+  
+  self->file = NULL;
+  free(self);
+
+ exit0:
+  return err;
+}
+
+static input_t *inputCreate() {
+  ENTER();
+  input_t *self = calloc(1, sizeof(*self));
+  return self;
+}
+
+static input_t *textfileGetInput(textfile_t *self, size_t part) {
   return (!self || !self->input || (part >= self->len))
 	? NULL : self->input[part];
 }
 
-static file_t *getFile(textfile_t *self, size_t part) {
-  input_t *input = getInput(self, part);
+static file_t *textfileGetFile(textfile_t *self, size_t part) {
+  input_t *input = textfileGetInput(self, part);
   return  input ? input->file : NULL;
 }
 
-static int sentenceSearchLast(long *length) {
+static int textfileSentenceSearchLast(long *length) {
   int err = 0;
   
   if (!length) {
@@ -58,14 +81,14 @@ static int sentenceSearchLast(long *length) {
 	for (i=*length-2; i>0; i--) {
 	  if ((tempbuf[i] == '.') && isspace(tempbuf[i+1])) {
 		found = 1;
-		length0 = i+2;
+		length0 = i+1;
 		break;
 	  }
 	}
 	if (!found) {
 	  for (i=*length-2; i>0; i--) {
 		if (!isspace(tempbuf[i]) && isspace(tempbuf[i+1])) {
-		  length0 = i+2;
+		  length0 = i+1;
 		  break;
 		}
 	  }
@@ -75,15 +98,21 @@ static int sentenceSearchLast(long *length) {
   return err;
 }
 
+/* textfileSentenceRead copies the maximum number of full/unsplitted
+sentences from the concerned part of textfile to tempbuf.
 
-static int sentenceGet(textfile_t *self, size_t part, long *length) {
+length is updated with the number of bytes copied.
+
+ */
+static int textfileReadSentences(textfile_t *self, size_t part, long *length) {
   ENTER();
   int err = 0;
   long max, x;
-  file_t *f = getFile(self, 0);
-  input_t *input = getInput(self, 0);
+  file_t *f = textfileGetFile(self, part);
+  input_t *input = textfileGetInput(self, part);
   region_t *r = NULL;
   msg("[%d] ENTER %s", getpid(), __func__);
+  size_t a = 0;
   
   if (!f|| !length ) {
 	err = EINVAL;
@@ -104,21 +133,22 @@ static int sentenceGet(textfile_t *self, size_t part, long *length) {
 	err = errno;
 	goto exit0;
   }
-  
-  while(!*length) {
-	*length = fread(tempbuf, 1, max, f->fd);
-	
-	if (!*length) {
+
+  while(a < max) {
+	size_t b = fread(tempbuf+a, 1, max-a, f->fd);
+	a += b;
+	if (b < max-a) {
 	  if (feof(f->fd))
-		goto exit0;
+		break;
 	  else if (ferror(f->fd)) {
 		err = EIO;
 		goto exit0;
 	  }
 	}
   }
+  *length = a;
   
-  err = sentenceSearchLast(length);
+  err = textfileSentenceSearchLast(length);
   if (err)
 	goto exit0;
 
@@ -131,35 +161,41 @@ static int sentenceGet(textfile_t *self, size_t part, long *length) {
   return err;
 }
 
-static int sentenceGetPosPrevious(textfile_t *self, region_t *r) {
+/* textfileAdjustRegion adjusts the concerned region of text so that
+its last sentence is unsplitted */
+static int textfileAdjustRegion(textfile_t *self, unsigned int part) {
   ENTER();
   int max = 0;
   long range = 0;
   int err = 0;
-  file_t *f = getFile(self, 0);
+  input_t *input = textfileGetInput(self, part);
+  region_t *r = NULL;
   
-  if (!f || !r) {
+  if (!input) {
 	err = EINVAL;
 	goto exit0;
   }
-  
+
+  r = &(input->region);
+
+  // read the last bytes of the region
   range = r->end - r->begin;
   if (range < 0) {
 	err = EINVAL;
 	goto exit0;
   }
+  
   max = (range < MAX_CHAR) ? range : MAX_CHAR;
 
-  {
+  {	
 	long length = 0;
-	region_t r0;
-	r0.begin = r->begin + (r->end - max); 
-	r0.end = r->end; 
-	err = sentenceGet(self, 0, &length);
-	if (err) {
+	long begin0 = r->begin; 
+	r->begin = r->end - max;
+	err = textfileReadSentences(self, part, &length);
+	if (err)
 	  goto exit0;
-	}
-	r->end = r0.begin + length;
+	r->end = r->begin + length;
+	r->begin = begin0;
   }
   
  exit0:
@@ -169,11 +205,11 @@ static int sentenceGetPosPrevious(textfile_t *self, region_t *r) {
   return err;
 }
 
-static int sentenceSet(textfile_t *self, const char *sentence) {
+static int textfileSetSentence(textfile_t *self, const char *sentence) {
   ENTER();
 
   int err = 0;
-  input_t *input = getInput(self, 0);
+  input_t *input = textfileGetInput(self, 0);
   
   if (!input || !sentence || !*sentence)
 	return EINVAL;
@@ -185,12 +221,62 @@ static int sentenceSet(textfile_t *self, const char *sentence) {
 	if (err) {
 	  fileDelete(f);
 	  input = NULL;
-	}
+	} else 
+	  err = fileFlush(f);
   } else {
 	err = EIO;
   }
   return err;
 }
+
+static int textfileSetParts(textfile_t *self) {
+  ENTER();
+
+  int err = EIO;
+  int i;
+  input_t *input0 = textfileGetInput(self, 0);
+  file_t *f0 = textfileGetFile(self, 0);
+  region_t r = {0};
+  region_t r0;
+  long partlen;
+  
+  if (!input0)
+	return EINVAL;
+
+  if (self->len <= 1)
+	return 0;
+  
+  for (i=1; i<self->len; i++) {
+  	input_t *input = textfileGetInput(self, i);
+  	input->file = fileCreate(f0->filename, FILE_READABLE|FILE_WRITABLE, false);
+  	if (!input->file)
+  	  goto exit0;
+  }
+
+  r0.begin = input0->region.begin;
+  r0.end = input0->region.end;
+  partlen = r0.end/self->len;
+
+  //  adjust each region so that the last sentence is unsplitted
+  for (i=0; i<self->len; i++) {
+	input_t *input = textfileGetInput(self, i);
+	r.begin = r.end;
+	if (i == self->len-1) {
+	  r.end = r0.end;
+	  bcopy(&(input->region), &r, sizeof(r));
+	} else {
+	  r.end = r.begin + partlen;
+	  bcopy(&(input->region), &r, sizeof(r));
+	  if (textfileAdjustRegion(self, i) == -1)
+		goto exit0;
+	}
+  }
+  err = 0;
+  
+ exit0:
+  return err;
+}
+
 
 void *textfileCreate(const char *inputfile, unsigned int *number_of_parts, const char *sentence) {
   ENTER();
@@ -211,14 +297,20 @@ void *textfileCreate(const char *inputfile, unsigned int *number_of_parts, const
   self->input = calloc(*number_of_parts, *number_of_parts*(sizeof(*self->input)));
   if(!self->input)
 	goto exit0;
+
+  for (i=0; i<self->len;i++) {
+	 self->input[i] = inputCreate();
+	 if (!self->input[i])
+	   goto exit0;
+  }
   
-  input = getInput(self, 0); 
+  input = self->input[0]; 
   if (input) { // check input
 	struct stat statbuf;
 	if (inputfile) {
 	  input->file = fileCreate(inputfile, FILE_READABLE, false);
 	} else if (sentence) {
-	  sentenceSet(self, sentence);
+	  textfileSetSentence(self, sentence);
 	} else if (fstat(STDIN_FILENO, &statbuf)) {
 	  // no action
 	} else if (S_ISREG(statbuf.st_mode)) {
@@ -229,7 +321,7 @@ void *textfileCreate(const char *inputfile, unsigned int *number_of_parts, const
 	} else if (S_ISFIFO(statbuf.st_mode)) {
 	  input->file = fileCreate(NULL, FILE_READABLE, true);
 	} else {
-	  sentenceSet(self, "Hello World!");
+	  textfileSetSentence(self, "Hello World!");
 	}
   }
 
@@ -252,44 +344,9 @@ void *textfileCreate(const char *inputfile, unsigned int *number_of_parts, const
 	self->len = *number_of_parts = 1;
 	return self;
   }	
-  
-  for (i=1; i<self->len; i++) {
-	input_t *input = getInput(self, i);
-	input->file = fileCreate(NULL, FILE_READABLE|FILE_WRITABLE, false);
-	if (!input->file)
-	  goto exit0;
-  }
 
-  region_t r = {0};
-  region_t r0;
-  /* r.begin = r.end = 0; */
-  r0.begin = input->region.begin;
-  r0.end = input->region.end;
-
-  partlen = input->region.end/self->len;
-
-  for (i=0; i<self->len; i++) {
-	input_t *input = getInput(self, i);
-	r.begin = r.end;
-	if (i == self->len-1) {
-	  r.end = r0.end;	  
-	} else {
-	  r.end = r.begin + partlen;
-	  if (sentenceGetPosPrevious(self, &r) == -1) {
-		goto exit0;
-	  }
-	}
-	if (!i) {
-	  r.begin = 0;
-	  //	  r.end = r.end;
-	}
-
-	input->region.begin = r.begin;
-	input->region.end = r.end;
-	if (fseek(input->file->fd, r.begin, SEEK_SET) == -1) {
-	  goto exit0;
-	}	
-  }
+  if (textfileSetParts(self))
+	goto exit0;
    
   return self;
 
@@ -306,18 +363,17 @@ int textfileDelete(void *handle) {
 
   if (!self)
 	return 0;
-  
-  for (i=0; i<self->len; i++) {
-	input_t *input = self->input[i];
-	err = fileDelete(input->file);
-	if (err)
-	  goto exit0;
-	input->file = NULL;
-	free(input);
-	self->input[i] = NULL;
+
+  if (self->input) {
+	for (i=0; i<self->len; i++) {
+	  err = inputDelete(self->input[i]);
+	  if (err)
+		goto exit0;
+	  self->input[i] = NULL;
+	}
+	free(self->input);
+	self->input = NULL;
   }
-  free(self->input);
-  self->input = NULL;
   free(self);
   return 0;
 
@@ -325,19 +381,22 @@ int textfileDelete(void *handle) {
   return -1;
 }
 
-int textfileSentenceGet(void *handle, unsigned int part, long *length) {
+int textfileGetNextSentences(void *handle, unsigned int part, long *length, const char **sentence) {
   ENTER();
   textfile_t *self = (textfile_t*)handle;
-  input_t *input = getInput(self, 0);
+  input_t *input = textfileGetInput(self, 0);
 
-  if (!input || !length)
+  if (!input || !length || !sentence)
 	return EINVAL;
-  
-  region_t *r = &input->region;
-  int err = sentenceGet(self, part, length);
 
-  if (!err && length)
-	r->begin += *length;
+  *sentence = NULL;
+  region_t *r = &input->region;
+  int err = textfileReadSentences(self, part, length);
+
+  if (!err && length) {
+	r->begin += *length + 1;
+	*sentence = tempbuf;
+  }
 
   return err;
 }

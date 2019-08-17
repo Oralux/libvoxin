@@ -184,7 +184,7 @@ int wavfileFlush(void *handle) {
 	return EINVAL;
   
   for (i=0; i<self->number_of_parts; i++) {
-	size += self->part[i]->len;
+	size += self->part[i]->written;
   }
 
   updateHeader(self, (uint32_t)size);

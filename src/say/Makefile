@@ -4,7 +4,7 @@ BIN=voxin-say.o tts.o file.o wavfile.o textfile.o
 LIBS=-L$(DESTDIR)/lib -lvoxin -lcommon -ldl
 CFLAGS += -g -DVERSION='"$(VERSION)"' -I../api -I../common
 #STRIP ?= strip --strip-unneeded
-STRIP ?=
+STRIP ?= echo
 
 all: voxin-say
 
@@ -17,7 +17,7 @@ install:
 	install -m 755 voxin-say $(DESTDIR)/bin
 
 clean:
-	rm -f voxin-say.o voxin-say
+	rm -f $(BIN) voxin-say *~
 
 test:
 	./test.sh

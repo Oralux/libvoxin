@@ -3,6 +3,6 @@
 
 void *textfileCreate(const char *inputfile, unsigned int *number_of_parts, const char *sentence);
 int textfileDelete(void *handle);
-int textfileSentenceGet(void *handle, unsigned int part, long *length);
+int textfileGetNextSentences(void *handle, unsigned int part, long *length, const char **sentence);
 
 #endif

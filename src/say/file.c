@@ -8,7 +8,7 @@
 #include "errno.h"
 #include "debug.h"
 
-#define FILE_TEMPLATE "/tmp/voxin-say.XXXXXXXXXX"
+#define FILE_TEMPLATE "/tmp/voxin-say.XXXXXX"
 #define FILE_TEMPLATE_LENGTH 30
 
 #define MAX_CHAR 10240
@@ -39,16 +39,8 @@ static int fileOpen(file_t *self, int mode) {
 	return 0;
   }
 
-  if (self->fd) {
-	if ((self->mode & mode) & (FILE_READABLE|FILE_WRITABLE)) {
-	  if (!(self->mode & FILE_APPEND))
-		rewind(self->fd);
-	  return 0;
-	} else {
-	  fclose(self->fd);
-	  self->fd = 0;
-	}	
-  }
+  if (self->fd)
+	return EIO;
   
   char *m;
   if (mode & FILE_READABLE)
@@ -57,8 +49,10 @@ static int fileOpen(file_t *self, int mode) {
 	m = "a";
   else
 	m = "w";
+  self->mode = mode;
+  self->read = self->written = 0;
   self->fd = fopen(self->filename, m);
-  return (!self->fd) ? 0 : errno;
+  return self->fd ? 0 : errno;
 }
 
 static int fileGetTemp(file_t *self, int mode) {
@@ -78,7 +72,7 @@ static int fileGetTemp(file_t *self, int mode) {
 	free(self->filename);
 	self->filename = NULL;
   }
-  self->len = 0;
+  self->read = self->written = 0;
   self->fifo = false;
   self->mode = mode;
   self->unlink = true;
@@ -95,7 +89,7 @@ static int fileGetTemp(file_t *self, int mode) {
 	goto exit0;
   }
 
-  self->fd = fdopen(fd, "rw");
+  self->fd = fdopen(fd, "r+");
   if (!self->fd) {
 	err = errno;
 	goto exit0;
@@ -165,26 +159,52 @@ int fileDelete(file_t *self) {
 }
 
 int fileWrite(file_t *self, const uint8_t *data, size_t len) {
-  int res = EINVAL;
-  if (self && self->fd && (self->mode & FILE_WRITABLE)) {
-	res = EIO;
-	int nb_items = fwrite(data, 1, len, self->fd);
-	if (nb_items == 1) {
-	  self->len += len;
+  int res = 0;
+  size_t x = 0;
+
+  if (!self || !self->fd || !(self->mode & FILE_WRITABLE))
+	return EINVAL;
+
+  while(x < len) {
+	size_t y = fwrite(data+x, 1, len-x, self->fd);
+	x += y;
+	if ((y < len-x) && ferror(self->fd)) {
+	  res = EIO;
+	  break;
 	}
   }
+  self->written += x;
   return res;
 }
 
 int fileRead(file_t *self, uint8_t *data, size_t len) {
-  int res = EINVAL;
-  if (self && self->fd && (self->mode & FILE_READABLE)) {
-	res = EIO;
-	int nb_items = fread(data, 1, len, self->fd);
-	if (nb_items == 1) {
-	  self->len += len;
+  int res = 0;
+  size_t x = 0;
+
+  if (!self || !self->fd || !(self->mode & FILE_READABLE))
+	return EINVAL;
+
+  while(x < len) {
+	size_t y = fread(data+x, 1, len-x, self->fd);
+	x += y;
+	if (y < len-x) {
+	  if (feof(self->fd))
+		break;
+	  if (ferror(self->fd)) {
+		res = EIO;
+		break;
+	  }
 	}
   }
+  self->read += x;
+
+  return res;
+}
+
+int fileFlush(file_t *self) {
+  int res = EINVAL;
+  if (self && self->fd && (self->mode & FILE_WRITABLE))
+	res = fflush(self->fd) ? errno : 0;
   return res;
 }
 
@@ -192,24 +212,50 @@ int fileCat(file_t *self, file_t *src) {
   ENTER();
   int err=0;
   FILE *fdout = NULL;
-  size_t size;
+  size_t size = 0;
 
   if (!self || !src) {
 	return EINVAL;
   }
 
+  if (src->fd)
+	fileClose(src);
+  
   err = fileOpen(src, FILE_READABLE);
   if (err)
 	goto exit0;
-  
-  err = fileOpen(self, FILE_WRITABLE|FILE_APPEND);
-  if (err)
-	goto exit0;
+
+  {
+	struct stat statbuf;
+	if (fstat(fileno(src->fd), &statbuf) == -1) {
+	  err = errno;
+	  goto exit0;
+	}
+	size = statbuf.st_size;
+  }
+
+  if (self->fd) {
+	if (!(self->mode & (FILE_WRITABLE))) {
+	  fclose(self->fd);
+	  self->fd = NULL;
+	}
+  }
+
+  if (!self->fd) {
+	err = fileOpen(self, FILE_WRITABLE|FILE_APPEND);
+	if (err)
+	  goto exit0;
+  }
   
   while(size) {
-	// TODO checks
-	fileRead(self, tempbuf, MAX_CHAR);
-	fileWrite(self, tempbuf, size);
+	size_t len = (size > MAX_CHAR) ? MAX_CHAR : size;
+	size -= len;
+	err = fileRead(src, tempbuf, len);
+	if (err)
+	  break;
+	err = fileWrite(self, tempbuf, len);
+	if (err)
+	  break;
   }
   fileClose(src);
   

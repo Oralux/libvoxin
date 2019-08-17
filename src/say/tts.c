@@ -97,10 +97,16 @@ static int voiceGetId(voice_t *self, const char *name) {
   int i;
   int index = VOICE_ID_UNDEFINED;
   
-  if (!self || !name || !*name) {
+  if (!self) {
 	goto exit0;
   }
 
+  if (self->len)
+	index = 0;
+  
+  if (!name || !*name)
+	goto exit0;
+  
   for (i = 0; i < self->len; i++) {
 	if (!strcasecmp(name, self->voice[i].name) || !strcasecmp(name, self->voice[i].lang)) {
 	  index = i;
@@ -161,7 +167,7 @@ int ttsSetVoice(void *handle, unsigned int id) {
   return res;
 }
 
-int ttsInit(void *handle, void *wav, int part) {
+int ttsSetOutput(void *handle, void *wav, unsigned int part) {
   ENTER();
 
   tts_t *self = handle;
