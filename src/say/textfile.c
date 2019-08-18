@@ -111,7 +111,6 @@ static int textfileReadSentences(textfile_t *self, size_t part, long *length) {
   file_t *f = textfileGetFile(self, part);
   input_t *input = textfileGetInput(self, part);
   region_t *r = NULL;
-  msg("[%d] ENTER %s", getpid(), __func__);
   size_t a = 0;
   
   if (!f|| !length ) {
@@ -124,6 +123,7 @@ static int textfileReadSentences(textfile_t *self, size_t part, long *length) {
   *tempbuf = 0;
   
   if (r->end <= r->begin) {
+	msg("empty region, part %ld: from=%ld to=%ld (length=%ld)", part, r->begin, r->end, *length);
 	goto exit0;
   }
   x = r->end - r->begin;
@@ -153,7 +153,7 @@ static int textfileReadSentences(textfile_t *self, size_t part, long *length) {
 	goto exit0;
 
   tempbuf[*length] = 0;
-  msg("[%d] read from=%ld, to=%ld", getpid(), r->begin, r->end);
+  msg("part=%ld, read from=%ld to=%ld (length=%ld)", part, r->begin, r->end, *length);
 
  exit0:
   if (err)
@@ -196,6 +196,7 @@ static int textfileAdjustRegion(textfile_t *self, unsigned int part) {
 	  goto exit0;
 	r->end = r->begin + length;
 	r->begin = begin0;
+	msg("adjust region, part %d: from=%ld to=%ld", part, r->begin, r->end);	
   }
   
  exit0:
@@ -248,7 +249,7 @@ static int textfileSetParts(textfile_t *self) {
   
   for (i=1; i<self->len; i++) {
   	input_t *input = textfileGetInput(self, i);
-  	input->file = fileCreate(f0->filename, FILE_READABLE|FILE_WRITABLE, false);
+  	input->file = fileCreate(f0->filename, FILE_READABLE, false);
   	if (!input->file)
   	  goto exit0;
   }
@@ -263,12 +264,13 @@ static int textfileSetParts(textfile_t *self) {
 	r.begin = r.end;
 	if (i == self->len-1) {
 	  r.end = r0.end;
-	  bcopy(&(input->region), &r, sizeof(r));
+	  memcpy(&(input->region), &r, sizeof(input->region));
 	} else {
 	  r.end = r.begin + partlen;
-	  bcopy(&(input->region), &r, sizeof(r));
+	  memcpy(&(input->region), &r, sizeof(input->region));
 	  if (textfileAdjustRegion(self, i) == -1)
 		goto exit0;
+	  r.end = input->region.end + 1; // skip the zero terminator
 	}
   }
   err = 0;
@@ -384,7 +386,7 @@ int textfileDelete(void *handle) {
 int textfileGetNextSentences(void *handle, unsigned int part, long *length, const char **sentence) {
   ENTER();
   textfile_t *self = (textfile_t*)handle;
-  input_t *input = textfileGetInput(self, 0);
+  input_t *input = textfileGetInput(self, part);
 
   if (!input || !length || !sentence)
 	return EINVAL;
@@ -393,9 +395,10 @@ int textfileGetNextSentences(void *handle, unsigned int part, long *length, cons
   region_t *r = &input->region;
   int err = textfileReadSentences(self, part, length);
 
-  if (!err && length) {
+  if (!err && *length) {
 	r->begin += *length + 1;
 	*sentence = tempbuf;
+	msg("new region, part %d: from=%ld to=%ld", part, r->begin, r->end);	
   }
 
   return err;

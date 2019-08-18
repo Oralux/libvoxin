@@ -178,6 +178,8 @@ if [ -n "$TEST" ]; then
 		getFile
 		./voxin-say -f "$file_utf_8" -s 500 -w "$file_utf_8.$$.wav"		
 
+#		gdb -ex "b eciNew" -ex "set args -f $file_utf_8 -j 2 -s 500 -w $file_utf_8.$$.wav" ./voxin-say
+		
 #		touch /tmp/test_voxind
 #		./voxin-say -f "$file_utf_8" -s 500 -w "$file_utf_8.$$.wav" &
 #		sleep 2
@@ -216,8 +218,12 @@ if [ -f "$BUILD" ]; then
 	done
 	
 	ECI="$RFSDIR"/var/opt/IBM/ibmtts/cfg/eci.ini
-	cat "$RFSDIR"/opt/IBM/ibmtts/etc/*.ini > "$ECI"
-	sed -i "s#=/opt/#=$RFSDIR/opt/#" "$ECI"
+	if [ -e "$ECI" ]; then
+		cat "$RFSDIR"/opt/IBM/ibmtts/etc/*.ini > "$ECI"
+		sed -i "s#=/opt/#=$RFSDIR/opt/#" "$ECI"
+	else
+		echo "Warning: $ECI not found (necessary only for IBM TTS"
+	fi
 fi
 
 

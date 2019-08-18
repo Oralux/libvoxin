@@ -73,6 +73,7 @@ typedef struct {
 
 static int objSayText(obj_t *self, int job) {
   ENTER();
+  
   long length = 0;
   int err = 0;  
   
@@ -121,7 +122,9 @@ static int objSay(obj_t *self) {
   }
 
   err = objSayText(self, 0);
-
+  if (err)
+	goto exit0;
+  
   for (i=1; i < self->jobs; i++) {
 	int status;
 	int pid = wait(&status);

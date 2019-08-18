@@ -158,7 +158,7 @@ void *wavfileCreate(const char *outputfile, size_t number_of_parts, uint32_t rat
 }
 
 int wavfileWriteData(void *handle, unsigned int part, uint8_t *data, size_t len) {
-  ENTER();
+  //  ENTER();
   
   wavfile_t *self = handle;
   int err = 0;
