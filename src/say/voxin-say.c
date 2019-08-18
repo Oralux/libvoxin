@@ -59,6 +59,8 @@ typedef struct {
   void *tts;
   void *wav;
   int jobs;
+  const char *voiceName;
+  int speed;
 } obj_t;
 
 #define getSpeedUnits(i) ((i<0) ? 0 : ((i>250) ? 250 : i))
@@ -82,6 +84,12 @@ static int objSayText(obj_t *self, int job) {
 	goto exit0;
   }
 
+  // tts must be created in each process
+  if (!self->tts)
+	self->tts = ttsCreate(self->voiceName, self->speed);
+  if (!self->tts)
+	goto exit0;
+  
   err = ttsSetOutput(self->tts, self->wav, job);
   if (err)
 	goto exit0;
@@ -113,12 +121,11 @@ static int objSay(obj_t *self) {
 	
   for (i=1; i<self->jobs; i++) {
 	pid[i] = fork();
-	if (!pid[i]) {	  
+	if (!pid[i]) {
 	  err = objSayText(self, i);
 	  exit(err);
 	}	
-	msg("[%d] child pid=%d, job=%d",
-		getpid(), pid[i], i);	  
+	msg("child pid=%d, job=%d", pid[i], i);	  
   }
 
   err = objSayText(self, 0);
@@ -136,7 +143,8 @@ static int objSay(obj_t *self) {
 	  goto exit0;
 	}
   }
-	
+
+  wavfileSetRate(self->wav, ttsGetRate(self->tts));
   err = wavfileFlush(self->wav);
 	
  exit0:
@@ -149,7 +157,10 @@ static void objDelete(obj_t *self) {
 	return;
   textfileDelete(self->text);
   ttsDelete(self->tts);
-  wavfileDelete(self->wav);  
+  wavfileDelete(self->wav);
+  if (self->voiceName)
+	free((char*)self->voiceName);
+  free(self);
 }
 
 static obj_t *objCreate(const char *input, const char *output, int jobs, const char *voiceName, int speed, const char *sentence) {
@@ -159,15 +170,13 @@ static obj_t *objCreate(const char *input, const char *output, int jobs, const c
   if (!self)
 	return NULL;
 
-  self->tts = ttsCreate(voiceName, speed);
-  if (!self->tts)
-	goto exit0;
-
+  self->voiceName = voiceName;
+  self->speed = speed;
   self->text = textfileCreate(input, &jobs, sentence);
   if (!self->text)
 	goto exit0;
 
-  self->wav = wavfileCreate(output, jobs, ttsGetRate(self->tts));
+  self->wav = wavfileCreate(output, jobs);
   // self->wav can be NULL (e.g. if only the list of voices is required)
 
   self->jobs = jobs;
@@ -283,6 +292,10 @@ int main(int argc, char *argv[])
   }
 
   if (list) {
+	if (!self->tts)
+	  self->tts = ttsCreate(voiceName, speed);
+	if (!self->tts)
+	  goto exit0;
 	ttsPrintList(self->tts);
 	err = 0;
 	goto exit0;
@@ -304,7 +317,7 @@ int main(int argc, char *argv[])
 
   if (sentence)
 	free(sentence);
-    
+
   if (err) {
 	char *s = strerror(err);
 	err("%s", s);

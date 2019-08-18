@@ -23,14 +23,16 @@ rate : the speech rate in Hertz which will be copied in the header (e.g. rate = 
 
 */
 
-void *wavfileCreate(const char *outputfile, size_t number_of_parts, uint32_t rate);
+void *wavfileCreate(const char *outputfile, size_t number_of_parts);
 
 int wavfileDelete(void *handle);
 
-/* wavfileWriteData writes yje data supplied to the corresponding part part =1 or greater)  */
+/* wavfileWriteData writes the data supplied to the corresponding part */
 int wavfileWriteData(void *handle, unsigned int part, uint8_t *data, size_t len);
 
-/* wavfileFlush writes its internal buffer to the output */
+int wavfileSetRate(void *handle, uint32_t rate);
+
+/* wavfileFlush writes the header + data to the output */
 int wavfileFlush(void *handle);
-  
+
 #endif

@@ -107,7 +107,7 @@ int wavfileDelete(void *handle) {
   return 0;
 }
 
-void *wavfileCreate(const char *outputfile, size_t number_of_parts, uint32_t rate) {
+void *wavfileCreate(const char *outputfile, size_t number_of_parts) {
   ENTER();
 
   wavfile_t *self = calloc(1, sizeof(*self));
@@ -118,7 +118,7 @@ void *wavfileCreate(const char *outputfile, size_t number_of_parts, uint32_t rat
   if (number_of_parts < 1)
 	goto exit0;
 
-  self->header.sampleRate = rate;
+  self->header.sampleRate = 11025;
   
   { // check outputfile
 	struct stat statbuf;
@@ -202,3 +202,12 @@ int wavfileFlush(void *handle) {
 }
 
 
+int wavfileSetRate(void *handle, uint32_t rate) {
+  wavfile_t *self = handle;
+
+  if(!self)
+	return EINVAL;
+
+  self->header.sampleRate = rate;
+  return 0;
+}

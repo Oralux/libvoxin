@@ -21,7 +21,7 @@ By default, a fake libibmeci.so is provided.
 
 ** Create a testing directory
 #+BEGIN_SRC shell
-./test.sh -b list.vv
+./test.sh -b src/list.vv
 
 # this 'list.vv' file provides the paths to the necessary tarballs.
 # the common tarballs (*all*, *voxind*) are expected to be placed 
