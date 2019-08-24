@@ -26,5 +26,7 @@ int fileRead(file_t *handle, uint8_t *data, size_t len);
 int fileWrite(file_t *handle, const uint8_t *data, size_t len);
 int fileFlush(file_t *handle);
 int fileCat(file_t *self, file_t *src);
+int fileClose(file_t *self);
+int fileGetSize(file_t *self);
 
 #endif

@@ -100,6 +100,8 @@ int wavfileDelete(void *handle) {
 	  fileDelete(self->part[i]);
 	  self->part[i] = NULL;
 	}
+	free(self->part);
+	self->part = NULL;
   }
   self->number_of_parts = 0;
   free(self);
@@ -184,7 +186,12 @@ int wavfileFlush(void *handle) {
 	return EINVAL;
   
   for (i=0; i<self->number_of_parts; i++) {
-	size += self->part[i]->written;
+	fileClose(self->part[i]);
+	int s = fileGetSize(self->part[i]);
+	if (s < 0) {
+	  return EIO;
+	}
+	size += s;	
   }
 
   updateHeader(self, (uint32_t)size);
@@ -198,7 +205,7 @@ int wavfileFlush(void *handle) {
 	  return EIO;	
 	}
   }
-
+  fileClose(self->output);
 }
 
 

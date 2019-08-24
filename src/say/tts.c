@@ -145,6 +145,13 @@ void ttsDelete(void *handle) {
 	return;
   voiceDelete(self->voice);
   self->voice = NULL;
+
+
+  if (self->handle) {
+	eciDelete(self->handle);
+	self->handle = NULL;
+  }
+  
   free(self);
 }
 
@@ -222,6 +229,7 @@ int ttsSetOutput(void *handle, void *wav, unsigned int part) {
  exit0:
   if (self->handle) {
 	eciDelete(self->handle);
+	self->handle = NULL;
   }
   if (err) {
 	err("%s", strerror(err));

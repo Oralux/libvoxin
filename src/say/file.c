@@ -14,7 +14,7 @@
 #define MAX_CHAR 10240
 static char tempbuf[MAX_CHAR+10];
 
-static int fileClose(file_t *self) {
+int fileClose(file_t *self) {
   ENTER();
   int res = 0;
   if (!self)
@@ -106,7 +106,6 @@ static int fileGetTemp(file_t *self, int mode) {
   if (err) {
 	char *s = strerror(err);
 	err("%s", s);
-	fprintf(stderr,"Error: %s\n", s);
   }
 
   return err;
@@ -235,7 +234,7 @@ int fileCat(file_t *self, file_t *src) {
   }
 
   if (self->fd) {
-	if (!(self->mode & (FILE_WRITABLE))) {
+	if ((self->mode & (FILE_WRITABLE|FILE_APPEND)) != (FILE_WRITABLE|FILE_APPEND)) {
 	  fclose(self->fd);
 	  self->fd = NULL;
 	}
@@ -248,20 +247,41 @@ int fileCat(file_t *self, file_t *src) {
   }
   
   while(size) {
+	size_t oldread = src->read;
 	size_t len = (size > MAX_CHAR) ? MAX_CHAR : size;
 	size -= len;
 	err = fileRead(src, tempbuf, len);
 	if (err)
 	  break;
-	err = fileWrite(self, tempbuf, len);
+	err = fileWrite(self, tempbuf, src->read - oldread);
 	if (err)
 	  break;
   }
   fileClose(src);
-  
+
  exit0:
   if (err) {
 	err("%s", strerror(err));
   }
   return err;
+}
+
+int fileGetSize(file_t *self) {
+  ENTER();
+
+  int size = -1;
+  struct stat statbuf;
+
+  if (!self || !self->filename)
+	return -1;
+
+  if (stat(self->filename, &statbuf) == -1) {
+	int err = errno;
+	err("%s", strerror(err));
+  } else {
+	size = statbuf.st_size;
+  }
+  
+ exit0:
+  return size;  
 }
