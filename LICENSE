@@ -18,7 +18,7 @@ License: LGPL-2.1+
  The GNU Lesser General Public License is copied in doc/LGPL.txt
 
 *------------------------------------------------------------
-Files: src/common/*
+Files: src/api/voxin.h, src/common/*
 Copyright: 2016-2019 Gilles Casse
 License: LGPL-2.1+ (See above)
 License: MIT
