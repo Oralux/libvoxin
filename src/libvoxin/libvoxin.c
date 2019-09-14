@@ -13,7 +13,6 @@
 #include <stdbool.h>
 #include "libvoxin.h"
 #include "msg.h"
-#include "no_pipe.h"
 #include "debug.h"
 
 #define IBMTTS_RO "opt/IBM/ibmtts"
@@ -26,52 +25,42 @@
 #define VOXIND_NVE "bin/voxind-nve"
 #define MAXBUF 4096
 
-typedef enum {ID_ECI, ID_NVE} voxind_id; // index of the voxind array
-
-typedef int (*t_pipe_create)(struct pipe_t **px);
-typedef int (*t_pipe_delete)(struct pipe_t **px);
-typedef int (*t_pipe_restore)(struct pipe_t **px, int fd);
-typedef int (*t_pipe_dup2)(struct pipe_t *p, int index, int new_fd);
-typedef int (*t_pipe_close)(struct pipe_t *p, int index);
-typedef int (*t_pipe_read)(struct pipe_t *p, void *buf, ssize_t *len);
-typedef int (*t_pipe_write)(struct pipe_t *p, void *buf, ssize_t *len);
-
-struct libvoxin_t {
-  uint32_t id;
-  uint32_t msg_count;
-  pid_t parent;
-  pid_t child;
-  struct pipe_t *pipe_command;
-  uint32_t stop_required;
-  t_pipe_create _pipe_create;
-  t_pipe_delete _pipe_delete;
-  t_pipe_restore _pipe_restore;
-  t_pipe_dup2 _pipe_dup2;
-  t_pipe_close _pipe_close;
-  t_pipe_read _pipe_read;
-  t_pipe_write _pipe_write;
-  uint32_t with_eci;
-};
-
 typedef struct {
-  voxind_id id;
-  const char *dir; // directory under which the voxind binary is expected (relative to rootdir)
-  const char *bin; // path to the voxind binary (relative to rootdir/dir)
-  char rootdir[MAXBUF]; // path to the root directory, dynamically determined
+  vox_tts_id id;
+  char rootdir[MAXBUF]; // path to the root directory
   // For example, rootdir could be "/", "/opt/oralux/voxin/rfs32",
   // "/home/user1/.oralux/voxin/rfs",
   // "/home/user1/.oralux/voxin/rfs/opt/oralux/voxin/rfs32"
-  char lib[MAXBUF]; // LD_LIBRARY_PATH (for eci), dynamically determined
-  bool present; // true if binary found
+  char dir[MAXBUF]; // directory under which the voxind binary is expected (relative to rootdir)
+  char bin[MAXBUF]; // path to the voxind binary (relative to rootdir/dir)
+  char lib[MAXBUF]; // LD_LIBRARY_PATH if needed by voxind
+  pid_t parent; // pid of the process which created voxind
+  pid_t child; // pid of voxind
+  struct pipe_t *pipe; // bi-directionnal pipe between the parent and the child processes
 } voxind_t;
 
-static voxind_t voxind[2] = {
-  {id:ID_ECI, dir:RFS32, bin:VOXIND},
-  {id:ID_NVE, dir:VOXIN_DIR, bin:VOXIND_NVE}
+typedef struct {
+  uint32_t id;
+  uint32_t msg_count;
+  pid_t parent;
+  voxind_t *voxind[VOX_TTS_MAX];
+  uint32_t stop_required;
+  char rootdir[MAXBUF]; // path to the root directory, dynamically determined
+} libvoxin_t;
+
+static voxind_t voxind_init[VOX_TTS_MAX] = {
+  {id:VOX_TTS_ECI, dir:RFS32, bin:VOXIND},
+  {id:VOX_TTS_NVE, dir:VOXIN_DIR, bin:VOXIND_NVE}
 };
 
-static void my_exit(struct libvoxin_t *the_obj)
-{
+static int voxind_write(voxind_t *self, void *buf, ssize_t *len) {
+  ENTER();
+  if (!self)
+	return 0;
+  return pipe_write(self->pipe, buf, len);
+}
+
+static void my_exit(voxind_t *self) {
   struct msg_t msg;
   ssize_t l = sizeof(struct msg_t);
   int res;
@@ -80,7 +69,7 @@ static void my_exit(struct libvoxin_t *the_obj)
   msg.id = MSG_EXIT;
   
   dbg("send exit msg");
-  res = the_obj->_pipe_write(the_obj->pipe_command, &msg, &l);
+  res = pipe_write(self->pipe, &msg, &l);
   if (res) {
 	dbg("write error (%d)", res);
   }
@@ -88,8 +77,7 @@ static void my_exit(struct libvoxin_t *the_obj)
 
 // fdwalk function from glib (GPLv2):
 // https://git.gnome.org/browse/glib/tree/glib/gspawn.c?h=2.50.0#n1027
-static int fdwalk (int (*cb)(void *data, int fd), void *data)
-{
+static int fdwalk (int (*cb)(void *data, int fd), void *data) {
   int open_max;
   int fd;
   int res = 0;  
@@ -143,13 +131,14 @@ static int fdwalk (int (*cb)(void *data, int fd), void *data)
 }
 
 
-// Return the absolute pathname of libvoxin linked to the running process
+// Return the root directory of the absolute pathname of libvoxin
+// linked to the running process.
 // For example, if the running process is linked to
 // /home/user1/.oralux/voxin/rfs/opt/oralux/voxin-2.00/lib/libvoxin.so.2.0.0
 // then the returned dir is
 // /home/user1/.oralux/voxin/rfs
 //
-static int getVoxinRootDir(char *dir, size_t len) {
+static int get_root_dir(char *dir, size_t len) {
   FILE *fd = NULL;
   char *basename = NULL;
   int err = EINVAL;
@@ -227,32 +216,31 @@ static int close_cb(void *data, int fd) {
 }
 
 
-static int child(struct libvoxin_t *the_obj, voxind_t *v)
-{
+static int voxind_routine(voxind_t *self) {
   int res = 0;
 	
   ENTER();
 
-  if (chdir(v->rootdir)) {
+  if (chdir(self->rootdir)) {
 	res = errno;
 	goto exit;
   }
 
   libvoxinDebugFinish();
   close(PIPE_COMMAND_FILENO);
-  the_obj->_pipe_dup2(the_obj->pipe_command, PIPE_SOCKET_CHILD_INDEX, PIPE_COMMAND_FILENO);
+  pipe_dup2(self->pipe, PIPE_SOCKET_CHILD_INDEX, PIPE_COMMAND_FILENO);
   fdwalk (close_cb, (void*)PIPE_COMMAND_FILENO);
   
-  if (v->lib[0] && setenv("LD_LIBRARY_PATH", v->lib, 1)) {
+  if (self->lib[0] && setenv("LD_LIBRARY_PATH", self->lib, 1)) {
 	res = errno;
 	goto exit;
   }
 
-  if (execl(v->bin, v->bin, NULL) == -1) {
+  if (execl(self->bin, self->bin, NULL) == -1) {
 	res = errno;
   }
 
-  my_exit(the_obj);
+  my_exit(self);
   
  exit:
   if (res)
@@ -262,46 +250,110 @@ static int child(struct libvoxin_t *the_obj, voxind_t *v)
   return res;  
 }
 
-/* get_voxind checks if the specific voxind (ec, nve) is present and
-   update the struct accordingly.
-*/
-static bool get_voxind(voxind_t *v) {
+
+static int voxind_start(voxind_t *self) {
+  int err = 0;
+
+  ENTER();
+  
+  if (!self)
+	return EINVAL;
+
+  self->child = fork();
+  switch(self->child) {
+  case 0:
+	if (prctl(PR_SET_PDEATHSIG, SIGKILL) == -1) {
+	  exit(errno);
+	  }
+	if (getppid() != self->parent) {
+	  exit(0);
+	}
+	  
+	pipe_close(self->pipe, PIPE_SOCKET_PARENT);
+	exit(voxind_routine(self));	
+	break;
+  case -1:
+	err = errno;
+	break;
+  default:
+	pipe_close(self->pipe, PIPE_SOCKET_CHILD_INDEX);
+	break;
+  }
+  
+  LEAVE();
+  return err;
+}
+
+
+static int voxind_stop(voxind_t *self) {  
+  ENTER();
+  if (!self)
+	return EINVAL;
+
+  if (!self->child) { // TODO
+  }
+  
+  LEAVE();
+  return 0;
+}
+
+static void voxind_delete(voxind_t *self) {
+  ENTER();
+  if (self) {
+	voxind_stop(self);
+	pipe_delete(&self->pipe);
+	// TODO stop thread
+  }
+}
+
+static voxind_t *voxind_create(vox_tts_id id, char *rootdir) {
   ENTER();
 
-  if (!v || !v->rootdir)
-	return false;
+  if ((id<0) || (id>=VOX_TTS_MAX) || !rootdir)
+	return NULL;
   
-  // if id == ID_NVE: rootdir unchanged and ld_library_path unset
-  if (v->id == ID_ECI) {
+  voxind_t *self = calloc(1, sizeof(*self));
+  if (!self)
+	return NULL;
+
+  self->id = id;
+  
+  const size_t max = sizeof(self->rootdir);
+  size_t len = strnlen(rootdir, max);
+  if (len+1 >= max)
+	goto exit;
+
+  strncpy(self->rootdir, rootdir, len);
+  
+  // if id == VOX_TTS_NVE: rootdir unchanged and ld_library_path unset
+  if (self->id == VOX_TTS_ECI) {
 	// the root directory is RFS32
 	// Note: eci.ini is expected to be accessible in the current
 	// working directory
 	//
-	size_t max = sizeof(v->rootdir);
-	size_t len = strnlen(v->rootdir, max);
 	if (len + strlen(RFS32) >= max)
 	  goto exit;
 	
-	strncpy(v->rootdir+len, RFS32, max-len);
+	strncpy(self->rootdir+len, RFS32, max-len);
 	
 	// LD_LIBRARY_PATH
 	// e.g if voxinRoot = "/"
 	// libraryPath = "/opt/IBM/ibmtts/lib:/opt/oralux/voxin/rfs32/lib:/opt/oralux/voxin/rfs32/usr/lib"
-	max = sizeof(v->lib);
-	len = snprintf(v->lib,
+	const size_t max = sizeof(self->lib);
+	len = snprintf(self->lib,
 				   max,
 				   "%s/%s/lib:%s" VOXIN_DIR "/rfs32/lib:%s" VOXIN_DIR "/rfs32/usr/lib",
-				   v->rootdir, IBMTTS_RO,
-				   v->rootdir, v->rootdir);
+				   self->rootdir, IBMTTS_RO,
+				   self->rootdir, self->rootdir);
 	if (len >= max) {
 	  dbg("path too long\n");
 	  goto exit;
 	}
   }
 
-  // check presence of binary 
+  // is the binary file present?
   char buf[MAXBUF];
-  size_t len = snprintf(buf, sizeof(buf), "%s/%s/%s", v->rootdir, v->dir, v->bin);
+  len = snprintf(buf, sizeof(buf), "%s/%s/%s", self->rootdir, self->dir, self->bin);
   if (len >= sizeof(buf))
 	goto exit;
   
@@ -309,194 +361,143 @@ static bool get_voxind(voxind_t *v) {
   if (fd)
 	fclose(fd);
 
-  v->present = (fd != NULL);
+  if (!fd) {
+	dbg("File not found %s", buf);
+	goto exit;
+  }
 
+  dbg("%s: dir=%s, bin=%s, rootdir=%s, lib=%s",
+	  (self->id == VOX_TTS_ECI) ? "eci" : "nve",
+	  self->dir, self->bin, self->rootdir, self->lib);
+
+  self->parent = getpid();
+
+  int err = pipe_create(&self->pipe);  
+  if (err)    
+	goto exit;
+  
+  return self;
+  
  exit:
-  if (v->present) {
-	dbg("%s: dir=%s, bin=%s, rootdir=%s, lib=%s",
-		(v->id == ID_ECI) ? "eci" : "nve",
-		v->dir, v->bin, v->rootdir, v->lib);
+  if (self) {
+	voxind_delete(self);
+	free(self);
+  }
+  return NULL;
+}
+
+void libvoxin_delete(void *handle) {
+  libvoxin_t **pself = NULL;
+  libvoxin_t *self = NULL;
+  
+  ENTER();
+
+  if (!handle)
+	return;
+
+  pself = (libvoxin_t**)handle;  
+  self = *pself;
+  
+  if (!self)
+	return;
+  
+  int i;
+  for (i=0; i<VOX_TTS_MAX; i++) {
+	voxind_delete(self->voxind[i]);
+  }
+
+  memset(self, 0, sizeof(*self));
+  free(self);
+  *pself = NULL;
+
+  LEAVE();
+}
+
+void *libvoxin_create() {
+  static bool once = false;
+  int err = 0;
+  libvoxin_t *self = NULL;
+
+  ENTER();
+
+  if (once) {
+	err = EINVAL;
+	goto exit0;
+  }
+
+  self = (libvoxin_t*)calloc(1, sizeof(libvoxin_t));
+  if (!self) {
+	err = errno;
+	goto exit0;
+  }
+
+  self->id = LIBVOXIN_ID;
+
+  err = get_root_dir(self->rootdir, sizeof(self->rootdir));
+  if (err) {
+	goto exit0;
   }
   
-  return v->present;
+  int i;
+  for (i=0; i<VOX_TTS_MAX; i++) {  
+	self->voxind[i] = voxind_create(i, self->rootdir);
+	if (self->voxind[i])
+	  voxind_start(self->voxind[i]);
+  }
+  
+ exit0:
+  if (err) {
+	libvoxin_delete(&self);
+	err("%s",strerror(err));
+  } else {
+	once = true;
+  }
+
+  LEAVE();  
+  return self;
 }
 
 
-static int daemon_start(struct libvoxin_t *the_obj) {
-  pid_t child_pid;
-  pid_t parent_pid;
-  int err = 0;
-
+int libvoxin_list_tts(void* handle, vox_tts_id *id, size_t *len) {
   ENTER();
-  
-  if (!the_obj)
+  libvoxin_t *self = (libvoxin_t *)handle;
+
+  if (!self || !len) {
+	err("LEAVE, args error(%d)",0);
 	return EINVAL;
-
-#ifdef NO_PIPE
-  the_obj->child = 0;  
-  return 0;
-#endif
-  
-  parent_pid = getpid();
-
-  err = getVoxinRootDir(voxind[ID_ECI].rootdir, sizeof(voxind[ID_ECI].rootdir));
-  if (err) {
-	return err;
   }
-  strncpy(voxind[ID_NVE].rootdir, voxind[ID_ECI].rootdir, sizeof(voxind[ID_NVE].rootdir));
 
+  if (!id) {
+	*len = 0;
+	int i;
+	for (i=0; i<VOX_TTS_MAX; i++) {
+	  if (self->voxind[i])
+		*len += 1;
+	}
+	dbg("len = %lu", (long unsigned int)*len);
+	return 0;
+  }
+
+  const size_t max = (*len<VOX_TTS_MAX) ? *len : VOX_TTS_MAX;
+  *len = 0;
   int i;
-  for (i=0; i<sizeof(voxind); i++) {  
-	if (!get_voxind(voxind))
-	  continue;
-  
-	child_pid = fork();
-	switch(child_pid) {
-	case 0:
-	  if (prctl(PR_SET_PDEATHSIG, SIGKILL) == -1) {
-		exit(errno);
-	  }
-	  if (getppid() != parent_pid) {
-		exit(0);
-	  }
-	  
-	  the_obj->_pipe_close(the_obj->pipe_command, PIPE_SOCKET_PARENT);
-	  exit(child(the_obj, voxind));
-	  
-	  break;
-	case -1:
-	  err = errno;
-	  break;
-	default:
-	  the_obj->child = child_pid;
-	  the_obj->_pipe_close(the_obj->pipe_command, PIPE_SOCKET_CHILD_INDEX);
-	  break;
+  for (i=0; i<max; i++) {
+	if (self->voxind[i]) {
+	  id[*len] = self->voxind[i]->id;
+	  *len += 1;
 	}
   }
-
-  LEAVE();
-  return err;
-}
-
-
-static int daemon_stop(struct libvoxin_t *the_obj)
-{  
-  ENTER();
-  if (!the_obj)
-	return EINVAL;
-
-  /* #ifdef NO_PIPE */
-  /* #endif */
-  if (!the_obj->child) { // TODO
-  }
   
-  LEAVE();
   return 0;
 }
 
-
-int libvoxin_create(libvoxin_handle_t *i, uint32_t with_eci)
-{
-  static int once = 0;
-  int res = 0;
-  struct libvoxin_t *the_obj = NULL;
-
-  ENTER();
-
-  if (!i || once)
-	return EINVAL;
-
-  the_obj = (struct libvoxin_t*)calloc(1, sizeof(struct libvoxin_t));
-  if (!the_obj)
-	return errno;
-
-  the_obj->with_eci = with_eci;
-#ifdef NO_PIPE
-  the_obj->_pipe_create = no_pipe_create;
-  the_obj->_pipe_delete = no_pipe_delete;
-  the_obj->_pipe_restore = no_pipe_restore;
-  the_obj->_pipe_dup2 = no_pipe_dup2;
-  the_obj->_pipe_close = no_pipe_close;
-  the_obj->_pipe_read = no_pipe_read;
-  the_obj->_pipe_write = no_pipe_write;  
-#else
-  the_obj->_pipe_create = pipe_create;
-  the_obj->_pipe_delete = pipe_delete;
-  the_obj->_pipe_restore = pipe_restore;
-  the_obj->_pipe_dup2 = pipe_dup2;
-  the_obj->_pipe_close = pipe_close;
-  the_obj->_pipe_read = pipe_read;
-  the_obj->_pipe_write = pipe_write;
-#endif
-  res = the_obj->_pipe_create(&the_obj->pipe_command);
-  
-  if (res)    
-	goto exit0;
-
-  the_obj->id = LIBVOXIN_ID;
-  res = daemon_start(the_obj);
-  if (!res) {
-	once = 1;
-	*i = the_obj;
-  }
-  
- exit0:
-  if (res) {
-	daemon_stop(the_obj);
-	the_obj->_pipe_delete(&the_obj->pipe_command);
-  }
-
-  LEAVE();
-  return res;  
-}
-
-
-int libvoxin_delete(libvoxin_handle_t *i)
-{
-  static int once = 0;
-  int res = 0;
-  struct libvoxin_t *the_obj = NULL;
-  
-  ENTER();
-
-  if (!i)
-	return EINVAL;
-
-  if (!*i)
-	return 0;
-  
-  the_obj = (struct libvoxin_t*)*i;
-  
-  if (once)
-	return 0;
-
-  res = daemon_stop(the_obj);
-  if (!res) {
-	res = the_obj->_pipe_delete(&the_obj->pipe_command);
-	if (res)    
-	  goto exit0;
-  }
-
-  if (!res) {
-	memset(the_obj, 0, sizeof(*the_obj));
-	free(the_obj);
-	*i = NULL;
-  }
-
- exit0:
-  LEAVE();
-  return res;  
-}
-
-
-int libvoxin_call_eci(libvoxin_handle_t i, struct msg_t *msg)
-{
+int libvoxin_call_eci(void* handle, struct msg_t *msg) {
   int res;
-  struct libvoxin_t *p = (struct libvoxin_t *)i;
+  libvoxin_t *self = (libvoxin_t *)handle;
   size_t allocated_msg_length;
   size_t effective_msg_length;
 
-  if (!p || !msg || (msg->id != MSG_TO_ECI_ID)) {
+  if (!self || !msg || (msg->id != MSG_TO_ECI_ID)) {
 	err("LEAVE, args error(%d)",0);
 	return EINVAL;
   }
@@ -509,17 +510,17 @@ int libvoxin_call_eci(libvoxin_handle_t i, struct msg_t *msg)
 	return EINVAL;
   }
 
-  msg->count = ++p->msg_count;
+  msg->count = ++self->msg_count;
   dbg("send msg '%s', length=%d (#%d)",msg_string((enum msg_type)(msg->func)), msg->effective_data_length, msg->count);  
   ssize_t s = effective_msg_length;
-  res = p->_pipe_write(p->pipe_command, msg, &s);
+  res = self->voxind_write(self->pipe, msg, &s);
   if (res)
 	goto exit0;
 
   effective_msg_length = allocated_msg_length;
   memset(msg, 0, MSG_HEADER_LENGTH);
   s = effective_msg_length;
-  res = p->_pipe_read(p->pipe_command, msg, &s);
+  res = self->_pipe_read(self->pipe, msg, &s);
   if (!res && (s >= 0)) {
 	effective_msg_length = (size_t)s;
 	if (!msg_string((enum msg_type)(msg->func))

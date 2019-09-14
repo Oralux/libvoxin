@@ -6,10 +6,11 @@
 
 #define LIBVOXIN_ID 0x010A0005
 
-typedef void *libvoxin_handle_t;
+typedef enum {VOX_TTS_ECI, VOX_TTS_NVE, VOX_TTS_MAX} vox_tts_id;
 
-extern int libvoxin_create(libvoxin_handle_t *i, uint32_t with_eci);
-extern int libvoxin_call_eci(libvoxin_handle_t i, struct msg_t *msg);
-extern int libvoxin_delete(libvoxin_handle_t *i);
+extern void *libvoxin_create();
+extern int libvoxin_list_tts(void *handle, vox_tts_id *id, size_t *len);
+extern int libvoxin_call_eci(void *handle, struct msg_t *msg);
+extern void libvoxin_delete(void *handle);
 
 #endif

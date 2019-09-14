@@ -43,13 +43,15 @@ struct engine_t {
 #define ALLOCATED_MSG_LENGTH PIPE_MAX_BLOCK
 
 struct api_t {
-  libvoxin_handle_t my_instance; // communication channel with voxind. my_api is fully created when my_instance is non NULL 
+  void *my_instance; // communication channel with voxind. my_api is fully created when my_instance is non NULL 
+  vox_tts_id *tts; // installed tts
+  size_t tts_len; // number of elements of the tts array
   pthread_mutex_t stop_mutex; // to process only one stop command
   pthread_mutex_t api_mutex; // to process exclusively any other command
   struct msg_t *msg; // message for voxind
 };
 
-static struct api_t my_api = {0, PTHREAD_MUTEX_INITIALIZER, PTHREAD_MUTEX_INITIALIZER, NULL};
+static struct api_t my_api = {.stop_mutex=PTHREAD_MUTEX_INITIALIZER, .api_mutex=PTHREAD_MUTEX_INITIALIZER, NULL};
 
 static vox_t vox_list[MSG_VOX_LIST_MAX];
 static int vox_list_nb;
@@ -92,7 +94,6 @@ static inote_charset_t getCharset(enum ECILanguageDialect lang)
   return charset;
 }
 
-  
 static int api_create(struct api_t *api) {
   int res = 0;
 
@@ -128,13 +129,19 @@ static int api_create(struct api_t *api) {
 	goto exit0;
   }
 
-  res = libvoxin_create(&api->my_instance, 1); // with_eci = 0 (TODO)
+  api->my_instance = libvoxin_create(&api->my_instance);
+  res = libvoxin_list_tts(api->my_instance, NULL, &api->tts_len);
+  if (!res && api->tts_len) {
+	api->tts = calloc(api->tts_len, sizeof(*api->tts));
+	if (api->tts) {
+	  res = libvoxin_list_tts(api->my_instance, api->tts, &api->tts_len);
+	}
+  }
 
  exit0:
-  if (res) {
-	err("error (%d)", res);
-	if (api->msg)
-	  free(api->msg);	
+  if ((!api->my_instance) && api->msg) {
+	free(api->msg);
+	api->msg = NULL;
   }
   {
 	int res;
