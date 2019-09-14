@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -9,6 +10,7 @@
 #include <sys/resource.h>
 #include <sys/types.h>
 #include <dirent.h>
+#include <stdbool.h>
 #include "libvoxin.h"
 #include "msg.h"
 #include "no_pipe.h"
@@ -20,9 +22,11 @@
 #define RFS32 VOXIN_DIR "/rfs32"
 // VOXIND: relative path when current working directory is RFS32
 #define VOXIND "usr/bin/voxind"
-// VOXIND_NVE: relative path when current working directory is VOXIN_DIR/bin
+// VOXIND_NVE: relative path when current working directory is VOXIN_DIR
 #define VOXIND_NVE "bin/voxind-nve"
 #define MAXBUF 4096
+
+typedef enum {ID_ECI, ID_NVE} voxind_id; // index of the voxind array
 
 typedef int (*t_pipe_create)(struct pipe_t **px);
 typedef int (*t_pipe_delete)(struct pipe_t **px);
@@ -48,7 +52,24 @@ struct libvoxin_t {
   t_pipe_write _pipe_write;
   uint32_t with_eci;
 };
-  
+
+typedef struct {
+  voxind_id id;
+  const char *dir; // directory under which the voxind binary is expected (relative to rootdir)
+  const char *bin; // path to the voxind binary (relative to rootdir/dir)
+  char rootdir[MAXBUF]; // path to the root directory, dynamically determined
+  // For example, rootdir could be "/", "/opt/oralux/voxin/rfs32",
+  // "/home/user1/.oralux/voxin/rfs",
+  // "/home/user1/.oralux/voxin/rfs/opt/oralux/voxin/rfs32"
+  char lib[MAXBUF]; // LD_LIBRARY_PATH (for eci), dynamically determined
+  bool present; // true if binary found
+} voxind_t;
+
+static voxind_t voxind[2] = {
+  {id:ID_ECI, dir:RFS32, bin:VOXIND},
+  {id:ID_NVE, dir:VOXIN_DIR, bin:VOXIND_NVE}
+};
+
 static void my_exit(struct libvoxin_t *the_obj)
 {
   struct msg_t msg;
@@ -128,13 +149,15 @@ static int fdwalk (int (*cb)(void *data, int fd), void *data)
 // then the returned dir is
 // /home/user1/.oralux/voxin/rfs
 //
-static char *getVoxinRootDir()
-{
-  char *line = NULL;
+static int getVoxinRootDir(char *dir, size_t len) {
   FILE *fd = NULL;
   char *basename = NULL;
-  int err = -1;
+  int err = EINVAL;
 
+  if (!dir || (len < MAXBUF))
+	return EINVAL;
+
+  *dir = 0;
   fd = fopen("/proc/self/maps", "r");
   if (!fd) {
 	err = errno;
@@ -142,18 +165,11 @@ static char *getVoxinRootDir()
 	goto exit0;
   }
 
-  line = (char *)calloc(1, MAXBUF);
-  if (!line) {
-	err = errno;
-	dbg("%s\n", strerror(err));
-	goto exit0;
-  }
-
   while(1) {
-	char *s = fgets(line, MAXBUF, fd);
-	char *libname=NULL;
+	char *s = fgets(dir, len, fd);
+	char *libname = NULL;
 	if (!s) {
-	  dbg("Can't read line\n");
+	  dbg("Can't read maps\n");
 	  goto exit0;
 	}
 
@@ -180,7 +196,7 @@ static char *getVoxinRootDir()
 		continue;
 	  }
 	  if (len == ref) {
-		strcpy(line,"/");
+		strcpy(dir, "/");
 	  } else {
 		s[len-ref+1] = 0;
 		basename = strchr(s, '/');
@@ -188,22 +204,18 @@ static char *getVoxinRootDir()
 		  dbg("not match (3)\n");
 		  continue;
 		}
-		bcopy(basename, line, strlen(basename)+1);
+		bcopy(basename, dir, strlen(basename)+1);
 	  }
 	  err = 0;
-	  dbg("line=%s\n", line);
+	  dbg("dir=%s\n", dir);
 	  break;
 	}	  
   }
 	
  exit0:
-  if (err && line) {
-	free(line);
-	line = NULL;
-  }
   if (fd)
 	fclose(fd);
-  return line;
+  return err;
 }
   
 
@@ -215,64 +227,13 @@ static int close_cb(void *data, int fd) {
 }
 
 
-static int child(struct libvoxin_t *the_obj)
+static int child(struct libvoxin_t *the_obj, voxind_t *v)
 {
   int res = 0;
-  char *voxinRoot = NULL;
-  char *libraryPath = NULL;
-  char *binPath = NULL;
-  char *buf = NULL;
-  int len;
 	
   ENTER();
 
-  voxinRoot = getVoxinRootDir();
-  if (!voxinRoot) {
-	goto exit;
-  }
-
-  buf = (char *)calloc(1, MAXBUF);
-  if (!buf) {
-	res = errno;
-	goto exit;
-  }
-
-  if (the_obj->with_eci) {
-	binPath = VOXIND;
-	// LD_LIBRARY_PATH
-	libraryPath = (char *)calloc(1, MAXBUF);
-	if (!libraryPath) {
-	  res = errno;
-	  goto exit;
-	}
-	len = snprintf(libraryPath,
-				   MAXBUF,
-				   "%s/%s/lib:%s" VOXIN_DIR "/rfs32/lib:%s" VOXIN_DIR "/rfs32/usr/lib",
-				   voxinRoot, IBMTTS_RO,
-				   voxinRoot, voxinRoot);
-	if (len >= MAXBUF) {
-	  dbg("path too long\n");
-	  goto exit;
-	}
-	// Change current directory to RFS32
-	// Note: eci.ini is expected to be accessible in the current
-	// working directory
-	// 
-	len = snprintf(buf, MAXBUF, "%s/%s", voxinRoot, RFS32);
-	if (len >= MAXBUF) {
-	  dbg("path too long\n");
-	  goto exit;
-	}	
-  } else {
-	binPath = VOXIND_NVE;
-	len = snprintf(buf, MAXBUF, "%s/bin", voxinRoot);
-	if (len >= MAXBUF) {
-	  dbg("path too long\n");
-	  goto exit;
-	}
-  }
-  
-  if (chdir(buf)) {
+  if (chdir(v->rootdir)) {
 	res = errno;
 	goto exit;
   }
@@ -282,13 +243,12 @@ static int child(struct libvoxin_t *the_obj)
   the_obj->_pipe_dup2(the_obj->pipe_command, PIPE_SOCKET_CHILD_INDEX, PIPE_COMMAND_FILENO);
   fdwalk (close_cb, (void*)PIPE_COMMAND_FILENO);
   
-  if (libraryPath && setenv("LD_LIBRARY_PATH", libraryPath, 1)) {
+  if (v->lib[0] && setenv("LD_LIBRARY_PATH", v->lib, 1)) {
 	res = errno;
 	goto exit;
   }
 
-  // launch voxind
-  if (execl(binPath, binPath, NULL) == -1) {
+  if (execl(v->bin, v->bin, NULL) == -1) {
 	res = errno;
   }
 
@@ -297,22 +257,75 @@ static int child(struct libvoxin_t *the_obj)
  exit:
   if (res)
 	dbg("%s\n", strerror(res));
-  if (voxinRoot)
-	free(voxinRoot);
-  if (libraryPath)
-	free(libraryPath);
-  if (buf)
-	free(buf);
+
   LEAVE();
   return res;  
 }
 
+/* get_voxind checks if the specific voxind (ec, nve) is present and
+   update the struct accordingly.
+*/
+static bool get_voxind(voxind_t *v) {
+  ENTER();
+
+  if (!v || !v->rootdir)
+	return false;
   
-static int daemon_start(struct libvoxin_t *the_obj)
-{
+  // if id == ID_NVE: rootdir unchanged and ld_library_path unset
+  if (v->id == ID_ECI) {
+	// the root directory is RFS32
+	// Note: eci.ini is expected to be accessible in the current
+	// working directory
+	//
+	size_t max = sizeof(v->rootdir);
+	size_t len = strnlen(v->rootdir, max);
+	if (len + strlen(RFS32) >= max)
+	  goto exit;
+	
+	strncpy(v->rootdir+len, RFS32, max-len);
+	
+	// LD_LIBRARY_PATH
+	// e.g if voxinRoot = "/"
+	// libraryPath = "/opt/IBM/ibmtts/lib:/opt/oralux/voxin/rfs32/lib:/opt/oralux/voxin/rfs32/usr/lib"
+	max = sizeof(v->lib);
+	len = snprintf(v->lib,
+				   max,
+				   "%s/%s/lib:%s" VOXIN_DIR "/rfs32/lib:%s" VOXIN_DIR "/rfs32/usr/lib",
+				   v->rootdir, IBMTTS_RO,
+				   v->rootdir, v->rootdir);
+	if (len >= max) {
+	  dbg("path too long\n");
+	  goto exit;
+	}
+  }
+
+  // check presence of binary 
+  char buf[MAXBUF];
+  size_t len = snprintf(buf, sizeof(buf), "%s/%s/%s", v->rootdir, v->dir, v->bin);
+  if (len >= sizeof(buf))
+	goto exit;
+  
+  FILE *fd = fopen(buf, "r");
+  if (fd)
+	fclose(fd);
+
+  v->present = (fd != NULL);
+
+ exit:
+  if (v->present) {
+	dbg("%s: dir=%s, bin=%s, rootdir=%s, lib=%s",
+		(v->id == ID_ECI) ? "eci" : "nve",
+		v->dir, v->bin, v->rootdir, v->lib);
+  }
+  
+  return v->present;
+}
+
+
+static int daemon_start(struct libvoxin_t *the_obj) {
   pid_t child_pid;
   pid_t parent_pid;
-  int res = 0;
+  int err = 0;
 
   ENTER();
   
@@ -325,31 +338,44 @@ static int daemon_start(struct libvoxin_t *the_obj)
 #endif
   
   parent_pid = getpid();
-  child_pid = fork();
-  switch(child_pid) {
-  case 0:
-	if (prctl(PR_SET_PDEATHSIG, SIGKILL) == -1) {
-	  exit(errno);
-	}
-	if (getppid() != parent_pid) {
-	  exit(0);
-	}
 
-	the_obj->_pipe_close(the_obj->pipe_command, PIPE_SOCKET_PARENT);
-	exit(child(the_obj));
-    
-	break;
-  case -1:
-	res = errno;
-	break;
-  default:
-	the_obj->child = child_pid;
-	the_obj->_pipe_close(the_obj->pipe_command, PIPE_SOCKET_CHILD_INDEX);
-	break;
+  err = getVoxinRootDir(voxind[ID_ECI].rootdir, sizeof(voxind[ID_ECI].rootdir));
+  if (err) {
+	return err;
+  }
+  strncpy(voxind[ID_NVE].rootdir, voxind[ID_ECI].rootdir, sizeof(voxind[ID_NVE].rootdir));
+
+  int i;
+  for (i=0; i<sizeof(voxind); i++) {  
+	if (!get_voxind(voxind))
+	  continue;
+  
+	child_pid = fork();
+	switch(child_pid) {
+	case 0:
+	  if (prctl(PR_SET_PDEATHSIG, SIGKILL) == -1) {
+		exit(errno);
+	  }
+	  if (getppid() != parent_pid) {
+		exit(0);
+	  }
+	  
+	  the_obj->_pipe_close(the_obj->pipe_command, PIPE_SOCKET_PARENT);
+	  exit(child(the_obj, voxind));
+	  
+	  break;
+	case -1:
+	  err = errno;
+	  break;
+	default:
+	  the_obj->child = child_pid;
+	  the_obj->_pipe_close(the_obj->pipe_command, PIPE_SOCKET_CHILD_INDEX);
+	  break;
+	}
   }
 
   LEAVE();
-  return res;
+  return err;
 }
 
 
@@ -359,8 +385,8 @@ static int daemon_stop(struct libvoxin_t *the_obj)
   if (!the_obj)
 	return EINVAL;
 
-/* #ifdef NO_PIPE */
-/* #endif */
+  /* #ifdef NO_PIPE */
+  /* #endif */
   if (!the_obj->child) { // TODO
   }
   
