@@ -16,11 +16,12 @@
 #include "debug.h"
 
 #define RFS "/opt/oralux/voxin"
+#define RFS_NVE "/opt/oralux/nve"
 
 // voxind binary path:
-// for eci (relative to rfs32/)
+// for eci (relative to RFS/rfs32/)
 #define VOXIND "usr/bin/voxind"
-// for nve (relative to RFS)
+// for nve (relative to RFS_NVE)
 #define VOXIND_NVE "bin/voxind-nve"
 
 #define MAXBUF 4096
@@ -323,19 +324,18 @@ static voxind_t *voxind_create(msg_tts_id id, char *rootdir) {
 
   self->id = id;
   
-  size_t max = sizeof(self->rfsdir);
-  size_t len = snprintf(self->rfsdir, max, "%s/%s", rootdir, RFS);
-  if (len >= max) {
-	dbg("path too long\n");
-	goto exit;
-  }
-  
-  // if id == MSG_TTS_NVE: rfsdir unchanged and ld_library_path unset
   if (self->id == MSG_TTS_ECI) {
-	// the rfs directory is rfs32/
+	// the rfs directory is RFS/rfs32/
 	// Note: eci.ini is expected to be accessible in the current
 	// working directory (under rfs32 after the chroot(rfs32))
 	//
+	size_t max = sizeof(self->rfsdir);
+	size_t len = snprintf(self->rfsdir, max, "%s/%s", rootdir, RFS);
+	if (len >= max) {
+	  dbg("path too long\n");
+	  goto exit;
+	}
+  
 	max -= len;
 	len = snprintf(self->rfsdir+len, max, "/rfs32");
 	if (len >= max) {
@@ -346,7 +346,7 @@ static voxind_t *voxind_create(msg_tts_id id, char *rootdir) {
 	// LD_LIBRARY_PATH
 	// e.g if rootdir = "/"
 	// libraryPath = "/opt/IBM/ibmtts/lib:/opt/oralux/voxin/rfs32/lib:/opt/oralux/voxin/rfs32/usr/lib"
-	size_t max = sizeof(self->ld_library_path);
+	max = sizeof(self->ld_library_path);
 	len = snprintf(self->ld_library_path, max,
 				   "%s/opt/IBM/ibmtts/lib:%s/lib:%s/usr/lib",
 				   rootdir, self->rfsdir, self->rfsdir);
@@ -357,18 +357,19 @@ static voxind_t *voxind_create(msg_tts_id id, char *rootdir) {
 
 	// binary path
 	max = sizeof(self->bin);
-	size_t len = snprintf(self->bin, max, "%s", VOXIND);
+	len = snprintf(self->bin, max, "%s", VOXIND);
 	if (len >= max) {
 	  dbg("path too long\n");
 	  goto exit;
 	}
   }  else { // MSG_TTS_NVE
-	// The rfs directory is already set to RFS.
+	// the rfs directory is RFS_NVE
+	size_t max = sizeof(self->rfsdir);
+	size_t len = snprintf(self->rfsdir, max, "%s/%s", rootdir, RFS_NVE);
 	// LD_LIBRARY_PATH is kept unset.
 	// binary path
-	// binary path
 	max = sizeof(self->bin);
-	size_t len = snprintf(self->bin, max, "%s", VOXIND_NVE);
+	len = snprintf(self->bin, max, "%s", VOXIND_NVE);
 	if (len >= max) {
 	  dbg("path too long\n");
 	  goto exit;
@@ -377,8 +378,8 @@ static voxind_t *voxind_create(msg_tts_id id, char *rootdir) {
 
   // is the binary file present?
   char buf[MAXBUF];
-  max = sizeof(buf);
-  len = snprintf(buf, sizeof(buf), "%s/%s", self->rfsdir, self->bin);
+  size_t max = sizeof(buf);
+  size_t len = snprintf(buf, sizeof(buf), "%s/%s", self->rfsdir, self->bin);
   if (len >= max) {
 	dbg("path too long\n");
 	goto exit;
