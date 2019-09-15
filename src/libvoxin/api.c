@@ -44,7 +44,7 @@ struct engine_t {
 
 struct api_t {
   void *my_instance; // communication channel with voxind. my_api is fully created when my_instance is non NULL 
-  vox_tts_id *tts; // installed tts
+  msg_tts_id *tts; // installed tts
   size_t tts_len; // number of elements of the tts array
   pthread_mutex_t stop_mutex; // to process only one stop command
   pthread_mutex_t api_mutex; // to process exclusively any other command

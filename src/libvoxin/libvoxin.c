@@ -26,7 +26,7 @@
 #define MAXBUF 4096
 
 typedef struct {
-  vox_tts_id id;
+  msg_tts_id id;
   char rootdir[MAXBUF]; // path to the root directory
   // For example, rootdir could be "/", "/opt/oralux/voxin/rfs32",
   // "/home/user1/.oralux/voxin/rfs",
@@ -43,15 +43,22 @@ typedef struct {
   uint32_t id;
   uint32_t msg_count;
   pid_t parent;
-  voxind_t *voxind[VOX_TTS_MAX];
+  voxind_t *voxind[MSG_TTS_MAX];
   uint32_t stop_required;
   char rootdir[MAXBUF]; // path to the root directory, dynamically determined
 } libvoxin_t;
 
-static voxind_t voxind_init[VOX_TTS_MAX] = {
-  {id:VOX_TTS_ECI, dir:RFS32, bin:VOXIND},
-  {id:VOX_TTS_NVE, dir:VOXIN_DIR, bin:VOXIND_NVE}
+static voxind_t voxind_init[MSG_TTS_MAX] = {
+  {id:MSG_TTS_ECI, dir:RFS32, bin:VOXIND},
+  {id:MSG_TTS_NVE, dir:VOXIN_DIR, bin:VOXIND_NVE}
 };
+
+static int voxind_read(voxind_t *self, void *buf, ssize_t *len) {
+  ENTER();
+  if (!self)
+	return 0;
+  return pipe_read(self->pipe, buf, len);
+}
 
 static int voxind_write(voxind_t *self, void *buf, ssize_t *len) {
   ENTER();
@@ -306,10 +313,10 @@ static void voxind_delete(voxind_t *self) {
   }
 }
 
-static voxind_t *voxind_create(vox_tts_id id, char *rootdir) {
+static voxind_t *voxind_create(msg_tts_id id, char *rootdir) {
   ENTER();
 
-  if ((id<0) || (id>=VOX_TTS_MAX) || !rootdir)
+  if ((id <= MSG_TTS_UNDEFINED) || (id >= MSG_TTS_MAX) || !rootdir)
 	return NULL;
   
   voxind_t *self = calloc(1, sizeof(*self));
@@ -325,8 +332,8 @@ static voxind_t *voxind_create(vox_tts_id id, char *rootdir) {
 
   strncpy(self->rootdir, rootdir, len);
   
-  // if id == VOX_TTS_NVE: rootdir unchanged and ld_library_path unset
-  if (self->id == VOX_TTS_ECI) {
+  // if id == MSG_TTS_NVE: rootdir unchanged and ld_library_path unset
+  if (self->id == MSG_TTS_ECI) {
 	// the root directory is RFS32
 	// Note: eci.ini is expected to be accessible in the current
 	// working directory
@@ -335,11 +342,12 @@ static voxind_t *voxind_create(vox_tts_id id, char *rootdir) {
 	  goto exit;
 	
 	strncpy(self->rootdir+len, RFS32, max-len);
-	
+
+
 	// LD_LIBRARY_PATH
-	// e.g if voxinRoot = "/"
+	// e.g if rootdir = "/"
 	// libraryPath = "/opt/IBM/ibmtts/lib:/opt/oralux/voxin/rfs32/lib:/opt/oralux/voxin/rfs32/usr/lib"
-	const size_t max = sizeof(self->lib);
+	size_t max = sizeof(self->lib);
 	len = snprintf(self->lib,
 				   max,
 				   "%s/%s/lib:%s" VOXIN_DIR "/rfs32/lib:%s" VOXIN_DIR "/rfs32/usr/lib",
@@ -349,6 +357,17 @@ static voxind_t *voxind_create(vox_tts_id id, char *rootdir) {
 	  dbg("path too long\n");
 	  goto exit;
 	}
+
+	len = strlen(VOXIND);
+	max = sizeof(self->bin);
+	if (len >= max)
+	  goto exit;
+	strncpy(self->bin, VOXIND, max);
+
+	
+
+  }  else { // MSG_TTS_NVE
+	// rootdir unchanget and lib unset
   }
 
   // is the binary file present?
@@ -367,7 +386,7 @@ static voxind_t *voxind_create(vox_tts_id id, char *rootdir) {
   }
 
   dbg("%s: dir=%s, bin=%s, rootdir=%s, lib=%s",
-	  (self->id == VOX_TTS_ECI) ? "eci" : "nve",
+	  (self->id == MSG_TTS_ECI) ? "eci" : "nve",
 	  self->dir, self->bin, self->rootdir, self->lib);
 
   self->parent = getpid();
@@ -386,6 +405,11 @@ static voxind_t *voxind_create(vox_tts_id id, char *rootdir) {
   return NULL;
 }
 
+static voxind_t *libvoxin_get_voxind(libvoxin_t *self, msg_tts_id id) {
+  return (!self || (id <= MSG_TTS_UNDEFINED) || (id >= MSG_TTS_MASK))
+	? NULL : self->voxind[id-1];
+}
+
 void libvoxin_delete(void *handle) {
   libvoxin_t **pself = NULL;
   libvoxin_t *self = NULL;
@@ -402,7 +426,7 @@ void libvoxin_delete(void *handle) {
 	return;
   
   int i;
-  for (i=0; i<VOX_TTS_MAX; i++) {
+  for (i=0; i<MSG_TTS_MAX; i++) {
 	voxind_delete(self->voxind[i]);
   }
 
@@ -439,8 +463,9 @@ void *libvoxin_create() {
   }
   
   int i;
-  for (i=0; i<VOX_TTS_MAX; i++) {  
-	self->voxind[i] = voxind_create(i, self->rootdir);
+  for (i=0; i<MSG_TTS_MAX; i++) {
+	// voxind[0] corresponds to MSG_TTS_ECI (=1)
+	self->voxind[i] = voxind_create(i+1, self->rootdir);
 	if (self->voxind[i])
 	  voxind_start(self->voxind[i]);
   }
@@ -458,7 +483,7 @@ void *libvoxin_create() {
 }
 
 
-int libvoxin_list_tts(void* handle, vox_tts_id *id, size_t *len) {
+int libvoxin_list_tts(void* handle, msg_tts_id *id, size_t *len) {
   ENTER();
   libvoxin_t *self = (libvoxin_t *)handle;
 
@@ -470,7 +495,7 @@ int libvoxin_list_tts(void* handle, vox_tts_id *id, size_t *len) {
   if (!id) {
 	*len = 0;
 	int i;
-	for (i=0; i<VOX_TTS_MAX; i++) {
+	for (i=0; i<MSG_TTS_MAX; i++) {
 	  if (self->voxind[i])
 		*len += 1;
 	}
@@ -478,7 +503,7 @@ int libvoxin_list_tts(void* handle, vox_tts_id *id, size_t *len) {
 	return 0;
   }
 
-  const size_t max = (*len<VOX_TTS_MAX) ? *len : VOX_TTS_MAX;
+  const size_t max = (*len<MSG_TTS_MAX) ? *len : MSG_TTS_MAX;
   *len = 0;
   int i;
   for (i=0; i<max; i++) {
@@ -497,7 +522,7 @@ int libvoxin_call_eci(void* handle, struct msg_t *msg) {
   size_t allocated_msg_length;
   size_t effective_msg_length;
 
-  if (!self || !msg || (msg->id != MSG_TO_ECI_ID)) {
+  if (!self || !msg || !MSG_TTS_ID(msg->id)) {
 	err("LEAVE, args error(%d)",0);
 	return EINVAL;
   }
@@ -510,17 +535,23 @@ int libvoxin_call_eci(void* handle, struct msg_t *msg) {
 	return EINVAL;
   }
 
+  voxind_t *v = libvoxin_get_voxind(self, MSG_TTS_ID(msg->id));
+  if (!v) {
+	err("LEAVE, args error(%d)",1);
+	return EINVAL;
+  }	
+
   msg->count = ++self->msg_count;
   dbg("send msg '%s', length=%d (#%d)",msg_string((enum msg_type)(msg->func)), msg->effective_data_length, msg->count);  
   ssize_t s = effective_msg_length;
-  res = self->voxind_write(self->pipe, msg, &s);
+  res = voxind_write(v, msg, &s);
   if (res)
 	goto exit0;
 
   effective_msg_length = allocated_msg_length;
   memset(msg, 0, MSG_HEADER_LENGTH);
   s = effective_msg_length;
-  res = self->_pipe_read(self->pipe, msg, &s);
+  res = voxind_read(v, msg, &s);
   if (!res && (s >= 0)) {
 	effective_msg_length = (size_t)s;
 	if (!msg_string((enum msg_type)(msg->func))

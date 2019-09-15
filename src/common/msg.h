@@ -4,8 +4,13 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#define MSG_TO_ECI_ID 0x100A0005
-#define MSG_TO_APP_ID 0x110A0005
+typedef enum {MSG_TTS_UNDEFINED=0, MSG_TTS_ECI, MSG_TTS_NVE, MSG_TTS_MAX} msg_tts_id;
+#define MSG_TO_APP_ID   0x110A0005
+#define MSG_TO_ECI_ID   (MSG_TO_APP_ID+(MSG_TTS_ECI<<8))
+#define MSG_TO_NVE_ID   (MSG_TO_APP_ID+(MSG_TTS_NVE<<8))
+
+#define MSG_TTS_MASK (MSG_TO_ECI_ID^MSG_TO_NVE_ID)
+#define MSG_TTS_ID(a) (((a)&MSG_TTS_MASK)>>8)
 
 enum msg_type {
   MSG_UNDEFINED,
