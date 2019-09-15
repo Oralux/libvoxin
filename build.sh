@@ -8,9 +8,9 @@ cd "$BASE"
 getVersion
 [ -z "$LIBVOXIN_VERSION_MAJOR" ] && exit 1
 
-unset ARCH CC CFLAGS CLEAN DBG_FLAGS HELP NO_PIPE RELEASE STRIP TEST WITH_DBG
+unset ARCH CC CFLAGS CLEAN DBG_FLAGS HELP RELEASE STRIP TEST WITH_DBG
 
-OPTIONS=`getopt -o cdhm:nrt --long clean,debug,help,mach:,no-pipe,release,test \
+OPTIONS=`getopt -o cdhm:rt --long clean,debug,help,mach:,release,test \
              -n "$NAME" -- "$@"`
 [ $? != 0 ] && usage && exit 1
 eval set -- "$OPTIONS"
@@ -21,7 +21,6 @@ while true; do
     -d|--debug) WITH_DBG=1; shift;;
     -h|--help) HELP=1; shift;;
     -m|--mach) ARCH=$2; shift 2;;
-    -n|--no_pipe) NO_PIPE=1; shift;;
     -r|--release) RELEASE=1; shift;;
     -t|--test) TEST=1; shift;;
     --) shift; break;;
@@ -29,9 +28,6 @@ while true; do
   esac
 done
 
-if [ -n "$NO_PIPE" ]; then
-	DBG_FLAGS="-DNO_PIPE"
-fi
 if [ -n "$WITH_DBG" ]; then
 	export DBG_FLAGS="$DBG_FLAGS -ggdb -DDEBUG"
 	export STRIP=test;

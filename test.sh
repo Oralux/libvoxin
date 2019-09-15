@@ -75,9 +75,11 @@ Options:
 Example:
 # build the testing directory
 # in $RFSDIR
- $0 -b src/list
+ $0 -b src/list.vv
+or
+ $0 -b src/list.nve
 
-# this 'list' file provides the paths to the necessary tarballs.
+# this 'list.vv' file provides the paths to the necessary tarballs.
 # For example to test English and French, these paths would be:
 #
 # /home/user1/voxin-2.0/voxin-enu-2.0/packages/all/rfs_2.0.all.txz
@@ -166,7 +168,7 @@ if [ -n "$TEST" ]; then
 #		rm /tmp/test_voxind
 	elif [ -n "$GDB_LIBVOXIN" ]; then
 #		gdb -ex 'b inote_convert_text_to_tlv' ./test$TEST
-		gdb -ex 'set follow-fork-mode child' -ex 'b child' ./test$TEST
+		gdb -ex 'set follow-fork-mode child' -ex 'b voxind_start' ./test$TEST
 	elif [ -n "$GDB_VOXIND" ]; then
 		#sudo bash -c "echo 0 > /proc/sys/kernel/yama/ptrace_scope"
 		touch /tmp/test_voxind
@@ -215,10 +217,12 @@ if [ -f "$BUILD" ]; then
 	for i in $(cat "$BUILD"); do
 		tarball=$(eval echo $i)
 		tar --exclude "libvoxin.so*" --exclude "voxind*" -C "$RFSDIR" -xf $tarball
+		tree "$RFSDIR"
 	done
 	
 	ECI="$RFSDIR"/var/opt/IBM/ibmtts/cfg/eci.ini
-	if [ -e "$ECI" ]; then
+#	if [ -e "$ECI" ]; then
+	if [ -e "$(dirname "$ECI")" ]; then
 		cat "$RFSDIR"/opt/IBM/ibmtts/etc/*.ini > "$ECI"
 		sed -i "s#=/opt/#=$RFSDIR/opt/#" "$ECI"
 	else

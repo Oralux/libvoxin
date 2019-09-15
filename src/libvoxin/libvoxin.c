@@ -15,28 +15,28 @@
 #include "msg.h"
 #include "debug.h"
 
-#define IBMTTS_RO "opt/IBM/ibmtts"
-#define IBMTTS_CFG "var/opt/IBM/ibmtts/cfg"
-#define VOXIN_DIR "/opt/oralux/voxin"
-#define RFS32 VOXIN_DIR "/rfs32"
-// VOXIND: relative path when current working directory is RFS32
+#define RFS "/opt/oralux/voxin"
+
+// voxind binary path:
+// for eci (relative to rfs32/)
 #define VOXIND "usr/bin/voxind"
-// VOXIND_NVE: relative path when current working directory is VOXIN_DIR
+// for nve (relative to RFS)
 #define VOXIND_NVE "bin/voxind-nve"
+
 #define MAXBUF 4096
 
 typedef struct {
   msg_tts_id id;
-  char rootdir[MAXBUF]; // path to the root directory
-  // For example, rootdir could be "/", "/opt/oralux/voxin/rfs32",
-  // "/home/user1/.oralux/voxin/rfs",
-  // "/home/user1/.oralux/voxin/rfs/opt/oralux/voxin/rfs32"
-  char dir[MAXBUF]; // directory under which the voxind binary is expected (relative to rootdir)
-  char bin[MAXBUF]; // path to the voxind binary (relative to rootdir/dir)
-  char lib[MAXBUF]; // LD_LIBRARY_PATH if needed by voxind
+  // rfsdir: path to the rfs directory.
+  // For example, rfsdir could be "/opt/oralux/voxin",
+  // "/opt/oralux/voxin/rfs32",
+  // "/home/user1/.oralux/voxin/rootdir/opt/oralux/voxin"
+  char rfsdir[MAXBUF];
+  char bin[MAXBUF]; // path to the voxind binary (relative to rfsdir)
+  char ld_library_path[MAXBUF]; // LD_LIBRARY_PATH if needed by voxind
   pid_t parent; // pid of the process which created voxind
   pid_t child; // pid of voxind
-  struct pipe_t *pipe; // bi-directionnal pipe between the parent and the child processes
+  struct pipe_t *pipe; // bi-directionnal pipe (between parent/child)
 } voxind_t;
 
 typedef struct {
@@ -45,13 +45,11 @@ typedef struct {
   pid_t parent;
   voxind_t *voxind[MSG_TTS_MAX];
   uint32_t stop_required;
-  char rootdir[MAXBUF]; // path to the root directory, dynamically determined
+  // rootdir: path to the root directory.
+  // For example, rootdir could be "/",
+  // "/home/user1/.oralux/voxin/rootdir"
+  char rootdir[MAXBUF];
 } libvoxin_t;
-
-static voxind_t voxind_init[MSG_TTS_MAX] = {
-  {id:MSG_TTS_ECI, dir:RFS32, bin:VOXIND},
-  {id:MSG_TTS_NVE, dir:VOXIN_DIR, bin:VOXIND_NVE}
-};
 
 static int voxind_read(voxind_t *self, void *buf, ssize_t *len) {
   ENTER();
@@ -140,10 +138,10 @@ static int fdwalk (int (*cb)(void *data, int fd), void *data) {
 
 // Return the root directory of the absolute pathname of libvoxin
 // linked to the running process.
-// For example, if the running process is linked to
-// /home/user1/.oralux/voxin/rfs/opt/oralux/voxin-2.00/lib/libvoxin.so.2.0.0
+// For example, if the running process is linked to this library:
+// /home/user1/.oralux/voxin/rootdir/opt/oralux/voxin-2.00/lib/libvoxin.so.2.0.0
 // then the returned dir is
-// /home/user1/.oralux/voxin/rfs
+// /home/user1/.oralux/voxin/rootdir
 //
 static int get_root_dir(char *dir, size_t len) {
   FILE *fd = NULL;
@@ -181,7 +179,7 @@ static int get_root_dir(char *dir, size_t len) {
 	*basename = 0;
 
 	{
-	  const char *path=VOXIN_DIR "/lib";
+	  const char *path=RFS "/lib";
 	  size_t len = strlen(s);
 	  size_t ref = strlen(path);
 	  dbg("len=%lu, ref=%lu\n", (long unsigned int)len, (long unsigned int)ref);
@@ -228,7 +226,7 @@ static int voxind_routine(voxind_t *self) {
 	
   ENTER();
 
-  if (chdir(self->rootdir)) {
+  if (chdir(self->rfsdir)) {
 	res = errno;
 	goto exit;
   }
@@ -238,7 +236,7 @@ static int voxind_routine(voxind_t *self) {
   pipe_dup2(self->pipe, PIPE_SOCKET_CHILD_INDEX, PIPE_COMMAND_FILENO);
   fdwalk (close_cb, (void*)PIPE_COMMAND_FILENO);
   
-  if (self->lib[0] && setenv("LD_LIBRARY_PATH", self->lib, 1)) {
+  if (self->ld_library_path[0] && setenv("LD_LIBRARY_PATH", self->ld_library_path, 1)) {
 	res = errno;
 	goto exit;
   }
@@ -325,56 +323,66 @@ static voxind_t *voxind_create(msg_tts_id id, char *rootdir) {
 
   self->id = id;
   
-  const size_t max = sizeof(self->rootdir);
-  size_t len = strnlen(rootdir, max);
-  if (len+1 >= max)
+  size_t max = sizeof(self->rfsdir);
+  size_t len = snprintf(self->rfsdir, max, "%s/%s", rootdir, RFS);
+  if (len >= max) {
+	dbg("path too long\n");
 	goto exit;
-
-  strncpy(self->rootdir, rootdir, len);
+  }
   
-  // if id == MSG_TTS_NVE: rootdir unchanged and ld_library_path unset
+  // if id == MSG_TTS_NVE: rfsdir unchanged and ld_library_path unset
   if (self->id == MSG_TTS_ECI) {
-	// the root directory is RFS32
+	// the rfs directory is rfs32/
 	// Note: eci.ini is expected to be accessible in the current
-	// working directory
+	// working directory (under rfs32 after the chroot(rfs32))
 	//
-	if (len + strlen(RFS32) >= max)
+	max -= len;
+	len = snprintf(self->rfsdir+len, max, "/rfs32");
+	if (len >= max) {
+	  dbg("path too long\n");
 	  goto exit;
+	}
 	
-	strncpy(self->rootdir+len, RFS32, max-len);
-
-
 	// LD_LIBRARY_PATH
 	// e.g if rootdir = "/"
 	// libraryPath = "/opt/IBM/ibmtts/lib:/opt/oralux/voxin/rfs32/lib:/opt/oralux/voxin/rfs32/usr/lib"
-	size_t max = sizeof(self->lib);
-	len = snprintf(self->lib,
-				   max,
-				   "%s/%s/lib:%s" VOXIN_DIR "/rfs32/lib:%s" VOXIN_DIR "/rfs32/usr/lib",
-				   self->rootdir, IBMTTS_RO,
-				   self->rootdir, self->rootdir);
+	size_t max = sizeof(self->ld_library_path);
+	len = snprintf(self->ld_library_path, max,
+				   "%s/opt/IBM/ibmtts/lib:%s/lib:%s/usr/lib",
+				   rootdir, self->rfsdir, self->rfsdir);
 	if (len >= max) {
 	  dbg("path too long\n");
 	  goto exit;
 	}
 
-	len = strlen(VOXIND);
+	// binary path
 	max = sizeof(self->bin);
-	if (len >= max)
+	size_t len = snprintf(self->bin, max, "%s", VOXIND);
+	if (len >= max) {
+	  dbg("path too long\n");
 	  goto exit;
-	strncpy(self->bin, VOXIND, max);
-
-	
-
+	}
   }  else { // MSG_TTS_NVE
-	// rootdir unchanget and lib unset
+	// The rfs directory is already set to RFS.
+	// LD_LIBRARY_PATH is kept unset.
+	// binary path
+	// binary path
+	max = sizeof(self->bin);
+	size_t len = snprintf(self->bin, max, "%s", VOXIND_NVE);
+	if (len >= max) {
+	  dbg("path too long\n");
+	  goto exit;
+	}
   }
 
   // is the binary file present?
   char buf[MAXBUF];
-  len = snprintf(buf, sizeof(buf), "%s/%s/%s", self->rootdir, self->dir, self->bin);
-  if (len >= sizeof(buf))
+  max = sizeof(buf);
+  len = snprintf(buf, sizeof(buf), "%s/%s", self->rfsdir, self->bin);
+  if (len >= max) {
+	dbg("path too long\n");
 	goto exit;
+  }
   
   FILE *fd = fopen(buf, "r");
   if (fd)
@@ -385,9 +393,9 @@ static voxind_t *voxind_create(msg_tts_id id, char *rootdir) {
 	goto exit;
   }
 
-  dbg("%s: dir=%s, bin=%s, rootdir=%s, lib=%s",
+  dbg("%s: rfsdir=%s, bin=%s, ld_library_path=%s",
 	  (self->id == MSG_TTS_ECI) ? "eci" : "nve",
-	  self->dir, self->bin, self->rootdir, self->lib);
+	  self->rfsdir, self->bin, self->ld_library_path);
 
   self->parent = getpid();
 

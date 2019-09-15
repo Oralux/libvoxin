@@ -1,4 +1,4 @@
-BIN := msg.o pipe.o no_pipe.o debug.o
+BIN := msg.o pipe.o debug.o
 
 #CFLAGS += -ggdb -DDEBUG -fPIC -I. -I../api
 CFLAGS += -fPIC -I. -I../api
