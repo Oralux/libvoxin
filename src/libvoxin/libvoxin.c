@@ -226,7 +226,9 @@ static int voxind_routine(voxind_t *self) {
   int res = 0;
 	
   ENTER();
-
+  if (self && self->ld_library_path) 
+	dbg("LD_LIBRARY_PATH: %s", self->ld_library_path);
+  
   if (chdir(self->rfsdir)) {
 	res = errno;
 	goto exit;
@@ -539,7 +541,7 @@ int libvoxin_call_eci(void* handle, struct msg_t *msg) {
   allocated_msg_length = MSG_HEADER_LENGTH + msg->allocated_data_length;
   effective_msg_length = MSG_HEADER_LENGTH + msg->effective_data_length;
 
-  if ((effective_msg_length > allocated_msg_length) || !msg_string((enum msg_type)msg->func)){
+  if ((effective_msg_length > allocated_msg_length) || !msg_string((enum msg_type)msg->func)) {
 	err("LEAVE, args error(%d)",1);
 	return EINVAL;
   }
@@ -551,7 +553,9 @@ int libvoxin_call_eci(void* handle, struct msg_t *msg) {
   }	
 
   msg->count = ++self->msg_count;
-  dbg("send msg '%s', length=%d (#%d)",msg_string((enum msg_type)(msg->func)), msg->effective_data_length, msg->count);  
+  dbg("[To %s] send msg '%s', length=%d (#%d)",
+	  msg_tts_id_string(v->id),
+	  msg_string((enum msg_type)(msg->func)), msg->effective_data_length, msg->count);  
   ssize_t s = effective_msg_length;
   res = voxind_write(v, msg, &s);
   if (res)

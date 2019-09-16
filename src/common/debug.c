@@ -1,3 +1,8 @@
+// syscall
+#define _GNU_SOURCE         /* See feature_test_macros(7) */
+#include <unistd.h>
+#include <sys/syscall.h>   /* For SYS_xxx definitions */
+//
 #include <stdlib.h>
 #include "debug.h"
 #include <string.h>
@@ -13,6 +18,10 @@ static enum libvoxinDebugLevel myDebugLevel = LV_ERROR_LEVEL;
 FILE *libvoxinDebugText = NULL;
 static size_t debugTextCount = 0; // number of bytes written to libvoxinDebugText
 static int checkEnableCount = 0;
+
+unsigned long dbg_gettid() {
+  return syscall(SYS_gettid);  
+}
 
 static int createDebugFile(const char *filename, FILE **fdi) {
   FILE *fd = NULL;
@@ -95,8 +104,10 @@ static void DebugFileInit()
       myDebugLevel = i;
   }
   fclose(fd);
-  
-  if (snprintf(filename, MAX_FILENAME, LIBVOXINLOG, getpid()) >= MAX_FILENAME)
+
+  unsigned long int tid = syscall(SYS_gettid);
+  //  if (snprintf(filename, MAX_FILENAME, LIBVOXINLOG, getpid()) >= MAX_FILENAME)
+  if (snprintf(filename, MAX_FILENAME, LIBVOXINLOG, tid) >= MAX_FILENAME)
 	return;
   
   if (createDebugFile(filename, &libvoxinDebugFile))

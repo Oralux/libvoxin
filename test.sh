@@ -78,6 +78,8 @@ Example:
  $0 -b src/list.vv
 or
  $0 -b src/list.nve
+or
+ $0 -b src/list.vv -b src/list.nve
 
 # this 'list.vv' file provides the paths to the necessary tarballs.
 # For example to test English and French, these paths would be:
@@ -114,7 +116,7 @@ eval set -- "$OPTIONS"
 while true; do
   case "$1" in
     -h|--help) HELP=1; shift;;
-    -b|--build) BUILD=$2; shift;;
+    -b|--build) BUILD="$BUILD $2"; shift 2;;
     -c|--delete) CLEAN=1; shift;;
     -f|--freq) FREQ=22050; shift;;
     -g|--gdb) GDB_LIBVOXIN=1; shift;;
@@ -202,7 +204,7 @@ if [ -n "$TEST" ]; then
 fi
 
 # BUILD
-if [ -f "$BUILD" ]; then
+if [ -n "$BUILD" ]; then
 	#[ ! -d "$RFSDIR" ] && mkdir -p "$RFSDIR"
 	rm -rf "$RFSDIR"
 	mkdir -p "$RFSDIR" 
@@ -210,14 +212,14 @@ if [ -f "$BUILD" ]; then
 	touch $HOME/libvoxin.ok $HOME/libinote.ok
 	rsync -av --delete "$ARCHDIR"/rfs/ "$RFSDIR"
 
-	if [ -n "$BUILD" ]; then
-		t=$(readlink -e "$BUILD") || leave "Error: the list file does not exist (-b $BUILD)" 1
-		BUILD=$t
-	fi
-	for i in $(cat "$BUILD"); do
-		tarball=$(eval echo $i)
-		tar --exclude "libvoxin.so*" --exclude "voxind*" -C "$RFSDIR" -xf $tarball
-		tree "$RFSDIR"
+	for LIST in $BUILD; do
+		t=$(readlink -e "$LIST") || leave "Error: the list file does not exist (-b $LIST)" 1
+		LIST=$t
+		for i in $(cat "$LIST"); do
+			tarball=$(eval echo $i)
+			tar --exclude "libvoxin.so*" --exclude "voxind*" -C "$RFSDIR" -xf $tarball
+			tree "$RFSDIR"
+		done
 	done
 	
 	ECI="$RFSDIR"/var/opt/IBM/ibmtts/cfg/eci.ini

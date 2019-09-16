@@ -11,6 +11,7 @@ typedef enum {MSG_TTS_UNDEFINED=0, MSG_TTS_ECI, MSG_TTS_NVE, MSG_TTS_MAX} msg_tt
 
 #define MSG_TTS_MASK (MSG_TO_ECI_ID^MSG_TO_NVE_ID)
 #define MSG_TTS_ID(a) (((a)&MSG_TTS_MASK)>>8)
+const char *msg_tts_id_string(msg_tts_id id);
 
 enum msg_type {
   MSG_UNDEFINED,

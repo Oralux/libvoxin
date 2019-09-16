@@ -54,3 +54,12 @@ const char *msg_string(enum msg_type m)
   return ((m>=0) && (m<MSG_MAX)) ? msg[m] : NULL;  
 }
 
+static char *msg_tts_id_str[] = {"undefined", "eci", "nve", "max"};
+
+const char *msg_tts_id_string(msg_tts_id id) {
+  if (id > MSG_TTS_MAX)
+	id = MSG_TTS_MAX;
+  if (id < MSG_TTS_UNDEFINED)
+	id = MSG_TTS_UNDEFINED;
+  return msg_tts_id_str[id];
+}
