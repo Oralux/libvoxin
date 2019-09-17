@@ -161,7 +161,7 @@ static int api_create(struct api_t *api) {
 
 static int msg_set_header(struct msg_t *msg, msg_tts_id id, uint32_t func, uint32_t engine_handle)
 {
-  if (!msg) {
+  if (!msg || !MSG_CHECK(id)) {
 	err("LEAVE, args error");
 	return EINVAL;
   }
@@ -872,8 +872,7 @@ Boolean eciStop(ECIHand hEngine)
 int eciGetAvailableLanguages(enum ECILanguageDialect *aLanguages, int *nLanguages)
 {
   int eci_res = ECI_PARAMETERERROR;
-  struct msg_t header;
-  struct api_t *api = &my_api;
+  int max = 0;
    
   dbg("ENTER(%p,%p)", aLanguages, nLanguages);  
 
@@ -882,22 +881,26 @@ int eciGetAvailableLanguages(enum ECILanguageDialect *aLanguages, int *nLanguage
 	return eci_res;
   }
 
-  msg_set_header(&header, MSG_DST(api->tts[0]), MSG_GET_AVAILABLE_LANGUAGES, 0); // TODO
-  if (!process_func1(api, &header, NULL, &eci_res, false, true)) {
-	struct msg_get_available_languages_t *lang = (struct msg_get_available_languages_t *)api->msg->data;
-	msg("nb lang=%d", lang->nb);
-	if (lang->nb <= MSG_LANG_INFO_MAX) {
-	  int i;
-	  eci_res =  0;
-	  *nLanguages = lang->nb;
-	  for (i=0; i<lang->nb; i++) {
-		aLanguages[i] = (enum ECILanguageDialect)(lang->languages[i]);
-		msg("lang[%d]=0x%x", i, aLanguages[i]);
-	  }
-	}	
-	api_unlock(api);	
+  max = *nLanguages;
+  if (!vox_list_nb) {
+	if (voxGetVoices(NULL, (unsigned int*)nLanguages))
+	  return ECI_PARAMETERERROR;
   }
-  return eci_res;
+  if (!vox_list_nb) {
+	return ECI_PARAMETERERROR;
+  }
+  if (!aLanguages) {
+	*nLanguages = vox_list_nb;
+	return 0;
+  }
+
+  *nLanguages = (vox_list_nb <= max) ? vox_list_nb : max;	
+  int i;
+  for (i=0; i < *nLanguages; i++) {
+	aLanguages[i] = vox_list[i].id;
+  }
+  
+  return 0;
 }
 
 
@@ -909,8 +912,27 @@ ECIHand eciNewEx(enum ECILanguageDialect Value)
   struct api_t *api = &my_api;
  
   dbg("ENTER(%d)", Value);
-	
-  if (msg_set_header(&header, MSG_DST(api->tts[0]), MSG_NEW_EX, 0))
+
+
+  if (!vox_list_nb) {
+	unsigned int n;
+	if (voxGetVoices(NULL, &n))
+	  return NULL;
+  }
+  if (!vox_list_nb) {
+	return NULL;
+  }
+  int i,j;
+  for (i=0, j=-1; i < vox_list_nb; i++) {
+	if (vox_list[i].id == Value) {
+	  j = i;
+	  break;
+	}
+  }
+  if (j == -1)
+	return NULL;
+    
+  if (msg_set_header(&header, MSG_DST(vox_list[j].tts_id), MSG_NEW_EX, 0))
 	return NULL;
 
   header.args.ne.Value = Value;
@@ -1405,6 +1427,8 @@ static int ttsGetVoices(msg_tts_id id, vox_t *list, unsigned int *nbVoices) {
 	strncpy(list[i].quality, data->voices[i].quality, MSG_VOX_STR_MAX);
 	list[i].quality[MSG_VOX_STR_MAX-1] = 0;
 		  
+	list[i].tts_id = data->voices[i].tts_id;
+
 	//		  msg("data[%d]=id=0x%x, name=%s, lang=%s, variant=%s, charset=%s", i, data->voices[i].id, data->voices[i].name, data->voices[i].lang, data->voices[i].variant, data->voices[i].charset);
 	dbg("vox[%d]=id=0x%x, name=%s, lang=%s, variant=%s, charset=%s", i, list[i].id, list[i].name, list[i].lang, list[i].variant, list[i].charset);
   }
@@ -1430,7 +1454,7 @@ int voxGetVoices(vox_t *list, unsigned int *nbVoices) {
 	int i;
 	for (i=0; i<api->tts_len; i++) {
 	  unsigned int n = MSG_VOX_LIST_MAX - vox_list_nb;
-	  ttsGetVoices(api->tts[i], vox_list, &n);
+	  ttsGetVoices(api->tts[i], vox_list+vox_list_nb, &n);
 	  vox_list_nb += n;
 	}
 	api_unlock(api);	

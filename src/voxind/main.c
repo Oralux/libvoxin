@@ -434,10 +434,10 @@ static int unserialize(struct msg_t *msg, size_t *msg_length)
     break;
 
   case MSG_NEW_EX:
-	if (*engines) {
-	  err("error: max number of engines allocated");	  
-	  return 0; // only one engine at the moment
-	}
+	/* if (*engines) { */
+	/*   err("error: max number of engines allocated");	   */
+	/*   return 0; // only one engine at the moment */
+	/* } */
 	*engines = engine_create(eciNewEx(msg->args.ne.Value));
 	engine_index = *engines ? ENGINE_INDEX : 0;
     msg->res = engine_index;
@@ -545,6 +545,7 @@ static int unserialize(struct msg_t *msg, size_t *msg_length)
 		  data->nb++;
 
 		  vox->id = eci->langID;		  
+		  vox->tts_id = MSG_TTS_ECI;		  
 
 		  strncpy(vox->name, eci->name, MSG_VOX_STR_MAX);
 		  vox->name[MSG_VOX_STR_MAX-1] = 0;

@@ -30,6 +30,7 @@ typedef struct {
   voxAge age;
   char multilang[VOX_STR_MAX]; // optional, e.g. "en,fr"
   char quality[VOX_STR_MAX]; // optional, e.g. "embedded-compact"
+  uint32_t tts_id;
 } vox_t;
 
 // voxGetVoices returns the list of available languages.

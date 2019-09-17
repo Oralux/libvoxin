@@ -88,6 +88,7 @@ struct msg_vox_t {
   uint32_t age;
   char multilang[MSG_VOX_STR_MAX];
   char quality[MSG_VOX_STR_MAX];
+  uint32_t tts_id;
 } __attribute__ ((packed));
 
 #define MSG_VOX_LIST_MAX 30
