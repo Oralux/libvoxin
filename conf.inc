@@ -118,8 +118,8 @@ getLibinote() {
 		[ ! -d libinote-$version ] && tar -zxf "$archivep" || true
 	fi	
 	##
-
-	unlink current || true
+	
+	unlink current 2>/dev/null || true
 	if [ -n "$dev" ]; then
 		dir=libinote-master
 	else

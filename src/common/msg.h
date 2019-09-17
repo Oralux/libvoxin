@@ -10,8 +10,15 @@ typedef enum {MSG_TTS_UNDEFINED=0, MSG_TTS_ECI, MSG_TTS_NVE, MSG_TTS_MAX} msg_tt
 #define MSG_TO_NVE_ID   (MSG_TO_APP_ID+(MSG_TTS_NVE<<8))
 
 #define MSG_TTS_MASK (MSG_TO_ECI_ID^MSG_TO_NVE_ID)
-#define MSG_TTS_ID(a) (((a)&MSG_TTS_MASK)>>8)
+// MSG_TTS converts a destination to its enum msg_tts_id
+// For example, converts MSG_TO_ECI_ID to MSG_TTS_ECI
+
+#define MSG_TTS(a) (((a)&MSG_TTS_MASK)>>8)
+#define MSG_CHECK(a) ((MSG_TTS(a) >= 0) && (MSG_TTS(a) <= MSG_TTS_MAX))
 const char *msg_tts_id_string(msg_tts_id id);
+
+// MSG_DST converts for example MSG_TTS_ECI to MSG_TO_ECI_ID, its message destination id
+#define MSG_DST(a)  (MSG_TO_APP_ID+((a)<<8))
 
 enum msg_type {
   MSG_UNDEFINED,

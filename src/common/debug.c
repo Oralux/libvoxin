@@ -19,7 +19,7 @@ FILE *libvoxinDebugText = NULL;
 static size_t debugTextCount = 0; // number of bytes written to libvoxinDebugText
 static int checkEnableCount = 0;
 
-unsigned long dbg_gettid() {
+unsigned long libvoxinDebugGetTid() {
   return syscall(SYS_gettid);  
 }
 
@@ -105,15 +105,13 @@ static void DebugFileInit()
   }
   fclose(fd);
 
-  unsigned long int tid = syscall(SYS_gettid);
-  //  if (snprintf(filename, MAX_FILENAME, LIBVOXINLOG, getpid()) >= MAX_FILENAME)
-  if (snprintf(filename, MAX_FILENAME, LIBVOXINLOG, tid) >= MAX_FILENAME)
+  if (snprintf(filename, MAX_FILENAME, LIBVOXINLOG, libvoxinDebugGetTid()) >= MAX_FILENAME)
 	return;
   
   if (createDebugFile(filename, &libvoxinDebugFile))
 	return;
   
-  if (snprintf(filename, MAX_FILENAME, LIBVOXINLOG ".txt", getpid()) >= MAX_FILENAME)
+  if (snprintf(filename, MAX_FILENAME, LIBVOXINLOG ".txt", libvoxinDebugGetTid()) >= MAX_FILENAME)
 	return;
   
   debugTextCount = 0;

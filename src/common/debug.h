@@ -9,18 +9,16 @@ extern "C" {
 #include <stdio.h>
 #include "msg.h"
 
-  
+
   // log enabled if this file exits under $HOME
 #define ENABLE_LOG "libvoxin.ok"
 
   // log level; first byte equals to a digit in DebugLevel (default 
-#define LIBVOXINLOG "/tmp/libvoxin.log.%d"
-
-  extern unsigned long dbg_gettid();
+#define LIBVOXINLOG "/tmp/libvoxin.log.%lu"
 
   enum libvoxinDebugLevel {LV_ERROR_LEVEL=0, LV_INFO_LEVEL=1, LV_DEBUG_LEVEL=2, LV_LOG_DEFAULT=LV_ERROR_LEVEL};
 
-#define log(level,fmt,...) if (libvoxinDebugEnabled(level)) {libvoxinDebugDisplayTime(); fprintf (libvoxinDebugFile, "[%lu] %s: " fmt "\n", dbg_gettid(), __func__, ##__VA_ARGS__);}
+#define log(level,fmt,...) if (libvoxinDebugEnabled(level)) {libvoxinDebugDisplayTime(); fprintf (libvoxinDebugFile, "%s: " fmt "\n", __func__, ##__VA_ARGS__);}
 #define log_bytes(level,label,bytes) if (libvoxinDebugEnabled(level) && label && bytes && bytes->b) { \
   libvoxinDebugDisplayTime(); \
   fprintf (libvoxinDebugFile, "%s: %s", __func__, label); /* unbuffered fprintf */ \
@@ -40,6 +38,7 @@ extern "C" {
   // BUILD_BUG_ON, linux kernel).
 #define BUILD_ASSERT(condition) ((void)sizeof(char[(condition)?1:-1]))
 
+  extern unsigned long libvoxinDebugGetTid();
   extern int libvoxinDebugEnabled(enum libvoxinDebugLevel level);
   extern void libvoxinDebugDisplayTime();
   extern size_t libvoxinDebugTextWrite(const char *text, size_t len);

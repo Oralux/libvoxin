@@ -170,7 +170,8 @@ if [ -n "$TEST" ]; then
 #		rm /tmp/test_voxind
 	elif [ -n "$GDB_LIBVOXIN" ]; then
 #		gdb -ex 'b inote_convert_text_to_tlv' ./test$TEST
-		gdb -ex 'set follow-fork-mode child' -ex 'b voxind_start' ./test$TEST
+#		gdb -ex 'set follow-fork-mode child' -ex 'b voxind_start' ./test$TEST
+		gdb -ex 'set follow-fork-mode parent' -ex 'b voxind_start' ./test$TEST
 	elif [ -n "$GDB_VOXIND" ]; then
 		#sudo bash -c "echo 0 > /proc/sys/kernel/yama/ptrace_scope"
 		touch /tmp/test_voxind

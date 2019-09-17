@@ -522,9 +522,12 @@ static int unserialize(struct msg_t *msg, size_t *msg_length)
     BUILD_ASSERT(MSG_HEADER_LENGTH + sizeof(struct msg_vox_get_voices_t) <= PIPE_MAX_BLOCK);
     nb = MSG_VOX_LIST_MAX;
 	data->nb = 0;
+    msg->res = eciGetAvailableLanguages(NULL, &nb);
+	memset(languages, 0, sizeof(languages));
+	if (nb >= MSG_VOX_LIST_MAX)
+	  nb = MSG_VOX_LIST_MAX;
     msg->res = eciGetAvailableLanguages(languages, &nb);
 
-	memset(languages, 0, sizeof(languages));
     dbg("nb=%d, msg->res=%d", nb, msg->res);
 	
 	if (!msg->res && nb) {

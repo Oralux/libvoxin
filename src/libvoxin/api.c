@@ -20,11 +20,12 @@
 
   
 #define MAX_LANG 2 // RFU
-  
+
 struct engine_t {
   uint32_t id; // structure identifier
   struct api_t *api; // parent api
-  uint32_t handle; // eci handle
+  uint32_t handle; // tts handle
+  msg_tts_id tts_id;
   void *cb; // user callback
   void *data_cb; // user data callback
   int16_t *samples; // user samples buffer
@@ -44,7 +45,7 @@ struct engine_t {
 
 struct api_t {
   void *my_instance; // communication channel with voxind. my_api is fully created when my_instance is non NULL 
-  msg_tts_id *tts; // installed tts
+  msg_tts_id tts[MSG_TTS_MAX]; // installed tts
   size_t tts_len; // number of elements of the tts array
   pthread_mutex_t stop_mutex; // to process only one stop command
   pthread_mutex_t api_mutex; // to process exclusively any other command
@@ -132,12 +133,11 @@ static int api_create(struct api_t *api) {
   api->my_instance = libvoxin_create(&api->my_instance);
   res = libvoxin_list_tts(api->my_instance, NULL, &api->tts_len);
   if (!res && api->tts_len) {
-	api->tts = calloc(api->tts_len, sizeof(*api->tts));
 	if (api->tts) {
 	  res = libvoxin_list_tts(api->my_instance, api->tts, &api->tts_len);
 	}
   }
-
+  
  exit0:
   if ((!api->my_instance) && api->msg) {
 	free(api->msg);
@@ -159,7 +159,7 @@ static int api_create(struct api_t *api) {
 }
 
 
-static int msg_set_header(struct msg_t *msg, uint32_t func, uint32_t engine_handle)
+static int msg_set_header(struct msg_t *msg, msg_tts_id id, uint32_t func, uint32_t engine_handle)
 {
   if (!msg) {
 	err("LEAVE, args error");
@@ -167,7 +167,7 @@ static int msg_set_header(struct msg_t *msg, uint32_t func, uint32_t engine_hand
   }
 
   memset(msg, 0, MSG_HEADER_LENGTH);
-  msg->id = MSG_TO_ECI_ID;
+  msg->id = id;
   msg->func = func;
   msg->engine = engine_handle;
   return 0;  
@@ -310,7 +310,7 @@ static void engine_init_buffers(struct engine_t *self) {
   }
 }
   
-static struct engine_t *engine_create(uint32_t handle, struct api_t *api)
+static struct engine_t *engine_create(uint32_t handle, struct api_t *api, msg_tts_id tts_id)
 {
   struct engine_t *self = NULL;
   
@@ -321,6 +321,7 @@ static struct engine_t *engine_create(uint32_t handle, struct api_t *api)
 	self->id = ENGINE_ID;
 	self->handle = handle;
 	self->api = api;
+	self->tts_id = tts_id;
 	self->inote = inote_create();
 	engine_init_buffers(self);
 	// TODO: state init (expectetd languages/annotation)
@@ -369,7 +370,7 @@ static int getCurrentLanguage(struct engine_t *engine)
   if (!engine)
 	return 0;
 
-  msg_set_header(&header, MSG_GET_PARAM, engine->handle);
+  msg_set_header(&header, MSG_DST(engine->tts_id), MSG_GET_PARAM, engine->handle);
   header.args.gp.Param = eciLanguageDialect;
   res = process_func1(engine->api, &header, NULL, &eci_res, false, false);
   if (!res) {
@@ -387,12 +388,12 @@ ECIHand eciNew(void)
  
   ENTER();
 
-  if (msg_set_header(&header, MSG_NEW, 0))
+  if (msg_set_header(&header, MSG_DST(api->tts[0]), MSG_NEW, 0))
 	return NULL;
 
   if (!process_func1(api, &header, NULL, &eci_res, false, true)) {
 	if (eci_res != 0) {
-	  engine = engine_create(eci_res, api);
+	  engine = engine_create(eci_res, api, api->tts[0]);
 	}
     
 	eci_res = getCurrentLanguage(engine);
@@ -418,7 +419,7 @@ Boolean eciSetOutputBuffer(ECIHand hEngine, int iSize, short *psBuffer)
 	return eci_res;
   }
 
-  if (msg_set_header(&header, MSG_SET_OUTPUT_BUFFER, engine->handle))
+  if (msg_set_header(&header, MSG_DST(engine->tts_id), MSG_SET_OUTPUT_BUFFER, engine->handle))
 	goto exit0;
   
   header.args.sob.nb_samples = iSize;
@@ -453,7 +454,7 @@ Boolean eciSetOutputFilename(ECIHand hEngine, const void *pFilename)
 	return ECIFalse;
   }
 
-  msg_set_header(&header, MSG_SET_OUTPUT_FILENAME, engine->handle);
+  msg_set_header(&header, MSG_DST(engine->tts_id), MSG_SET_OUTPUT_FILENAME, engine->handle);
   process_func1(engine->api, &header, &bytes, &eci_res, true, true);
   return eci_res;
 }
@@ -600,7 +601,7 @@ Boolean eciAddText(ECIHand hEngine, ECIInputText pText)
 	t0 = t - text_left;
 
 	if (loop && engine->tlv_message.length) {
-	  msg_set_header(&header, MSG_ADD_TLV, engine->handle);
+	  msg_set_header(&header, MSG_DST(engine->tts_id), MSG_ADD_TLV, engine->handle);
 	  struct msg_bytes_t bytes;
 	  bytes.b = engine->tlv_message.buffer;
 	  bytes.len = engine->tlv_message.length;
@@ -632,7 +633,7 @@ Boolean eciSynthesize(ECIHand hEngine)
 	return ECIFalse;
   }
 
-  msg_set_header(&header, MSG_SYNTHESIZE, engine->handle);
+  msg_set_header(&header, MSG_DST(engine->tts_id), MSG_SYNTHESIZE, engine->handle);
   process_func1(engine->api, &header, NULL, &eci_res, true, true);
   return eci_res;
 }
@@ -663,7 +664,7 @@ static Boolean synchronize(struct engine_t *engine, enum msg_type type)
   
   m = api->msg;
   c = m->count;
-  msg_set_header(m, type, engine->handle);
+  msg_set_header(m, MSG_DST(engine->tts_id), type, engine->handle);
   m->count = c;
   m->allocated_data_length = ALLOCATED_MSG_LENGTH;
   res = libvoxin_call_eci(api->my_instance, m);
@@ -773,7 +774,7 @@ ECIHand eciDelete(ECIHand hEngine)
   if (api_lock(api))
 	return handle;
 
-  msg_set_header(&header, MSG_DELETE, engine->handle);
+  msg_set_header(&header, MSG_DST(engine->tts_id), MSG_DELETE, engine->handle);
   if (!process_func1(engine->api, &header, NULL, (int*)&eci_res, false, false)) {
 	if (eci_res == NULL_ECI_HAND) {
 	  engine_delete(engine);
@@ -799,7 +800,7 @@ void eciRegisterCallback(ECIHand hEngine, ECICallback Callback, void *pData)
 	return;
   }
 
-  msg_set_header(&header, MSG_REGISTER_CALLBACK, engine->handle);
+  msg_set_header(&header, MSG_DST(engine->tts_id), MSG_REGISTER_CALLBACK, engine->handle);
   header.args.rc.Callback = !!Callback;
 
   if (!process_func1(engine->api, &header, NULL, NULL, 0, 1)) {
@@ -855,7 +856,7 @@ Boolean eciStop(ECIHand hEngine)
 
   engine->stop_required = 1;
 
-  msg_set_header(&header, MSG_STOP, engine->handle);
+  msg_set_header(&header, MSG_DST(engine->tts_id), MSG_STOP, engine->handle);
   process_func1(engine->api, &header, NULL, &eci_res, true, true);
 
   engine->stop_required = 0;
@@ -881,7 +882,7 @@ int eciGetAvailableLanguages(enum ECILanguageDialect *aLanguages, int *nLanguage
 	return eci_res;
   }
 
-  msg_set_header(&header, MSG_GET_AVAILABLE_LANGUAGES, 0);
+  msg_set_header(&header, MSG_DST(api->tts[0]), MSG_GET_AVAILABLE_LANGUAGES, 0); // TODO
   if (!process_func1(api, &header, NULL, &eci_res, false, true)) {
 	struct msg_get_available_languages_t *lang = (struct msg_get_available_languages_t *)api->msg->data;
 	msg("nb lang=%d", lang->nb);
@@ -909,14 +910,14 @@ ECIHand eciNewEx(enum ECILanguageDialect Value)
  
   dbg("ENTER(%d)", Value);
 	
-  if (msg_set_header(&header, MSG_NEW_EX, 0))
+  if (msg_set_header(&header, MSG_DST(api->tts[0]), MSG_NEW_EX, 0))
 	return NULL;
 
   header.args.ne.Value = Value;
 
   if (!process_func1(api, &header, NULL, &eci_res, false, true)) {
 	if (eci_res != 0) {
-	  engine = engine_create(eci_res, api);
+	  engine = engine_create(eci_res, api, api->tts[0]);
 	  engine->to_charset = getCharset(Value);
 	}
 	api_unlock(api);
@@ -940,7 +941,7 @@ int eciSetParam(ECIHand hEngine, enum ECIParam Param, int iValue)
 	return eci_res;
   }
 
-  msg_set_header(&header, MSG_SET_PARAM, engine->handle);
+  msg_set_header(&header, MSG_DST(engine->tts_id), MSG_SET_PARAM, engine->handle);
   header.args.sp.Param = Param;
   header.args.sp.iValue = iValue;
   if (!process_func1(engine->api, &header, NULL, &eci_res, false, true)) {
@@ -960,7 +961,7 @@ int eciSetDefaultParam(enum ECIParam parameter, int value)
    
   dbg("ENTER(%d,%d)", parameter, value);  
 
-  msg_set_header(&header, MSG_SET_DEFAULT_PARAM, 0);
+  msg_set_header(&header, MSG_DST(api->tts[0]), MSG_SET_DEFAULT_PARAM, 0); // TODO
   header.args.sp.Param = parameter;
   header.args.sp.iValue = value;
   process_func1(api, &header, NULL, &eci_res, true, true);
@@ -980,7 +981,7 @@ int eciGetParam(ECIHand hEngine, enum ECIParam Param)
 	return eci_res;
   }
 
-  msg_set_header(&header, MSG_GET_PARAM, engine->handle);
+  msg_set_header(&header, MSG_DST(engine->tts_id), MSG_GET_PARAM, engine->handle);
   header.args.gp.Param = Param;
   process_func1(engine->api, &header, NULL, &eci_res, true, true);
   return eci_res;  
@@ -994,7 +995,7 @@ int eciGetDefaultParam(enum ECIParam parameter)
    
   dbg("ENTER(%d)", parameter);  
 
-  msg_set_header(&header, MSG_GET_DEFAULT_PARAM, 0);
+  msg_set_header(&header, MSG_DST(api->tts[0]), MSG_GET_DEFAULT_PARAM, 0); // TODO
   header.args.gp.Param = parameter;
   process_func1(api, &header, NULL, &eci_res, true, true);
 
@@ -1024,7 +1025,7 @@ void eciErrorMessage(ECIHand hEngine, void *buffer)
   }
 
   api = engine->api;
-  msg_set_header(&header, MSG_ERROR_MESSAGE, engine->handle);
+  msg_set_header(&header, MSG_DST(engine->tts_id), MSG_ERROR_MESSAGE, engine->handle);
   if (!process_func1(engine->api, &header, NULL, NULL, false, true)) {
 	memccpy(buffer, api->msg->data, 0, MSG_ERROR_MESSAGE);
 	msg("msg=%s", (char*)buffer);
@@ -1048,7 +1049,7 @@ int eciProgStatus(ECIHand hEngine)
 	return ECI_PARAMETERERROR;
   }
 
-  msg_set_header(&header, MSG_PROG_STATUS, engine->handle);
+  msg_set_header(&header, MSG_DST(engine->tts_id), MSG_PROG_STATUS, engine->handle);
   process_func1(engine->api, &header, NULL, &eci_res, true, true);
   return eci_res;
 }
@@ -1065,7 +1066,7 @@ void eciClearErrors(ECIHand hEngine)
 	err("LEAVE, args error");
 	return;
   }
-  msg_set_header(&header, MSG_CLEAR_ERRORS, engine->handle);
+  msg_set_header(&header, MSG_DST(engine->tts_id), MSG_CLEAR_ERRORS, engine->handle);
   process_func1(engine->api, &header, NULL, NULL, true, true);  
 }
 
@@ -1081,7 +1082,7 @@ Boolean eciReset(ECIHand hEngine)
 	err("LEAVE, args error");
 	return ECIFalse;
   }
-  msg_set_header(&header, MSG_RESET, engine->handle);
+  msg_set_header(&header, MSG_DST(engine->tts_id), MSG_RESET, engine->handle);
   process_func1(engine->api, &header, NULL, &eci_res, true, true);
   return eci_res;
 }
@@ -1101,7 +1102,7 @@ void eciVersion(char *pBuffer)
 
   *(char*)pBuffer=0;
 
-  msg_set_header(&header, MSG_VERSION, 0);
+  msg_set_header(&header, MSG_DST(api->tts[0]), MSG_VERSION, 0); // TODO
   if (!process_func1(api, &header, NULL, NULL, false, true)) {
 	memccpy(pBuffer, api->msg->data, 0, MAX_VERSION);
 	msg("version=%s", (char*)pBuffer);
@@ -1125,7 +1126,7 @@ int eciGetVoiceParam(ECIHand hEngine, int iVoice, enum ECIVoiceParam Param)
 	return eci_res;
   }
     
-  msg_set_header(&header, MSG_GET_VOICE_PARAM, engine->handle);
+  msg_set_header(&header, MSG_DST(engine->tts_id), MSG_GET_VOICE_PARAM, engine->handle);
   header.args.gvp.iVoice = iVoice;
   header.args.gvp.Param = Param;
   process_func1(engine->api, &header, NULL, &eci_res, true, true);
@@ -1146,7 +1147,7 @@ int eciSetVoiceParam(ECIHand hEngine, int iVoice, enum ECIVoiceParam Param, int 
 	return eci_res;
   }
 
-  msg_set_header(&header, MSG_SET_VOICE_PARAM, engine->handle);
+  msg_set_header(&header, MSG_DST(engine->tts_id), MSG_SET_VOICE_PARAM, engine->handle);
   header.args.svp.iVoice = iVoice;
   header.args.svp.Param = Param;
   header.args.svp.iValue = iValue;
@@ -1168,7 +1169,7 @@ Boolean eciPause(ECIHand hEngine, Boolean On)
 	return eci_res;
   }
 
-  msg_set_header(&header, MSG_PAUSE, engine->handle);
+  msg_set_header(&header, MSG_DST(engine->tts_id), MSG_PAUSE, engine->handle);
   header.args.p.On = On;
   process_func1(engine->api, &header, NULL, &eci_res, true, true);
   return eci_res;  
@@ -1188,7 +1189,7 @@ Boolean eciInsertIndex(ECIHand hEngine, int iIndex)
 	return eci_res;
   }
     
-  msg_set_header(&header, MSG_INSERT_INDEX, engine->handle);
+  msg_set_header(&header, MSG_DST(engine->tts_id), MSG_INSERT_INDEX, engine->handle);
   header.args.ii.iIndex = iIndex;
   process_func1(engine->api, &header, NULL, &eci_res, true, true);
   return eci_res;  
@@ -1207,7 +1208,7 @@ Boolean eciCopyVoice(ECIHand hEngine, int iVoiceFrom, int iVoiceTo)
 	return eci_res;
   }
     
-  msg_set_header(&header, MSG_COPY_VOICE, engine->handle);
+  msg_set_header(&header, MSG_DST(engine->tts_id), MSG_COPY_VOICE, engine->handle);
   header.args.cv.iVoiceFrom = iVoiceFrom;
   header.args.cv.iVoiceTo = iVoiceTo;
   process_func1(engine->api, &header, NULL, &eci_res, true, true);
@@ -1227,7 +1228,7 @@ ECIDictHand eciNewDict(ECIHand hEngine)
 	err("LEAVE, args error");
 	return NULL_DICT_HAND;
   }
-  msg_set_header(&header, MSG_NEW_DICT, engine->handle);
+  msg_set_header(&header, MSG_DST(engine->tts_id), MSG_NEW_DICT, engine->handle);
   process_func1(engine->api, &header, NULL, (int*)&eci_res, true, true);
   return eci_res;
 }
@@ -1244,7 +1245,7 @@ ECIDictHand eciGetDict(ECIHand hEngine)
 	err("LEAVE, args error");
 	return NULL_DICT_HAND;
   }
-  msg_set_header(&header, MSG_GET_DICT, engine->handle);
+  msg_set_header(&header, MSG_DST(engine->tts_id), MSG_GET_DICT, engine->handle);
   process_func1(engine->api, &header, NULL, (int*)&eci_res, true, true);
   return eci_res;
 }
@@ -1262,7 +1263,7 @@ enum ECIDictError eciSetDict(ECIHand hEngine, ECIDictHand hDict)
 	return eci_res;
   }
 
-  msg_set_header(&header, MSG_SET_DICT, engine->handle);
+  msg_set_header(&header, MSG_DST(engine->tts_id), MSG_SET_DICT, engine->handle);
   header.args.sd.hDict = (char*)hDict - (char*)NULL;
   process_func1(engine->api, &header, NULL, (int*)&eci_res, true, true);
   return eci_res;  
@@ -1281,7 +1282,7 @@ ECIDictHand eciDeleteDict(ECIHand hEngine, ECIDictHand hDict)
 	return eci_res;
   }
     
-  msg_set_header(&header, MSG_DELETE_DICT, engine->handle);
+  msg_set_header(&header, MSG_DST(engine->tts_id), MSG_DELETE_DICT, engine->handle);
   header.args.dd.hDict = (char*)hDict - (char*)NULL;
   process_func1(engine->api, &header, NULL, (int*)&eci_res, true, true);
   return eci_res;  
@@ -1307,7 +1308,7 @@ enum ECIDictError eciLoadDict(ECIHand hEngine, ECIDictHand hDict, enum ECIDictVo
 	return eci_res;
   }
   
-  msg_set_header(&header, MSG_LOAD_DICT, engine->handle);
+  msg_set_header(&header, MSG_DST(engine->tts_id), MSG_LOAD_DICT, engine->handle);
   header.args.ld.hDict = (char*)hDict - (char*)NULL;
   header.args.ld.DictVol = DictVol;
 
@@ -1329,7 +1330,7 @@ Boolean eciClearInput(ECIHand hEngine)
 	err("LEAVE, args error");
 	return ECIFalse;
   }
-  msg_set_header(&header, MSG_CLEAR_INPUT, engine->handle);
+  msg_set_header(&header, MSG_DST(engine->tts_id), MSG_CLEAR_INPUT, engine->handle);
   process_func1(engine->api, &header, NULL, &eci_res, true, true);
   return eci_res;
 }
@@ -1348,16 +1349,72 @@ Boolean ECIFNDECLARE eciSetOutputDevice(ECIHand hEngine, int iDevNum)
 	return eci_res;
   }
 
-  msg_set_header(&header, MSG_SET_OUTPUT_DEVICE, engine->handle);
+  msg_set_header(&header, MSG_DST(engine->tts_id), MSG_SET_OUTPUT_DEVICE, engine->handle);
   header.args.sod.iDevNum = iDevNum;
   process_func1(engine->api, &header, NULL, &eci_res, true, true);
   return eci_res;
 }
 
-int voxGetVoices(vox_t *list, unsigned int *nbVoices) {
+static int ttsGetVoices(msg_tts_id id, vox_t *list, unsigned int *nbVoices) {
   struct msg_t header;
   struct api_t *api = &my_api;
-  int res = 1;
+  int eci_res = 1;
+  unsigned int max = 0;
+  
+  if ((id <= MSG_TTS_UNDEFINED) || (id >= MSG_TTS_MAX) || !list || !nbVoices) {
+	err("LEAVE, args error");
+	return 1;
+  }
+
+  max = *nbVoices;
+  *nbVoices = 0;
+  dbg("ENTER(%p,max=%d)", list, max);
+  
+  msg_set_header(&header, MSG_DST(id), MSG_VOX_GET_VOICES, 0);
+  if (process_func1(api, &header, NULL, &eci_res, false, false) || eci_res)
+	return 1;
+  
+  struct msg_vox_get_voices_t *data = (struct msg_vox_get_voices_t *)api->msg->data;
+  msg("nb voices=%d", data->nb);
+  if (data->nb <= max) {
+	max = data->nb;
+  }
+  int i;
+  for (i=0; i<max; i++) {
+	list[i].id = data->voices[i].id;
+		
+	strncpy(list[i].name, data->voices[i].name, MSG_VOX_STR_MAX);
+	list[i].lang[MSG_VOX_STR_MAX-1] = 0;
+		
+	strncpy(list[i].lang, data->voices[i].lang, MSG_VOX_STR_MAX);
+	list[i].lang[MSG_VOX_STR_MAX-1] = 0;
+		
+	strncpy(list[i].variant, data->voices[i].variant, MSG_VOX_STR_MAX);
+	list[i].variant[MSG_VOX_STR_MAX-1] = 0;
+		  
+	list[i].rate = data->voices[i].rate;
+	list[i].size = data->voices[i].size;
+	strncpy(list[i].charset, data->voices[i].charset, MSG_VOX_STR_MAX);
+	list[i].charset[MSG_VOX_STR_MAX-1] = 0;
+		  
+	list[i].gender = data->voices[i].gender;
+	list[i].age = data->voices[i].age;
+	strncpy(list[i].multilang, data->voices[i].multilang, MSG_VOX_STR_MAX);
+	list[i].multilang[MSG_VOX_STR_MAX-1] = 0;
+		
+	strncpy(list[i].quality, data->voices[i].quality, MSG_VOX_STR_MAX);
+	list[i].quality[MSG_VOX_STR_MAX-1] = 0;
+		  
+	//		  msg("data[%d]=id=0x%x, name=%s, lang=%s, variant=%s, charset=%s", i, data->voices[i].id, data->voices[i].name, data->voices[i].lang, data->voices[i].variant, data->voices[i].charset);
+	dbg("vox[%d]=id=0x%x, name=%s, lang=%s, variant=%s, charset=%s", i, list[i].id, list[i].name, list[i].lang, list[i].variant, list[i].charset);
+  }
+  *nbVoices = max;
+  
+  return 0;
+}
+
+int voxGetVoices(vox_t *list, unsigned int *nbVoices) {
+  struct api_t *api = &my_api;
   
   if (!nbVoices) {
 	err("LEAVE, args error");
@@ -1367,57 +1424,30 @@ int voxGetVoices(vox_t *list, unsigned int *nbVoices) {
   dbg("ENTER(%p,%d)", list, *nbVoices);
   
   if (!vox_list_nb) {
-	msg_set_header(&header, MSG_VOX_GET_VOICES, 0);
-	if (!process_func1(api, &header, NULL, &res, false, true)) {
-	  struct msg_vox_get_voices_t *data = (struct msg_vox_get_voices_t *)api->msg->data;
-	  msg("nb voices=%d", data->nb);
-	  if (data->nb <= MSG_VOX_LIST_MAX) {
-		int i;
-		res =  0;
-		vox_list_nb = data->nb;
-		for (i=0; i<data->nb; i++) {
-		  vox_list[i].id = data->voices[i].id;
-
-		  strncpy(vox_list[i].name, data->voices[i].name, MSG_VOX_STR_MAX);
-		  vox_list[i].lang[MSG_VOX_STR_MAX-1] = 0;
-
-		  strncpy(vox_list[i].lang, data->voices[i].lang, MSG_VOX_STR_MAX);
-		  vox_list[i].lang[MSG_VOX_STR_MAX-1] = 0;
-		  
-		  strncpy(vox_list[i].variant, data->voices[i].variant, MSG_VOX_STR_MAX);
-		  vox_list[i].variant[MSG_VOX_STR_MAX-1] = 0;
-		  
-		  vox_list[i].rate = data->voices[i].rate;
-		  vox_list[i].size = data->voices[i].size;
-		  strncpy(vox_list[i].charset, data->voices[i].charset, MSG_VOX_STR_MAX);
-		  vox_list[i].charset[MSG_VOX_STR_MAX-1] = 0;
-		  
-		  vox_list[i].gender = data->voices[i].gender;
-		  vox_list[i].age = data->voices[i].age;
-		  strncpy(vox_list[i].multilang, data->voices[i].multilang, MSG_VOX_STR_MAX);
-		  vox_list[i].multilang[MSG_VOX_STR_MAX-1] = 0;
-		  
-		  strncpy(vox_list[i].quality, data->voices[i].quality, MSG_VOX_STR_MAX);
-		  vox_list[i].quality[MSG_VOX_STR_MAX-1] = 0;
-		  
-		  //		  msg("data[%d]=id=0x%x, name=%s, lang=%s, variant=%s, charset=%s", i, data->voices[i].id, data->voices[i].name, data->voices[i].lang, data->voices[i].variant, data->voices[i].charset);
-		  dbg("vox[%d]=id=0x%x, name=%s, lang=%s, variant=%s, charset=%s", i, vox_list[i].id, vox_list[i].name, vox_list[i].lang, vox_list[i].variant, vox_list[i].charset);
-		}
-	  }	
-	  api_unlock(api);	
+	if (api_lock(api))
+	  return 1;
+	
+	int i;
+	for (i=0; i<api->tts_len; i++) {
+	  unsigned int n = MSG_VOX_LIST_MAX - vox_list_nb;
+	  ttsGetVoices(api->tts[i], vox_list, &n);
+	  vox_list_nb += n;
 	}
+	api_unlock(api);	
   }
 
-  if (*nbVoices > vox_list_nb) {
+  if (!list) {
 	*nbVoices = vox_list_nb;
-  }
-  
-  if (list) {
+  } else {
+	if (*nbVoices > vox_list_nb) {
+	  *nbVoices = vox_list_nb;
+	}	
 	memcpy(list, vox_list, *nbVoices * sizeof(*list));
-	return 0;
   }
 
-  return res;
+  dbg("%d voices", *nbVoices);
+  
+  return 0;
 }
 
 int voxString(vox_t *v, char *s, size_t len) {

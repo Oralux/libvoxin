@@ -70,14 +70,17 @@ static void my_exit(voxind_t *self) {
   struct msg_t msg;
   ssize_t l = sizeof(struct msg_t);
   int res;
+  unsigned long int tid = libvoxinDebugGetTid();
+
+  dbg("[pid=%lu] ENTER", tid);  
   
   memset(&msg, 0, MIN_MSG_SIZE);
   msg.id = MSG_EXIT;
   
-  dbg("send exit msg");
+  dbg("[pid=%lu] send exit msg", tid);
   res = pipe_write(self->pipe, &msg, &l);
   if (res) {
-	dbg("write error (%d)", res);
+	dbg("[pid=%lu] write error (%d)", tid, res);
   }
 }
 
@@ -225,9 +228,10 @@ static int close_cb(void *data, int fd) {
 static int voxind_routine(voxind_t *self) {
   int res = 0;
 	
-  ENTER();
+  dbg("[pid=%lu] ENTER", libvoxinDebugGetTid());
+
   if (self && self->ld_library_path) 
-	dbg("LD_LIBRARY_PATH: %s", self->ld_library_path);
+	dbg("[pid=%lu] LD_LIBRARY_PATH: %s", libvoxinDebugGetTid(), self->ld_library_path);
   
   if (chdir(self->rfsdir)) {
 	res = errno;
@@ -262,8 +266,8 @@ static int voxind_routine(voxind_t *self) {
 static int voxind_start(voxind_t *self) {
   int err = 0;
 
-  ENTER();
-  
+  dbg("[pid=%lu] ENTER", libvoxinDebugGetTid());
+    
   if (!self)
 	return EINVAL;
 
@@ -276,7 +280,6 @@ static int voxind_start(voxind_t *self) {
 	if (getppid() != self->parent) {
 	  exit(0);
 	}
-	  
 	pipe_close(self->pipe, PIPE_SOCKET_PARENT);
 	exit(voxind_routine(self));	
 	break;
@@ -288,7 +291,7 @@ static int voxind_start(voxind_t *self) {
 	break;
   }
   
-  LEAVE();
+  dbg("[pid=%lu] LEAVE", libvoxinDebugGetTid());
   return err;
 }
 
@@ -533,11 +536,11 @@ int libvoxin_call_eci(void* handle, struct msg_t *msg) {
   size_t allocated_msg_length;
   size_t effective_msg_length;
 
-  if (!self || !msg || !MSG_TTS_ID(msg->id)) {
+  if (!self || !msg || !MSG_CHECK(msg->id)) {
 	err("LEAVE, args error(%d)",0);
 	return EINVAL;
   }
-
+  
   allocated_msg_length = MSG_HEADER_LENGTH + msg->allocated_data_length;
   effective_msg_length = MSG_HEADER_LENGTH + msg->effective_data_length;
 
@@ -546,7 +549,7 @@ int libvoxin_call_eci(void* handle, struct msg_t *msg) {
 	return EINVAL;
   }
 
-  voxind_t *v = libvoxin_get_voxind(self, MSG_TTS_ID(msg->id));
+  voxind_t *v = libvoxin_get_voxind(self, MSG_TTS(msg->id));
   if (!v) {
 	err("LEAVE, args error(%d)",1);
 	return EINVAL;

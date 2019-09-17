@@ -55,7 +55,7 @@ int pipe_create(struct pipe_t **px)
 {
   int res = 0;
   
-  ENTER();
+  dbg("[pid=%lu] ENTER", libvoxinDebugGetTid());
 
   if (!px)
     return EINVAL;
@@ -76,9 +76,11 @@ int pipe_create(struct pipe_t **px)
   if (res) {
     pipe_free(px);
     *px = NULL;
+	dbg("[pid=%lu] LEAVE", libvoxinDebugGetTid());
+  } else {
+	dbg("[pid=%lu] LEAVE (0:%d, 1:%d) ", libvoxinDebugGetTid(), (*px)->sv[0], (*px)->sv[1]);
   }
 
-  LEAVE();
   return res;
 }
 
@@ -102,15 +104,18 @@ int pipe_restore(struct pipe_t **px, int fd)
  exit0:
   if (res) {
     pipe_free(px);
+	dbg("[pid=%lu] LEAVE", libvoxinDebugGetTid());	
+  } else {
+	dbg("[pid=%lu] LEAVE (0:%d, 1:%d)", libvoxinDebugGetTid(), (*px)->sv[0], (*px)->sv[1]);	
   }
 
-  LEAVE();
   return res;
 }
 
 
 int pipe_delete(struct pipe_t **px)
 {
+  ENTER();
   return pipe_free(px);
 }
 
@@ -199,17 +204,26 @@ int pipe_dup2(struct pipe_t *p, int index, int new_fd)
   } while(1);
 
  exit0:
+  if (res) {
+	dbg("[pid=%lu] LEAVE", libvoxinDebugGetTid());	
+  } else {
+	dbg("[pid=%lu] LEAVE (0:%d, 1:%d)", libvoxinDebugGetTid(), p->sv[0], p->sv[1]);	
+  }
+
   return res;
 }
 
 
 int pipe_close(struct pipe_t *p, int index)
 {
-  ENTER();
+  dbg("[pid=%lu] ENTER", libvoxinDebugGetTid());
   
   if (!p) {
+	dbg("[pid=%lu] LEAVE", libvoxinDebugGetTid());	
     return EINVAL;
+  } else {
+	dbg("[pid=%lu] LEAVE (%d:%d)", libvoxinDebugGetTid(), index, p->sv[index]);	
   }
-
+  
   return close(p->sv[index]);
 }
