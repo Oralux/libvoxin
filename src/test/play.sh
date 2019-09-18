@@ -5,6 +5,5 @@ FREQ=11025
 
 for raw in $(ls /tmp/test_libvoxin*raw); do
     echo "--> $raw"
-    wav=$(echo $raw | sed 's/raw/wav/')
-    sox -r "$FREQ" -e signed -b 16 -c 1 $raw $wav; aplay $wav
+	aplay -c 1 -f S16_LE -r $FREQ $raw
 done

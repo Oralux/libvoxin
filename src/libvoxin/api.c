@@ -719,7 +719,7 @@ static Boolean synchronize(struct engine_t *engine, enum msg_type type)
 	  dbg("stop required");
 	}
 
-	m->id = MSG_TO_ECI_ID;
+	m->id = MSG_DST(engine->tts_id);
 	m->allocated_data_length = ALLOCATED_MSG_LENGTH;
 	res = libvoxin_call_eci(api->my_instance, m);
 	if (res)
@@ -939,7 +939,7 @@ ECIHand eciNewEx(enum ECILanguageDialect Value)
 
   if (!process_func1(api, &header, NULL, &eci_res, false, true)) {
 	if (eci_res != 0) {
-	  engine = engine_create(eci_res, api, api->tts[0]);
+	  engine = engine_create(eci_res, api, vox_list[j].tts_id);
 	  engine->to_charset = getCharset(Value);
 	}
 	api_unlock(api);
