@@ -1,16 +1,17 @@
 #define _GNU_SOURCE
-#include <stdlib.h>
-#include <errno.h>
-#include <unistd.h>
-#include <sys/stat.h>
-#include <string.h>
-#include <signal.h>
 #include <endian.h>
+#include <errno.h>
+#include <signal.h>
+#include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include "debug.h"
+#include "inote.h"
 #include "msg.h"
 #include "pipe.h"
-#include "debug.h"
-#include "eci.h"
-#include "inote.h"
+#include "voxin.h"
 
 #define VOXIND_ID 0x05000A01 
 #define ENGINE_ID 0x15000A01 
@@ -36,8 +37,9 @@ struct engine_t {
 };
 
 #define ENGINE_INDEX 0xEA61AE00 
-#define ENGINE_MAX_NB 1
-static struct engine_t *engines[ENGINE_MAX_NB];
+#define ENGINE_MAX_NB VOX_ECI_VOICES
+static struct engine_t *engines[ENGINE_MAX_NB]; // array of created engines (not contiguous due to potential deletes)
+static size_t engine_number; // number of created engines (and not yet deleted)
 
 // eciLocale, eciLocales from speech-dispatcher (ibmtts.c)
 typedef struct _eciLocale {
@@ -419,29 +421,32 @@ static int unserialize(struct msg_t *msg, size_t *msg_length)
     break;
 
   case MSG_NEW:
-	if (*engines) {
+	if (engine_number >= ENGINE_MAX_NB) {
 	  err("error: max number of engines allocated");
-	  return 0; // only one engine at the moment
+	  return 0;
 	}
-	*engines = engine_create(eciNew());
-	// index + ENGINE_INDEX (0 considered as error)
-	engine_index = *engines ? ENGINE_INDEX : 0;
-    msg->res = engine_index;
+	engines[engine_number] = engine_create(eciNew());
+	// return index + ENGINE_INDEX (0 considered as error)
+	engine_index = engines[engine_number] ? ENGINE_INDEX + engine_number: 0;
+	engine_number++;
+	msg->res = engine_index;	
     break;
-
+	
   case MSG_NEW_DICT:
     msg->res = (uint32_t)eciNewDict(engine->handle);
     break;
 
   case MSG_NEW_EX:
-	/* if (*engines) { */
-	/*   err("error: max number of engines allocated");	   */
-	/*   return 0; // only one engine at the moment */
-	/* } */
-	*engines = engine_create(eciNewEx(msg->args.ne.Value));
-	engine_index = *engines ? ENGINE_INDEX : 0;
-    msg->res = engine_index;
-    break;
+	if (engine_number >= ENGINE_MAX_NB) {
+	  err("error: max number of engines allocated");
+	  return 0;
+	}
+	engines[engine_number] = engine_create(eciNewEx(msg->args.ne.Value));
+	// return index + ENGINE_INDEX (0 considered as error)
+	engine_index = engines[engine_number] ? ENGINE_INDEX + engine_number: 0;
+	engine_number++;
+	msg->res = engine_index;
+	break;
     
   case MSG_PAUSE:
     msg->res = (uint32_t)eciPause(engine->handle, msg->args.p.On);
