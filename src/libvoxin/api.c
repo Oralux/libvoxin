@@ -534,6 +534,46 @@ static int replayText(struct engine_t *engine, inote_slice_t *text, int skip_byt
   return ret;
 }
 
+static int switchLanguage(struct engine_t *engine, inote_slice_t *text, size_t *text_left) {
+  int ret = 0;
+
+  if (!engine
+	  || !text || !text->buffer
+	  || !text->length || (text->length > TEXT_LENGTH_MAX)
+	  || !text_left || !*text_left || (*text_left > text->length)) {	
+	err("LEAVE, args error");
+	return -1;
+  }
+  
+  size_t left = *text_left;
+  unsigned char *s = text->buffer + text->length - left;
+  int i;
+  for (i=0; i<left; i++) {
+	if (s[i] == ' ')
+	  break;
+  }
+  if (s[i] == ' ') {
+	s[i] = 0;
+	dbg("annotation: %s\n", s);
+	i++;
+	if (i < left) {
+	  left -= i;
+	  text->buffer = s + i;
+	  text->length = left;
+	  left = 0;
+	  engine_init_buffers(engine);	
+	  inote_error status = inote_convert_text_to_tlv(engine->inote, text, &(engine->state), &(engine->tlv_message), &left);
+	  if (status) {
+		err("replay inote_convert_text_to_tlv: ret=%d", status);
+		ret = -1;
+	  }
+	  
+	}	
+  }
+
+  return ret;  
+}
+
 
 Boolean eciAddText(ECIHand hEngine, ECIInputText pText)
 {
@@ -593,6 +633,8 @@ Boolean eciAddText(ECIHand hEngine, ECIInputText pText)
 	  dbg("inote_convert_text_to_tlv: incomplete multibyte");
 	  loop = (!replayText(engine, &text, 0, &text_left));
 	  break;
+	case INOTE_LANGUAGE_SWITCHING:
+	  switchLanguage(engine, &text, &text_left);
 	default:
 	  loop = false;
 	  break;
