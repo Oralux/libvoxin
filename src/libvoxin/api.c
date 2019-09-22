@@ -57,6 +57,8 @@ static struct api_t my_api = {.stop_mutex=PTHREAD_MUTEX_INITIALIZER, .api_mutex=
 static vox_t vox_list[MSG_VOX_LIST_MAX];
 static int vox_list_nb;
 
+static int eciDefaultParam[eciNumParams];
+
 static inote_charset_t getCharset(enum ECILanguageDialect lang)
 {
   inote_charset_t charset = INOTE_CHARSET_UTF_8; // default for other engine
@@ -1022,27 +1024,6 @@ int eciSetParam(ECIHand hEngine, enum ECIParam Param, int iValue)
   return eci_res;
 }
 
-int eciSetDefaultParam(enum ECIParam parameter, int value)
-{
-  int eci_res = -1;
-  struct api_t *api = &my_api;
-  struct msg_t header;
-  int res = 0;
-   
-  dbg("ENTER(%d,%d)", parameter, value);  
-
-  if (!IS_API(api)) {
-	err("LEAVE, error %d", res);
-	return -1;
-  }
-  
-  msg_set_header(&header, MSG_DST(api->tts[0]), MSG_SET_DEFAULT_PARAM, 0); // TODO
-  header.args.sp.Param = parameter;
-  header.args.sp.iValue = value;
-  process_func1(api, &header, NULL, &eci_res, true, true);
-  return eci_res;
-}
-
 int eciGetParam(ECIHand hEngine, enum ECIParam Param)
 {
   int eci_res = -1;
@@ -1062,28 +1043,25 @@ int eciGetParam(ECIHand hEngine, enum ECIParam Param)
   return eci_res;  
 }
 
-int eciGetDefaultParam(enum ECIParam parameter)
+// TODO
+int eciSetDefaultParam(enum ECIParam parameter, int value)
 {
-  int eci_res = -1;
-  struct msg_t header;
-  struct api_t *api = &my_api;
-  int res = 0;
-   
-  dbg("ENTER(%d)", parameter);  
-
-  if (!IS_API(api)) {
-	err("LEAVE, error %d", res);	
-	return -1;
-  }
-
-  msg_set_header(&header, MSG_DST(api->tts[0]), MSG_GET_DEFAULT_PARAM, 0); // TODO
-  header.args.gp.Param = parameter;
-  process_func1(api, &header, NULL, &eci_res, true, true);
-
-  LEAVE();  
-  return eci_res;  
+  ENTER();
+  int res = -1;
+  if ((parameter >= 0) && (parameter < eciNumParams)) {
+	res = eciDefaultParam[parameter];
+	eciDefaultParam[parameter] = value;
+  }  
+  return res;
 }
 
+// TODO
+int eciGetDefaultParam(enum ECIParam parameter)
+{
+  int res = ((parameter >= 0) && (parameter < eciNumParams)) ? eciDefaultParam[parameter] : -1; 
+  dbg("res = %d", res);
+  return res;
+}
 
 void eciErrorMessage(ECIHand hEngine, void *buffer)
 {
@@ -1171,10 +1149,6 @@ Boolean eciReset(ECIHand hEngine)
 
 void eciVersion(char *pBuffer)
 {
-  struct api_t *api = &my_api;
-  struct msg_t header;
-  int res = 0;
-
   ENTER();
 
   if (!pBuffer) {
@@ -1182,19 +1156,9 @@ void eciVersion(char *pBuffer)
 	return;
   }
 
-  *(char*)pBuffer=0;
-
-  if (!IS_API(api)) {
-	err("LEAVE, error %d", res);
-	return;
-  }
-  
-  msg_set_header(&header, MSG_DST(api->tts[0]), MSG_VERSION, 0); // TODO
-  if (!process_func1(api, &header, NULL, NULL, false, true)) {
-	memccpy(pBuffer, api->msg->data, 0, MAX_VERSION);
-	msg("version=%s", (char*)pBuffer);
-	api_unlock(api);	
-  }
+  int len = snprintf(pBuffer, 20, "%d.%d.%d", LIBVOXIN_VERSION_MAJOR, LIBVOXIN_VERSION_MINOR, LIBVOXIN_VERSION_PATCH);
+  pBuffer[19]=0;
+  msg("version=%s", (char*)pBuffer);
   
   LEAVE();
 }

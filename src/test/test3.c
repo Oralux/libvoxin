@@ -62,6 +62,7 @@ int main(int argc, char **argv)
   }
 
   eciVersion(version);
+  fprintf(stderr, "version = %s\n", version);
     
   ECIHand handle = eciNew();
   if (!handle)
