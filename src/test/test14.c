@@ -29,8 +29,8 @@ const char *pathname[MAX_TESTED_LANG] = {"/tmp/test_libvoxin_en.raw", "/tmp/test
 const int max_samples[MAX_TESTED_LANG] = {1024, 20000, 40000, 20000};
 ECIHand handle[MAX_TESTED_LANG];
 const enum ECILanguageDialect lang[MAX_TESTED_LANG] = {
-//	eciGeneralAmericanEnglish,
-	nveEnglishNathan,
+	eciGeneralAmericanEnglish,
+//	nveEnglishNathan,
 	nveFrenchThomas,
 	// eciStandardFrench,
 	eciStandardGerman,
@@ -159,8 +159,7 @@ int set_engine(int i)
 }
 
 
-int say(int i)
-{
+int say_synchronous(int i) {
 	int res = 0;
 	if ((i >= MAX_TESTED_LANG) || !handle[i])
 		return __LINE__;
@@ -169,53 +168,94 @@ int say(int i)
 		res = __LINE__;	
 	}
   
-#ifndef TODO 
 	if (eciSynchronize(handle[i]) == ECIFalse) // to removed to test eciSpeaking
 		return __LINE__;
-#endif
 	//
 
 	return 0;
 }
 
-int main(int argc, char **argv)
-{
+int say_asynchronous() {
+	int res = 0;
+	int nbCompletedLanguages = 0;
+	int nb_languages = 0;
+	enum state_t {STATE_UNDEFINED, STATE_IDLE, STATE_SPEAKING, STATE_COMPLETED};
+	int state[MAX_TESTED_LANG];
+	int i;
+
+	for (i=0; i<MAX_TESTED_LANG; i++) {
+		if (handle[i]) {
+			nb_languages++;
+			if (eciSynthesize(handle[i]) == ECIFalse) {
+				return __LINE__;	
+			}
+
+			state[i] = STATE_IDLE;
+			fprintf(stderr, "State of 0x%08x: idle\n", lang[i]);										
+		} else {
+			state[i] = STATE_UNDEFINED;
+		}
+	}
+	
+#define ONE_MILLISECOND_IN_NANOSECOND 1000000 
+
+	nbCompletedLanguages = 0;
+	i = 0;
+	while (nbCompletedLanguages != nb_languages) {
+		struct timespec req = {.tv_sec=0, .tv_nsec=10*ONE_MILLISECOND_IN_NANOSECOND};
+		i = (i+1) % MAX_TESTED_LANG;
+		if (!handle[i])
+			continue;
+		switch (state[i]) {
+		case STATE_IDLE:
+			if (eciSpeaking(handle[i]) == ECITrue) {
+				state[i] = STATE_SPEAKING;
+				fprintf(stderr,"State of 0x%08x: speaking\n", lang[i]);				
+			}
+			break;
+		case STATE_SPEAKING:
+			if (eciSpeaking(handle[i]) == ECIFalse) {
+				state[i] = STATE_COMPLETED;
+				++nbCompletedLanguages;
+				fprintf(stderr,"State of 0x%08x: completed\n", lang[i]);
+			}
+			break;
+		default:
+			break;
+		}
+		// req.tv_sec=0;
+		// req.tv_nsec=10*ONE_MILLISECOND_IN_NANOSECOND;
+		nanosleep(&req, NULL);
+	}
+	return 0;
+}
+
+int main(int argc, char **argv) {
 	uint8_t *buf;
 	size_t len;
 	int i;
 	enum ECILanguageDialect Languages[MAX_LANGUAGES];
 	int nbLanguages=MAX_LANGUAGES;
-	enum state_t {IDLE, SPEAKING, OVER};
-	int state[MAX_TESTED_LANG];
-	int nbLanguagesOver;
-
-	for (i=0;i<MAX_TESTED_LANG;i++) {
-		state[i] = -1;	
-	}
 	  
 	if (eciGetAvailableLanguages(Languages, &nbLanguages))
 		return __LINE__;
 
 	for (i=0; i<nbLanguages; i++) {
 		switch (Languages[i]) {
-//		case eciGeneralAmericanEnglish:
-		case nveEnglishNathan:
+		case eciGeneralAmericanEnglish:
+//		case nveEnglishNathan:
 			set_engine(ENGLISH);
-			state[ENGLISH] = 0;
 			break;
 //		case eciStandardFrench:
 		case nveFrenchThomas:
 			set_engine(FRENCH);
-			state[FRENCH] = 0;
 			break;
 			// case eciStandardGerman:
 			//   set_engine(GERMAN);
-			//   state[GERMAN] = 0;
 			//   break;
 //		case eciCastilianSpanish:
 		case nveSpanishMarisol:
 			set_engine(SPANISH);
-			state[SPANISH] = 0;
 			break;
 		default:
 			fprintf(stderr,"Voice not yet tested: 0x%x\n", Languages[i]);
@@ -223,44 +263,14 @@ int main(int argc, char **argv)
 		}
 	}
 
-	for (i=0; i<nbLanguages; i++) {
-		say(i);
-	}
+	// for (i=0; i<nbLanguages; i++) {
+	// 	say_synchronous(i);
+	// }
 
-#ifdef TODO
-	for (i=0;i<MAX_TESTED_LANG;i++) {
-		if (state[i] == -1) {
-			fprintf(stderr,"Install all required languages\n");
-			return __LINE__;
-		}
-	}
-
-#define ONE_MILLISECOND_IN_NANOSECOND 1000000 
-	struct timespec req;
-	req.tv_sec=0;
-	req.tv_nsec=ONE_MILLISECOND_IN_NANOSECOND;
-
-	nbLanguagesOver = 0;
-	while(nbLanguagesOver != nbLanguages) {
-		for (i=0; i<nbLanguages; i++) {
-			switch (state[i]) {
-			case IDLE:
-				if (eciSpeaking(handle[i]) == ECITrue)
-					state[i] = SPEAKING;
-				break;
-			case SPEAKING:
-				if (eciSpeaking(handle[i]) == ECIFalse) {
-					state[i] = OVER;
-					++nbLanguagesOver;
-				}
-				break;
-			default:
-				break;
-			}
-		}
-		nanosleep(&req, NULL);
-	}
-#endif
+	int res = say_asynchronous();
+	if (res)
+		return res;
+	
   
 	for (i=0; i<MAX_TESTED_LANG; i++) {
 		if (!handle[i])

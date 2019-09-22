@@ -17,7 +17,7 @@
 
 #define ENGINE_ID 0x020A0005
 #define IS_ENGINE(e) (e && (e->id == ENGINE_ID) && e->handle && e->api)
-
+#define IS_API(a) (a && (a->my_instance || !(res=api_create(a))))
   
 #define MAX_LANG 2 // RFU
 
@@ -203,19 +203,13 @@ static int msg_copy_bytes(struct msg_t *msg, const struct msg_bytes_t *bytes)
 
 static int api_lock(struct api_t *api)
 {
-  int res;
+  int res = 0;
 
   ENTER();
 
-  if (!api) {
-	err("LEAVE, args error");
-	return EINVAL;
-  }
-
-  if (!api->my_instance) {
-	res = api_create(api);
-	if (res)
-	  return res;
+  if (!IS_API(api)) {
+	err("LEAVE, error %d", res);
+	return res;
   }
   
   res = pthread_mutex_lock(&api->api_mutex);
@@ -381,13 +375,19 @@ static int getCurrentLanguage(struct engine_t *engine)
 
 ECIHand eciNew(void)
 {
-  int eci_res;
+  int eci_res = 0;
   struct engine_t *engine = NULL;
   struct msg_t header;
   struct api_t *api = &my_api;
+  int res = 0;
  
   ENTER();
 
+  if (!IS_API(api)) {
+	err("LEAVE, error %d", res);
+	return NULL;
+  }
+  
   if (msg_set_header(&header, MSG_DST(api->tts[0]), MSG_NEW, 0))
 	return NULL;
 
@@ -875,7 +875,7 @@ Boolean eciStop(ECIHand hEngine)
   struct engine_t *engine = (struct engine_t *)hEngine;
   struct msg_t header;
   struct api_t *api;
-  int res;
+  int res = 0;
   
   ENTER();
 
@@ -885,9 +885,9 @@ Boolean eciStop(ECIHand hEngine)
   }
     
   api = engine->api;
-  if (!api->my_instance) {
-	err("LEAVE, args error");
-	return eci_res;
+  if (!IS_API(api)) {
+	err("LEAVE, error %d", res);
+	return ECIFalse;
   }
 
   res = pthread_mutex_lock(&api->stop_mutex);
@@ -952,10 +952,15 @@ ECIHand eciNewEx(enum ECILanguageDialect Value)
   struct engine_t *engine = NULL;
   struct msg_t header;
   struct api_t *api = &my_api;
+  int res = 0;
  
   dbg("ENTER(%d)", Value);
 
-
+  if (!IS_API(api)) {
+	err("LEAVE, error %d", res);
+	return NULL;
+  }
+  
   if (!vox_list_nb) {
 	unsigned int n;
 	if (voxGetVoices(NULL, &n))
@@ -1022,9 +1027,15 @@ int eciSetDefaultParam(enum ECIParam parameter, int value)
   int eci_res = -1;
   struct api_t *api = &my_api;
   struct msg_t header;
+  int res = 0;
    
   dbg("ENTER(%d,%d)", parameter, value);  
 
+  if (!IS_API(api)) {
+	err("LEAVE, error %d", res);
+	return -1;
+  }
+  
   msg_set_header(&header, MSG_DST(api->tts[0]), MSG_SET_DEFAULT_PARAM, 0); // TODO
   header.args.sp.Param = parameter;
   header.args.sp.iValue = value;
@@ -1056,8 +1067,14 @@ int eciGetDefaultParam(enum ECIParam parameter)
   int eci_res = -1;
   struct msg_t header;
   struct api_t *api = &my_api;
+  int res = 0;
    
   dbg("ENTER(%d)", parameter);  
+
+  if (!IS_API(api)) {
+	err("LEAVE, error %d", res);	
+	return -1;
+  }
 
   msg_set_header(&header, MSG_DST(api->tts[0]), MSG_GET_DEFAULT_PARAM, 0); // TODO
   header.args.gp.Param = parameter;
@@ -1156,6 +1173,7 @@ void eciVersion(char *pBuffer)
 {
   struct api_t *api = &my_api;
   struct msg_t header;
+  int res = 0;
 
   ENTER();
 
@@ -1166,6 +1184,11 @@ void eciVersion(char *pBuffer)
 
   *(char*)pBuffer=0;
 
+  if (!IS_API(api)) {
+	err("LEAVE, error %d", res);
+	return;
+  }
+  
   msg_set_header(&header, MSG_DST(api->tts[0]), MSG_VERSION, 0); // TODO
   if (!process_func1(api, &header, NULL, NULL, false, true)) {
 	memccpy(pBuffer, api->msg->data, 0, MAX_VERSION);
@@ -1481,6 +1504,7 @@ static int ttsGetVoices(msg_tts_id id, vox_t *list, unsigned int *nbVoices) {
 
 int voxGetVoices(vox_t *list, unsigned int *nbVoices) {
   struct api_t *api = &my_api;
+  int res = 0;
   
   if (!nbVoices) {
 	err("LEAVE, args error");
@@ -1488,6 +1512,11 @@ int voxGetVoices(vox_t *list, unsigned int *nbVoices) {
   }
 
   dbg("ENTER(%p,%d)", list, *nbVoices);
+
+  if (!IS_API(api)) {
+	err("LEAVE, error %d", res);
+	return 1;
+  }
   
   if (!vox_list_nb) {
 	if (api_lock(api))
