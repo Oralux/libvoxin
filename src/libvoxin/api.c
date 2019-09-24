@@ -24,7 +24,8 @@
 struct engine_t {
   uint32_t id; // structure identifier
   struct api_t *api; // parent api
-  uint32_t handle; // tts handle
+  uint32_t handle; // tts effective handle (current handle)
+  uint32_t real_handle; // tts real handle (initial handle)
   msg_tts_id tts_id;
   void *cb; // user callback
   void *data_cb; // user data callback
@@ -52,10 +53,18 @@ struct api_t {
   struct msg_t *msg; // message for voxind
 };
 
+typedef struct {
+  struct engine_t *engine;
+  size_t ref_counter;
+} engines_t;
+
 static struct api_t my_api = {.stop_mutex=PTHREAD_MUTEX_INITIALIZER, .api_mutex=PTHREAD_MUTEX_INITIALIZER, NULL};
 
 static vox_t vox_list[MSG_VOX_LIST_MAX];
 static int vox_list_nb;
+static engines_t engines[VOX_MAX_NB_OF_LANGUAGES];
+static size_t engines_number; // number of elements in the engines array
+#define ENGINES_MAX (sizeof(engines)/sizeof(*engines))
 
 static int eciDefaultParam[eciNumParams];
 
@@ -375,6 +384,26 @@ static int getCurrentLanguage(struct engine_t *engine)
   return res;  
 }
 
+static bool new_engine(size_t *index) {
+  bool res = false;
+  if (engines_number < ENGINES_MAX) {
+	*index = engines_number;
+	engines_number++;	
+	res = true;
+  }
+  return res;
+}
+
+static bool set_engine(size_t index, struct engine_t *engine) {
+  bool res = false;
+  if ((index < ENGINES_MAX) && !engines[index].ref_counter) {
+	engines[index].engine = engine;
+	engines[index].ref_counter = 1;
+	res = true;
+  }
+  return res;
+}
+
 ECIHand eciNew(void)
 {
   int eci_res = 0;
@@ -389,13 +418,25 @@ ECIHand eciNew(void)
 	err("LEAVE, error %d", res);
 	return NULL;
   }
+
+  res = api_lock(api);
+  if (res)
+	return NULL;
+  //  usleep(1000);
+
+  size_t index;
+  if (!new_engine(&index)) {
+	err("LEAVE, error too many engines");
+	return NULL;
+  }
   
   if (msg_set_header(&header, MSG_DST(api->tts[0]), MSG_NEW, 0))
 	return NULL;
 
-  if (!process_func1(api, &header, NULL, &eci_res, false, true)) {
+  if (!process_func1(api, &header, NULL, &eci_res, false, false)) {
 	if (eci_res != 0) {
 	  engine = engine_create(eci_res, api, api->tts[0]);
+	  set_engine(index, engine);
 	}
     
 	eci_res = getCurrentLanguage(engine);
@@ -981,15 +1022,27 @@ ECIHand eciNewEx(enum ECILanguageDialect Value)
   if (j == -1)
 	return NULL;
     
+  res = api_lock(api);
+  if (res)
+	return NULL;
+  //  usleep(1000);
+
+  size_t index;
+  if (!new_engine(&index)) {
+	err("LEAVE, error too many engines");
+	return NULL;
+  }
+
   if (msg_set_header(&header, MSG_DST(vox_list[j].tts_id), MSG_NEW_EX, 0))
 	return NULL;
 
   header.args.ne.Value = Value;
 
-  if (!process_func1(api, &header, NULL, &eci_res, false, true)) {
+  if (!process_func1(api, &header, NULL, &eci_res, false, false)) {
 	if (eci_res != 0) {
 	  engine = engine_create(eci_res, api, vox_list[j].tts_id);
 	  engine->to_charset = getCharset(Value);
+	  set_engine(index, engine);
 	}
 	api_unlock(api);
   }
@@ -1156,7 +1209,7 @@ void eciVersion(char *pBuffer)
 	return;
   }
 
-  int len = snprintf(pBuffer, 20, "%d.%d.%d", LIBVOXIN_VERSION_MAJOR, LIBVOXIN_VERSION_MINOR, LIBVOXIN_VERSION_PATCH);
+  snprintf(pBuffer, 20, "%d.%d.%d", LIBVOXIN_VERSION_MAJOR, LIBVOXIN_VERSION_MINOR, LIBVOXIN_VERSION_PATCH);
   pBuffer[19]=0;
   msg("version=%s", (char*)pBuffer);
   

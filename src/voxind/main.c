@@ -317,21 +317,36 @@ static int unserialize(struct msg_t *msg, size_t *msg_length)
   }
 
   engine = engines[engine_index];
-  
-  if ((*msg_length < MIN_MSG_SIZE)
-      || (msg->id != MSG_TO_ECI_ID)
-      || !msg_string(msg->func)
-      || (*msg_length < MSG_HEADER_LENGTH + msg->effective_data_length)
-      || (engine && !check_engine(engine))) {
-    msg("recv erroneous msg"); 
-    memset(msg, 0, MIN_MSG_SIZE);
-    msg->id = MSG_TO_APP_ID;
-    msg->func = MSG_UNDEFINED;
-    *msg_length = MIN_MSG_SIZE;
-    msg->res = ECIFalse;
-    dbg("send msg '%s', length=%d, res=0x%x (#%d)", msg_string(msg->func), msg->effective_data_length, msg->res, msg->count);    
-    LEAVE();
-    return 0;
+  {
+	int err = 0;
+	if (*msg_length < MIN_MSG_SIZE) {
+	  msg("msg_length=%d (%d)", *msg_length, MIN_MSG_SIZE); 
+	  err=1;
+	} else if (msg->id != MSG_TO_ECI_ID) {
+	  msg("id=%d (%d)", msg->id, MSG_TO_ECI_ID); 
+	  err=2;
+	} else if (!msg_string(msg->func)) {
+	  msg("func=%d", msg->func); 
+	  err=3;
+	} else if (*msg_length < MSG_HEADER_LENGTH + msg->effective_data_length) {
+		msg("length=%d (%d)", *msg_length, MSG_HEADER_LENGTH + msg->effective_data_length); 
+	  err=4;
+	} else if (engine && !check_engine(engine)) {
+	  msg("id=0x%x, h=0x%x",engine->id, (unsigned int)engine->handle);
+	  err=5;
+	}
+
+	if (err) {
+	  msg("recv erroneous msg (err=%d)", err); 
+	  memset(msg, 0, MIN_MSG_SIZE);
+	  msg->id = MSG_TO_APP_ID;
+	  msg->func = MSG_UNDEFINED;
+	  *msg_length = MIN_MSG_SIZE;
+	  msg->res = ECIFalse;
+	  dbg("send msg '%s', length=%d, res=0x%x (#%d)", msg_string(msg->func), msg->effective_data_length, msg->res, msg->count);    
+	  LEAVE();
+	  return 0;
+	}
   }
 
   dbg("recv msg '%s', length=%d, engine=%p (#%d)", msg_string(msg->func), msg->effective_data_length, engine, msg->count); 

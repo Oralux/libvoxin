@@ -181,8 +181,9 @@ if [ -n "$TEST" ]; then
 		rm /tmp/test_voxind
 	elif [ "$PLAY" ]; then
 		getFile
-		./voxin-say -f "$file_utf_8" -s 500 -w "$file_utf_8.$$.wav"		
+#		./voxin-say -f "$file_utf_8" -s 500 -w "$file_utf_8.$$.wav"		
 
+		gdb -ex "b voxGetVoices" -ex "b libvoxin_create" -ex "set args -f $file_utf_8 -j 2 -s 500 -w $file_utf_8.$$.wav" ./voxin-say
 #		gdb -ex "b eciNew" -ex "set args -f $file_utf_8 -j 2 -s 500 -w $file_utf_8.$$.wav" ./voxin-say
 		
 #		touch /tmp/test_voxind

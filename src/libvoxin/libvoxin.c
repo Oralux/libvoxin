@@ -370,7 +370,9 @@ static voxind_t *voxind_create(msg_tts_id id, char *rootdir) {
   }  else { // MSG_TTS_NVE
 	// the rfs directory is RFS_NVE
 	size_t max = sizeof(self->rfsdir);
-	size_t len = snprintf(self->rfsdir, max, "%s/%s", rootdir, RFS_NVE);
+	// TODO voxind-nve binary should be relative to rootdir
+	//	size_t len = snprintf(self->rfsdir, max, "%s/%s", rootdir, RFS_NVE);
+	size_t len = snprintf(self->rfsdir, max, "%s", RFS_NVE);
 	// LD_LIBRARY_PATH is kept unset.
 	// binary path
 	max = sizeof(self->bin);
