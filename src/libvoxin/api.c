@@ -24,8 +24,9 @@
 struct engine_t {
   uint32_t id; // structure identifier
   struct api_t *api; // parent api
-  uint32_t handle; // tts effective handle (current handle)
-  uint32_t real_handle; // tts real handle (initial handle)
+  uint32_t handle; // current handle 
+  uint32_t initial_handle;
+  uint32_t other_handle; 
   msg_tts_id tts_id;
   void *cb; // user callback
   void *data_cb; // user data callback
@@ -53,19 +54,10 @@ struct api_t {
   struct msg_t *msg; // message for voxind
 };
 
-typedef struct {
-  struct engine_t *engine;
-  size_t ref_counter;
-} engines_t;
-
 static struct api_t my_api = {.stop_mutex=PTHREAD_MUTEX_INITIALIZER, .api_mutex=PTHREAD_MUTEX_INITIALIZER, NULL};
 
 static vox_t vox_list[MSG_VOX_LIST_MAX];
 static int vox_list_nb;
-static engines_t engines[VOX_MAX_NB_OF_LANGUAGES];
-static size_t engines_number; // number of elements in the engines array
-#define ENGINES_MAX (sizeof(engines)/sizeof(*engines))
-
 static int eciDefaultParam[eciNumParams];
 
 static inote_charset_t getCharset(enum ECILanguageDialect lang)
@@ -329,7 +321,7 @@ static struct engine_t *engine_create(uint32_t handle, struct api_t *api, msg_tt
 	self->tts_id = tts_id;
 	self->inote = inote_create();
 	engine_init_buffers(self);
-	// TODO: state init (expectetd languages/annotation)
+	// TODO: state init (expected languages/annotation)
 	/* state.expected_lang[0] = ENGLISH; */
 	/* state.expected_lang[1] = FRENCH; */
 	/* state.max_expected_lang = MAX_LANG; */
@@ -384,26 +376,6 @@ static int getCurrentLanguage(struct engine_t *engine)
   return res;  
 }
 
-static bool new_engine(size_t *index) {
-  bool res = false;
-  if (engines_number < ENGINES_MAX) {
-	*index = engines_number;
-	engines_number++;	
-	res = true;
-  }
-  return res;
-}
-
-static bool set_engine(size_t index, struct engine_t *engine) {
-  bool res = false;
-  if ((index < ENGINES_MAX) && !engines[index].ref_counter) {
-	engines[index].engine = engine;
-	engines[index].ref_counter = 1;
-	res = true;
-  }
-  return res;
-}
-
 ECIHand eciNew(void)
 {
   int eci_res = 0;
@@ -419,24 +391,38 @@ ECIHand eciNew(void)
 	return NULL;
   }
 
+  if (!vox_list_nb) {
+	unsigned int n;
+	if (voxGetVoices(NULL, &n))
+	  return NULL;
+  }
+  if (!vox_list_nb) {
+	return NULL;
+  }
   res = api_lock(api);
   if (res)
 	return NULL;
   //  usleep(1000);
 
-  size_t index;
-  if (!new_engine(&index)) {
-	err("LEAVE, error too many engines");
-	return NULL;
+  // look for the first available tts
+  int i;
+  msg_tts_id tts_id = MSG_TTS_UNDEFINED;
+  for (i=0; i<api->tts_len; i++) {
+	if (api->tts[i] != MSG_TTS_UNDEFINED) {	  
+	  tts_id = api->tts[i];
+	  break;
+	}
   }
-  
-  if (msg_set_header(&header, MSG_DST(api->tts[0]), MSG_NEW, 0))
+  if (tts_id == MSG_TTS_UNDEFINED) {
+	dbg("no tts available");
+	return NULL;	
+  }
+  if (msg_set_header(&header, MSG_DST(tts_id), MSG_NEW, 0))
 	return NULL;
 
   if (!process_func1(api, &header, NULL, &eci_res, false, false)) {
 	if (eci_res != 0) {
-	  engine = engine_create(eci_res, api, api->tts[0]);
-	  set_engine(index, engine);
+	  engine = engine_create(eci_res, api, tts_id);
 	}
     
 	eci_res = getCurrentLanguage(engine);
@@ -1027,12 +1013,6 @@ ECIHand eciNewEx(enum ECILanguageDialect Value)
 	return NULL;
   //  usleep(1000);
 
-  size_t index;
-  if (!new_engine(&index)) {
-	err("LEAVE, error too many engines");
-	return NULL;
-  }
-
   if (msg_set_header(&header, MSG_DST(vox_list[j].tts_id), MSG_NEW_EX, 0))
 	return NULL;
 
@@ -1042,7 +1022,6 @@ ECIHand eciNewEx(enum ECILanguageDialect Value)
 	if (eci_res != 0) {
 	  engine = engine_create(eci_res, api, vox_list[j].tts_id);
 	  engine->to_charset = getCharset(Value);
-	  set_engine(index, engine);
 	}
 	api_unlock(api);
   }
@@ -1096,7 +1075,7 @@ int eciGetParam(ECIHand hEngine, enum ECIParam Param)
   return eci_res;  
 }
 
-// TODO
+// TODO eciSetDefaultParam
 int eciSetDefaultParam(enum ECIParam parameter, int value)
 {
   ENTER();
@@ -1108,7 +1087,7 @@ int eciSetDefaultParam(enum ECIParam parameter, int value)
   return res;
 }
 
-// TODO
+// TODO eciGetDefaultParam
 int eciGetDefaultParam(enum ECIParam parameter)
 {
   int res = ((parameter >= 0) && (parameter < eciNumParams)) ? eciDefaultParam[parameter] : -1; 
@@ -1542,8 +1521,12 @@ int voxGetVoices(vox_t *list, unsigned int *nbVoices) {
 	int i;
 	for (i=0; i<api->tts_len; i++) {
 	  unsigned int n = MSG_VOX_LIST_MAX - vox_list_nb;
-	  ttsGetVoices(api->tts[i], vox_list+vox_list_nb, &n);
-	  vox_list_nb += n;
+	  int err = ttsGetVoices(api->tts[i], vox_list+vox_list_nb, &n);
+	  if (err) {
+		api->tts[i] = MSG_TTS_UNDEFINED;
+	  } else {		
+		vox_list_nb += n;
+	  }
 	}
 	api_unlock(api);	
   }

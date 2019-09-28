@@ -225,7 +225,7 @@ if [ -n "$BUILD" ]; then
 	done
 	
 	ECI="$RFSDIR"/var/opt/IBM/ibmtts/cfg/eci.ini
-#	if [ -e "$ECI" ]; then
+	#	if [ -e "$ECI" ]; then
 	if [ -e "$(dirname "$ECI")" ]; then
 		cat "$RFSDIR"/opt/IBM/ibmtts/etc/*.ini > "$ECI"
 		sed -i "s#=/opt/#=$RFSDIR/opt/#" "$ECI"

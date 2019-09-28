@@ -1,6 +1,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <poll.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -119,6 +120,29 @@ int pipe_delete(struct pipe_t **px)
   return pipe_free(px);
 }
 
+static int poll_in(int fd) {
+  int err = 0;  // 0 = OK
+  int res = 0;
+  struct pollfd pfd;
+  
+  pfd.fd = fd;
+  pfd.events = POLLIN;
+  pfd.revents = 0;
+  res = poll(&pfd, 1, 300);
+  err = errno;
+  if ((res > 0) && (pfd.revents & POLLIN)) {
+	err = 0;
+  } else if (res == -1) {
+	dbg("poll: ko (%s)", strerror(err));
+  } else if (res == 0) {
+	dbg("poll: ko (timeout)");
+	err = EBADFD;
+  } else {
+	dbg("poll: ko");
+	err = EBADFD;
+  }
+  return err;
+}
 
 int pipe_read(struct pipe_t *p, void *buf, ssize_t *len)
 {
@@ -132,7 +156,12 @@ int pipe_read(struct pipe_t *p, void *buf, ssize_t *len)
   }
 
   while(1) {
-    *len = read(p->sv[p->ind], buf, *len);
+	res = poll_in(p->sv[p->ind]);
+	if (res) {
+      err("KO (%d)", res);	  
+	  goto exit0;
+	}	  
+	*len = read(p->sv[p->ind], buf, *len);
     if (*len == 0) {
       err("0 bytes!");
       break;
@@ -146,6 +175,7 @@ int pipe_read(struct pipe_t *p, void *buf, ssize_t *len)
     }
   }
   
+ exit0:
   LEAVE();
   return res;
 }
