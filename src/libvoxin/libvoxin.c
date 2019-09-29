@@ -24,6 +24,7 @@
 // for nve (relative to RFS_NVE)
 #define VOXIND_NVE "bin/voxind-nve"
 
+#define READ_TIMEOUT_IN_MS 300
 #define MAXBUF 4096
 
 typedef struct {
@@ -407,7 +408,7 @@ static voxind_t *voxind_create(msg_tts_id id, char *rootdir) {
 
   self->parent = getpid();
 
-  int err = pipe_create(&self->pipe);  
+  int err = pipe_create(&self->pipe, READ_TIMEOUT_IN_MS);  
   if (err)    
 	goto exit;
   

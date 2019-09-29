@@ -52,7 +52,7 @@ static int pipe_free(struct pipe_t **px)
 }
 
 
-int pipe_create(struct pipe_t **px)
+int pipe_create(struct pipe_t **px, unsigned int read_timeout_in_ms)
 {
   int res = 0;
   
@@ -72,6 +72,7 @@ int pipe_create(struct pipe_t **px)
   }
 
   (*px)->ind = PIPE_SOCKET_PARENT;
+  (*px)->read_timeout_in_ms = read_timeout_in_ms;
 
  exit0:
   if (res) {
@@ -86,7 +87,7 @@ int pipe_create(struct pipe_t **px)
 }
 
 
-int pipe_restore(struct pipe_t **px, int fd)
+int pipe_restore(struct pipe_t **px, int fd, unsigned int read_timeout_in_ms)
 {
   int res = 0;
   
@@ -101,6 +102,7 @@ int pipe_restore(struct pipe_t **px, int fd)
 
   (*px)->sv[PIPE_SOCKET_CHILD_INDEX] = fd;
   (*px)->ind = PIPE_SOCKET_CHILD_INDEX;
+  (*px)->read_timeout_in_ms = read_timeout_in_ms;
 
  exit0:
   if (res) {
@@ -120,17 +122,21 @@ int pipe_delete(struct pipe_t **px)
   return pipe_free(px);
 }
 
-static int poll_in(int fd) {
+static int poll_in(int fd, unsigned int timeout_in_ms) {
   int err = 0;  // 0 = OK
   int res = 0;
   struct pollfd pfd;
+
+  if (!timeout_in_ms)
+	return 0;
   
   pfd.fd = fd;
   pfd.events = POLLIN;
   pfd.revents = 0;
-  res = poll(&pfd, 1, 300);
+  res = poll(&pfd, 1, timeout_in_ms);
   err = errno;
   if ((res > 0) && (pfd.revents & POLLIN)) {
+	dbg("poll: ok");
 	err = 0;
   } else if (res == -1) {
 	dbg("poll: ko (%s)", strerror(err));
@@ -156,7 +162,7 @@ int pipe_read(struct pipe_t *p, void *buf, ssize_t *len)
   }
 
   while(1) {
-	res = poll_in(p->sv[p->ind]);
+	res = poll_in(p->sv[p->ind], p->read_timeout_in_ms);
 	if (res) {
       err("KO (%d)", res);	  
 	  goto exit0;

@@ -14,12 +14,13 @@
 struct pipe_t {
   int sv[2]; /* socketpair descriptors (0=PARENT, 1=CHILD)*/
   int ind; /* sv[ind] current valid descriptor */
+  unsigned int read_timeout_in_ms; /* timeout on read, 0=no timeout */ 
   void *priv;
 };
 
-extern int pipe_create(struct pipe_t **px);
+extern int pipe_create(struct pipe_t **px, unsigned int read_timeout_in_ms);
 extern int pipe_delete(struct pipe_t **px);
-extern int pipe_restore(struct pipe_t **px, int fd);
+extern int pipe_restore(struct pipe_t **px, int fd, unsigned int read_timeout_in_ms);
 extern int pipe_dup2(struct pipe_t *p, int index, int new_fd);
 extern int pipe_close(struct pipe_t *p, int index);
 extern int pipe_read(struct pipe_t *p, void *buf, ssize_t *len);

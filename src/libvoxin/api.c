@@ -16,7 +16,7 @@
 #define FILTER_PUNC 2
 
 #define ENGINE_ID 0x020A0005
-#define IS_ENGINE(e) (e && (e->id == ENGINE_ID) && e->handle && e->api)
+#define IS_ENGINE(e) (e && (e->id == ENGINE_ID) && e->handle && e->api && e->current_engine)
 #define IS_API(a) (a && (a->my_instance || !(res=api_create(a))))
   
 #define MAX_LANG 2 // RFU
@@ -24,15 +24,16 @@
 struct engine_t {
   uint32_t id; // structure identifier
   struct api_t *api; // parent api
-  uint32_t handle; // current handle 
-  uint32_t initial_handle;
-  uint32_t other_handle; 
+  uint32_t handle;
+  struct engine_t *current_engine;
+  struct engine_t *other_engine; 
   msg_tts_id tts_id;
   void *cb; // user callback
   void *data_cb; // user data callback
   int16_t *samples; // user samples buffer
   uint32_t nb_samples; // current number of samples in the user sample buffer
   uint32_t stop_required;
+  char *output_filename;
   void *inote; // inote handle
   inote_charset_t from_charset; // charset of the text supplied by the caller
   inote_charset_t to_charset; // charset expected by the tts engine
@@ -318,6 +319,7 @@ static struct engine_t *engine_create(uint32_t handle, struct api_t *api, msg_tt
   if (self) {
 	self->id = ENGINE_ID;
 	self->handle = handle;
+	self->current_engine = self;
 	self->api = api;
 	self->tts_id = tts_id;
 	self->inote = inote_create();
@@ -339,21 +341,24 @@ static struct engine_t *engine_create(uint32_t handle, struct api_t *api, msg_tt
 }
 
 
-static struct engine_t *engine_delete(struct engine_t *engine)
+static struct engine_t *engine_delete(struct engine_t *self)
 {
   ENTER();
 
-  if (!engine)
+  if (!self)
 	return NULL;
 
-  inote_delete(engine->inote);
+  inote_delete(self->inote);
+  engine_delete(self->other_engine);
+  if (self->output_filename)
+	free(self->output_filename);
   
-  memset(engine, 0, sizeof(*engine));
-  free(engine);
-  engine = NULL;
+  memset(self, 0, sizeof(*self));
+  free(self);
+  self = NULL;
 
   LEAVE();
-  return engine;
+  return self;
 }
 
 // to be called with a lock on api
@@ -448,6 +453,7 @@ Boolean eciSetOutputBuffer(ECIHand hEngine, int iSize, short *psBuffer)
 	err("LEAVE, args error");
 	return eci_res;
   }
+  engine = engine->current_engine;
 
   if (msg_set_header(&header, MSG_DST(engine->tts_id), MSG_SET_OUTPUT_BUFFER, engine->handle))
 	goto exit0;
@@ -483,9 +489,15 @@ Boolean eciSetOutputFilename(ECIHand hEngine, const void *pFilename)
 	err("LEAVE, args error");
 	return ECIFalse;
   }
+  engine = engine->current_engine;
 
   msg_set_header(&header, MSG_DST(engine->tts_id), MSG_SET_OUTPUT_FILENAME, engine->handle);
   process_func1(engine->api, &header, &bytes, &eci_res, true, true);
+  if (eci_res == ECITrue) {
+	if (engine->output_filename)
+	  free(engine->output_filename);
+	engine->output_filename = strdup(pFilename);
+  }
   return eci_res;
 }
 
@@ -620,6 +632,7 @@ Boolean eciAddText(ECIHand hEngine, ECIInputText pText)
 	err("LEAVE, args error");
 	return ECIFalse;
   }
+  engine = engine->current_engine;
 
   api = engine->api;
   if (api_lock(api))
@@ -704,6 +717,7 @@ Boolean eciSynthesize(ECIHand hEngine)
 	err("LEAVE, args error");
 	return ECIFalse;
   }
+  engine = engine->current_engine;
 
   msg_set_header(&header, MSG_DST(engine->tts_id), MSG_SYNTHESIZE, engine->handle);
   process_func1(engine->api, &header, NULL, &eci_res, true, true);
@@ -725,6 +739,7 @@ static Boolean synchronize(struct engine_t *engine, enum msg_type type)
 	err("LEAVE, args error");
 	return eci_res;
   }
+  engine = engine->current_engine;
 
   api = engine->api;
 
@@ -841,7 +856,12 @@ ECIHand eciDelete(ECIHand hEngine)
 	err("LEAVE, args error");
 	return handle;
   }
+  //engine = engine->current_engine;
 
+  if (engine->other_engine) {
+	eciDelete(engine->other_engine);
+  }
+  
   api = engine->api;
   if (api_lock(api))
 	return handle;
@@ -871,6 +891,7 @@ void eciRegisterCallback(ECIHand hEngine, ECICallback Callback, void *pData)
 	err("LEAVE, args error");
 	return;
   }
+  engine = engine->current_engine;
 
   msg_set_header(&header, MSG_DST(engine->tts_id), MSG_REGISTER_CALLBACK, engine->handle);
   header.args.rc.Callback = !!Callback;
@@ -913,6 +934,7 @@ Boolean eciStop(ECIHand hEngine)
 	err("LEAVE, args error");
 	return eci_res;
   }
+  engine = engine->current_engine;
     
   api = engine->api;
   if (!IS_API(api)) {
@@ -984,7 +1006,7 @@ ECIHand eciNewEx(enum ECILanguageDialect Value)
   struct api_t *api = &my_api;
   int res = 0;
  
-  dbg("ENTER(%d)", Value);
+  dbg("ENTER(0x%0x)", Value);
 
   if (!IS_API(api)) {
 	err("LEAVE, error %d", res);
@@ -1031,11 +1053,52 @@ ECIHand eciNewEx(enum ECILanguageDialect Value)
   return (ECIHand)engine;
 }
 
+static bool ttsIsIdCompatible(uint32_t id, msg_tts_id tts_id) {
+  bool res=false;
+  res = (((tts_id == MSG_TTS_ECI) && (id <= VOX_LAST_ECI_VOICE))
+		 || ((tts_id == MSG_TTS_NVE) && (id > VOX_LAST_ECI_VOICE)));
+  dbg("ENTER(id=0x%0x, tts_id=%d): %d", id, tts_id, res);
+  return res;
+}
+
+static int engine_copy(struct engine_t *src, struct engine_t *dst) {
+  int ret = 0;
+
+  if (!src || !dst) {	
+	err("LEAVE, args error");
+	return -1;
+  }
+
+  if (src->output_filename &&
+	  (!dst->output_filename || strcmp(src->output_filename, dst->output_filename))) {
+	if (ECIFalse == eciSetOutputFilename(dst, src->output_filename))
+	  return -1;
+  }
+
+  if (src->samples) {
+	if ((src->samples != dst->samples) || (src->nb_samples != dst->nb_samples)){
+	  if (ECIFalse == eciSetOutputBuffer(dst, src->nb_samples, src->samples))
+		return -1;
+	}
+  }
+
+  if ((src->cb != dst->cb) || (src->data_cb != dst->data_cb)){
+	eciRegisterCallback(dst, src->cb, src->data_cb);
+  }
+
+  
+  /* // update other_engine from self */
+  /* self->current_engine = self->other_engine; */
+  /* engine_copy(self, self->other_engine); */
+
+  return ret;
+}
 
 int eciSetParam(ECIHand hEngine, enum ECIParam Param, int iValue)
 {
   int eci_res = -1;
-  struct engine_t *engine = (struct engine_t *)hEngine;
+  struct engine_t *self = (struct engine_t *)hEngine;
+  struct engine_t *engine = self;
   struct msg_t header;
    
   dbg("ENTER(%d,0x%0x)", Param, iValue);  
@@ -1044,7 +1107,29 @@ int eciSetParam(ECIHand hEngine, enum ECIParam Param, int iValue)
 	err("LEAVE, args error");
 	return eci_res;
   }
+  //  engine = engine->current_engine;
 
+  if (Param == eciLanguageDialect) {
+	if (!ttsIsIdCompatible(iValue, self->current_engine->tts_id)) {
+	  if (self->current_engine == self) {	  
+		if (!self->other_engine) {
+		  self->other_engine = eciNewEx(iValue);
+		}
+		if (!self->other_engine)
+		  return -1;
+		// update other_engine from self
+		self->current_engine = self->other_engine;
+		engine_copy(self, self->other_engine);
+	  } else {
+		// update self from other_engine
+		self->current_engine = self;
+		engine_copy(self->other_engine, self);
+	  }
+	}
+  }
+
+  engine = self->current_engine;
+  
   msg_set_header(&header, MSG_DST(engine->tts_id), MSG_SET_PARAM, engine->handle);
   header.args.sp.Param = Param;
   header.args.sp.iValue = iValue;
@@ -1069,6 +1154,7 @@ int eciGetParam(ECIHand hEngine, enum ECIParam Param)
 	err("LEAVE, args error");
 	return eci_res;
   }
+  engine = engine->current_engine;
 
   msg_set_header(&header, MSG_DST(engine->tts_id), MSG_GET_PARAM, engine->handle);
   header.args.gp.Param = Param;
@@ -1115,6 +1201,7 @@ void eciErrorMessage(ECIHand hEngine, void *buffer)
 	err("LEAVE, args error");
 	return;
   }
+  engine = engine->current_engine;
 
   api = engine->api;
   msg_set_header(&header, MSG_DST(engine->tts_id), MSG_ERROR_MESSAGE, engine->handle);
@@ -1140,6 +1227,7 @@ int eciProgStatus(ECIHand hEngine)
 	err("LEAVE, args error");
 	return ECI_PARAMETERERROR;
   }
+  engine = engine->current_engine;
 
   msg_set_header(&header, MSG_DST(engine->tts_id), MSG_PROG_STATUS, engine->handle);
   process_func1(engine->api, &header, NULL, &eci_res, true, true);
@@ -1158,6 +1246,8 @@ void eciClearErrors(ECIHand hEngine)
 	err("LEAVE, args error");
 	return;
   }
+  engine = engine->current_engine;
+
   msg_set_header(&header, MSG_DST(engine->tts_id), MSG_CLEAR_ERRORS, engine->handle);
   process_func1(engine->api, &header, NULL, NULL, true, true);  
 }
@@ -1174,6 +1264,8 @@ Boolean eciReset(ECIHand hEngine)
 	err("LEAVE, args error");
 	return ECIFalse;
   }
+  engine = engine->current_engine;
+
   msg_set_header(&header, MSG_DST(engine->tts_id), MSG_RESET, engine->handle);
   process_func1(engine->api, &header, NULL, &eci_res, true, true);
   return eci_res;
@@ -1209,6 +1301,7 @@ int eciGetVoiceParam(ECIHand hEngine, int iVoice, enum ECIVoiceParam Param)
 	err("LEAVE, args error");
 	return eci_res;
   }
+  engine = engine->current_engine;
     
   msg_set_header(&header, MSG_DST(engine->tts_id), MSG_GET_VOICE_PARAM, engine->handle);
   header.args.gvp.iVoice = iVoice;
@@ -1230,6 +1323,7 @@ int eciSetVoiceParam(ECIHand hEngine, int iVoice, enum ECIVoiceParam Param, int 
 	err("LEAVE, args error");
 	return eci_res;
   }
+  engine = engine->current_engine;
 
   msg_set_header(&header, MSG_DST(engine->tts_id), MSG_SET_VOICE_PARAM, engine->handle);
   header.args.svp.iVoice = iVoice;
@@ -1252,6 +1346,7 @@ Boolean eciPause(ECIHand hEngine, Boolean On)
 	err("LEAVE, args error");
 	return eci_res;
   }
+  engine = engine->current_engine;
 
   msg_set_header(&header, MSG_DST(engine->tts_id), MSG_PAUSE, engine->handle);
   header.args.p.On = On;
@@ -1272,6 +1367,7 @@ Boolean eciInsertIndex(ECIHand hEngine, int iIndex)
 	err("LEAVE, args error");
 	return eci_res;
   }
+  engine = engine->current_engine;
     
   msg_set_header(&header, MSG_DST(engine->tts_id), MSG_INSERT_INDEX, engine->handle);
   header.args.ii.iIndex = iIndex;
@@ -1291,6 +1387,7 @@ Boolean eciCopyVoice(ECIHand hEngine, int iVoiceFrom, int iVoiceTo)
 	err("LEAVE, args error");
 	return eci_res;
   }
+  engine = engine->current_engine;
     
   msg_set_header(&header, MSG_DST(engine->tts_id), MSG_COPY_VOICE, engine->handle);
   header.args.cv.iVoiceFrom = iVoiceFrom;
@@ -1312,6 +1409,7 @@ ECIDictHand eciNewDict(ECIHand hEngine)
 	err("LEAVE, args error");
 	return NULL_DICT_HAND;
   }
+  engine = engine->current_engine;
   msg_set_header(&header, MSG_DST(engine->tts_id), MSG_NEW_DICT, engine->handle);
   process_func1(engine->api, &header, NULL, (int*)&eci_res, true, true);
   return eci_res;
@@ -1329,6 +1427,7 @@ ECIDictHand eciGetDict(ECIHand hEngine)
 	err("LEAVE, args error");
 	return NULL_DICT_HAND;
   }
+  engine = engine->current_engine;
   msg_set_header(&header, MSG_DST(engine->tts_id), MSG_GET_DICT, engine->handle);
   process_func1(engine->api, &header, NULL, (int*)&eci_res, true, true);
   return eci_res;
@@ -1365,6 +1464,7 @@ ECIDictHand eciDeleteDict(ECIHand hEngine, ECIDictHand hDict)
 	err("LEAVE, args error");
 	return eci_res;
   }
+  engine = engine->current_engine;
     
   msg_set_header(&header, MSG_DST(engine->tts_id), MSG_DELETE_DICT, engine->handle);
   header.args.dd.hDict = (char*)hDict - (char*)NULL;
@@ -1391,6 +1491,7 @@ enum ECIDictError eciLoadDict(ECIHand hEngine, ECIDictHand hDict, enum ECIDictVo
 	err("LEAVE, args error 1");
 	return eci_res;
   }
+  engine = engine->current_engine;
   
   msg_set_header(&header, MSG_DST(engine->tts_id), MSG_LOAD_DICT, engine->handle);
   header.args.ld.hDict = (char*)hDict - (char*)NULL;
@@ -1414,6 +1515,7 @@ Boolean eciClearInput(ECIHand hEngine)
 	err("LEAVE, args error");
 	return ECIFalse;
   }
+  engine = engine->current_engine;
   msg_set_header(&header, MSG_DST(engine->tts_id), MSG_CLEAR_INPUT, engine->handle);
   process_func1(engine->api, &header, NULL, &eci_res, true, true);
   return eci_res;
@@ -1432,6 +1534,7 @@ Boolean ECIFNDECLARE eciSetOutputDevice(ECIHand hEngine, int iDevNum)
 	err("LEAVE, args error");
 	return eci_res;
   }
+  engine = engine->current_engine;
 
   msg_set_header(&header, MSG_DST(engine->tts_id), MSG_SET_OUTPUT_DEVICE, engine->handle);
   header.args.sod.iDevNum = iDevNum;

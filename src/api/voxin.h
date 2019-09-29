@@ -15,6 +15,7 @@ typedef enum {voxAdult, voxChild, voxSenior} voxAge;
 #define VOX_RESERVED_VOICES 30
 #define VOX_MAX_NB_OF_LANGUAGES (VOX_ECI_VOICES + VOX_RESERVED_VOICES)
 #define VOX_STR_MAX 128
+#define VOX_LAST_ECI_VOICE eciStandardFinnish
 
 typedef struct {
   uint32_t id; // voice identifier, e.g.: 0x2d0002

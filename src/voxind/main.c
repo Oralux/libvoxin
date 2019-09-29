@@ -15,6 +15,7 @@
 
 #define VOXIND_ID 0x05000A01 
 #define ENGINE_ID 0x15000A01 
+#define READ_TIMEOUT_IN_MS 0
 
 struct voxind_t {
   uint32_t id;
@@ -653,7 +654,7 @@ int main(int argc, char **argv)
   }
   my_voxind->msg_length = PIPE_MAX_BLOCK;
   
-  res = pipe_restore(&my_voxind->pipe_command, PIPE_COMMAND_FILENO);
+  res = pipe_restore(&my_voxind->pipe_command, PIPE_COMMAND_FILENO, READ_TIMEOUT_IN_MS);
   if (res)
     goto exit0;
 
