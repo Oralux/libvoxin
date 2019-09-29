@@ -162,8 +162,9 @@ static int api_create(struct api_t *api) {
 }
 
 
-static int msg_set_header(struct msg_t *msg, msg_tts_id id, uint32_t func, uint32_t engine_handle)
+static int msg_set_header(struct msg_t *msg, uint32_t id, uint32_t func, uint32_t engine_handle)
 {
+  dbg("ENTER(0x%0x,%d,0x%0x)", id, func, engine_handle);
   if (!msg || !MSG_CHECK(id)) {
 	err("LEAVE, args error");
 	return EINVAL;

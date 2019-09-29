@@ -230,8 +230,8 @@ static int voxind_routine(voxind_t *self) {
 	
   dbg("[pid=%lu] ENTER", libvoxinDebugGetTid());
 
-  if (self && self->ld_library_path) 
-	dbg("[pid=%lu] LD_LIBRARY_PATH: %s", libvoxinDebugGetTid(), self->ld_library_path);
+  if (self && self->ld_library_path && self->bin && self->rfsdir) 
+	dbg("[pid=%lu] LD_LIBRARY_PATH: %s, bin=%s, rfsdir=%s", libvoxinDebugGetTid(), self->ld_library_path, self->bin, self->rfsdir);
   
   if (chdir(self->rfsdir)) {
 	res = errno;
@@ -479,11 +479,14 @@ void *libvoxin_create() {
   }
   
   int i;
-  for (i=0; i<MSG_TTS_MAX; i++) {
-	// voxind[0] corresponds to MSG_TTS_ECI (=1)
-	self->voxind[i] = voxind_create(i+1, self->rootdir);
-	if (self->voxind[i])
-	  voxind_start(self->voxind[i]);
+  int j;
+  for (i=0, j=0; i<MSG_TTS_MAX; i++) {
+	voxind_t *v = voxind_create(i, self->rootdir);
+	if (v) {
+	  self->voxind[j] = v;
+	  j++;
+	  voxind_start(v);
+	}
   }
   
  exit0:
