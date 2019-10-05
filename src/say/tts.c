@@ -74,7 +74,7 @@ static voice_t *voiceCreate() {
 	  }
 	}
 				
-	vox->rate = 22050; //TODO (to remove)
+	//	vox->rate = 22050; //TODO (to remove)
 	dbg("voxin: local[%d]=langID=0x%x, name=%s, lang=%s, dialect=%s, charset=%s, rate=%d",
 		i, vox->id, vox->name, vox->lang, vox->variant, vox->charset, vox->rate);
 	j++;

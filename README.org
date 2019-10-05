@@ -34,6 +34,10 @@ By default, a fake libibmeci.so is provided.
 /home/user1/voxin-2.0/voxin-enu-2.0/packages/all/voxin-viavoice-enu_6.7-1.0-1.txz
 /home/user1/voxin-2.0/voxin-fra-2.0/packages/all/voxin-viavoice-fra_6.7-1.0-1.txz
 
+# or several lists of tarballs
+./test.sh -b src/list.vv -b src/list.nve
+
+
 #+END_SRC
 
 ** Run test 1

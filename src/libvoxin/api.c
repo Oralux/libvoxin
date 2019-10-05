@@ -20,7 +20,7 @@
 #define IS_API(a) (a && (a->my_instance || !(res=api_create(a))))
   
 #define MAX_LANG 2 // RFU
-
+#define VOICE_PARAM_UNCHANGED 0x1000
 struct engine_t {
   uint32_t id; // structure identifier
   struct api_t *api; // parent api
@@ -37,10 +37,11 @@ struct engine_t {
   void *inote; // inote handle
   inote_charset_t from_charset; // charset of the text supplied by the caller
   inote_charset_t to_charset; // charset expected by the tts engine
+  uint32_t voice_param[eciNumVoiceParams];
   uint32_t state_expected_lang[MAX_LANG]; // state internal buffer 
   uint8_t tlv_message_buffer[TLV_MESSAGE_LENGTH_MAX]; // tlv internal buffer
   inote_slice_t tlv_message;
-  inote_state_t state;
+  inote_state_t state;  
   uint8_t text_buffer[TEXT_LENGTH_MAX];  
 };
 
@@ -323,6 +324,9 @@ static struct engine_t *engine_create(uint32_t handle, struct api_t *api, msg_tt
 	self->api = api;
 	self->tts_id = tts_id;
 	self->inote = inote_create();
+	int i;
+	for (i=0; i<sizeof(self->voice_param)/sizeof(*self->voice_param); i++)
+	  self->voice_param[i] = VOICE_PARAM_UNCHANGED;
 	engine_init_buffers(self);
 	// TODO: state init (expected languages/annotation)
 	/* state.expected_lang[0] = ENGLISH; */
@@ -856,12 +860,7 @@ ECIHand eciDelete(ECIHand hEngine)
 	err("LEAVE, args error");
 	return handle;
   }
-  //engine = engine->current_engine;
 
-  if (engine->other_engine) {
-	eciDelete(engine->other_engine);
-  }
-  
   api = engine->api;
   if (api_lock(api))
 	return handle;
@@ -1086,6 +1085,16 @@ static int engine_copy(struct engine_t *src, struct engine_t *dst) {
 	eciRegisterCallback(dst, src->cb, src->data_cb);
   }
 
+  int i;
+  for (i=0; i<sizeof(src->voice_param)/sizeof(*src->voice_param); i++) {
+	dbg("get engine=%p, voice_param[%d] = %d)", src, i, src->voice_param[i]);  
+	//	if ((src->voice_param[i] != VOICE_PARAM_UNCHANGED) && (src->voice_param[i] != dst->voice_param[i])) {
+	if (src->voice_param[i] != VOICE_PARAM_UNCHANGED) {
+	  eciSetVoiceParam(dst, 0, i, src->voice_param[i]);
+	}
+  }
+
+  
   
   /* // update other_engine from self */
   /* self->current_engine = self->other_engine; */
@@ -1107,7 +1116,6 @@ int eciSetParam(ECIHand hEngine, enum ECIParam Param, int iValue)
 	err("LEAVE, args error");
 	return eci_res;
   }
-  //  engine = engine->current_engine;
 
   if (Param == eciLanguageDialect) {
 	if (!ttsIsIdCompatible(iValue, self->current_engine->tts_id)) {
@@ -1117,11 +1125,11 @@ int eciSetParam(ECIHand hEngine, enum ECIParam Param, int iValue)
 		}
 		if (!self->other_engine)
 		  return -1;
-		// update other_engine from self
+		dbg("update other_engine from self");
 		self->current_engine = self->other_engine;
 		engine_copy(self, self->other_engine);
 	  } else {
-		// update self from other_engine
+		dbg("update self from other_engine");
 		self->current_engine = self;
 		engine_copy(self->other_engine, self);
 	  }
@@ -1139,6 +1147,7 @@ int eciSetParam(ECIHand hEngine, enum ECIParam Param, int iValue)
 	}
 	api_unlock(engine->api);	      
   }
+
   return eci_res;
 }
 
@@ -1319,7 +1328,7 @@ int eciSetVoiceParam(ECIHand hEngine, int iVoice, enum ECIVoiceParam Param, int 
    
   dbg("ENTER(%p,%d,%d,%d)", hEngine, iVoice, Param, iValue);  
   
-  if (!IS_ENGINE(engine)) {
+  if (!IS_ENGINE(engine) || (Param >= eciNumVoiceParams)) {
 	err("LEAVE, args error");
 	return eci_res;
   }
@@ -1330,6 +1339,10 @@ int eciSetVoiceParam(ECIHand hEngine, int iVoice, enum ECIVoiceParam Param, int 
   header.args.svp.Param = Param;
   header.args.svp.iValue = iValue;
   process_func1(engine->api, &header, NULL, &eci_res, true, true);
+  if (eci_res >= 0) {
+	engine->voice_param[Param] = iValue;
+	dbg("set engine=%p, voice_param[%d] = %d)", engine, Param, iValue);  
+  }
   return eci_res;
 }
 
@@ -1393,6 +1406,7 @@ Boolean eciCopyVoice(ECIHand hEngine, int iVoiceFrom, int iVoiceTo)
   header.args.cv.iVoiceFrom = iVoiceFrom;
   header.args.cv.iVoiceTo = iVoiceTo;
   process_func1(engine->api, &header, NULL, &eci_res, true, true);
+
   return eci_res;  
 }
 
