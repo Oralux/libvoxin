@@ -24,8 +24,11 @@
 // for nve (relative to RFS_NVE)
 #define VOXIND_NVE "bin/voxind-nve"
 
-#define READ_TIMEOUT_IN_MS 300
+#define READ_TIMEOUT_IN_MS 5000
 #define MAXBUF 4096
+
+#define ECI_INSTALL_WITNESS "/opt/IBM/ibmtts/lib/libibmeci.so"
+#define NVE_INSTALL_WITNESS "/opt/oralux/nve/bin/voxind-nve"
 
 typedef struct {
   msg_tts_id id;
@@ -323,6 +326,20 @@ static voxind_t *voxind_create(msg_tts_id id, char *rootdir) {
 
   if ((id <= MSG_TTS_UNDEFINED) || (id >= MSG_TTS_MAX) || !rootdir)
 	return NULL;
+  
+  if (id == MSG_TTS_ECI) {
+	FILE *fd = fopen(ECI_INSTALL_WITNESS, "r");
+	if (!fd)
+	  return NULL;
+	fclose(fd);
+  } else if (id == MSG_TTS_NVE) {
+	FILE *fd = fopen(NVE_INSTALL_WITNESS, "r");
+	if (!fd)
+	  return NULL;
+	fclose(fd);	
+  } else {
+	  return NULL;
+  }
   
   voxind_t *self = calloc(1, sizeof(*self));
   if (!self)
