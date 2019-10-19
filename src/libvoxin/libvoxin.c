@@ -14,7 +14,6 @@
 #include "libvoxin.h"
 #include "msg.h"
 #include "debug.h"
-
 #define RFS "/opt/oralux/voxin"
 #define RFS_NVE "/opt/oralux/nve"
 
@@ -48,7 +47,7 @@ typedef struct {
   uint32_t id;
   uint32_t msg_count;
   pid_t parent;
-  voxind_t *voxind[MSG_TTS_MAX];
+  voxind_t *voxind[MSG_TTS_MAX]; // Warning: index==0 is the first valid value (0 is not interpreted as MSG_TTS_UNDEFINED!)
   uint32_t stop_required;
   // rootdir: path to the root directory.
   // For example, rootdir could be "/",
@@ -322,7 +321,7 @@ static void voxind_delete(voxind_t *self) {
 }
 
 static voxind_t *voxind_create(msg_tts_id id, char *rootdir) {
-  ENTER();
+  dbg("ENTER id=%d", id);
 
   if ((id <= MSG_TTS_UNDEFINED) || (id >= MSG_TTS_MAX) || !rootdir)
 	return NULL;
@@ -440,8 +439,17 @@ static voxind_t *voxind_create(msg_tts_id id, char *rootdir) {
 }
 
 static voxind_t *libvoxin_get_voxind(libvoxin_t *self, msg_tts_id id) {
-  return (!self || (id <= MSG_TTS_UNDEFINED) || (id >= MSG_TTS_MASK))
-	? NULL : self->voxind[id-1];
+  voxind_t *res = NULL;
+  if (self && (id > MSG_TTS_UNDEFINED) && (id < MSG_TTS_MAX)) {
+	int i;
+	for (i=0; i<MSG_TTS_MAX; i++) {
+	  if (self->voxind[i]->id == id) {
+		res = self->voxind[i];
+		break;
+	  }
+	}
+  }
+  return res;
 }
 
 void libvoxin_delete(void *handle) {
@@ -568,7 +576,7 @@ int libvoxin_call_eci(void* handle, struct msg_t *msg) {
   effective_msg_length = MSG_HEADER_LENGTH + msg->effective_data_length;
 
   if ((effective_msg_length > allocated_msg_length) || !msg_string((enum msg_type)msg->func)) {
-	err("LEAVE, args error(%d)",1);
+	err("LEAVE, args error(%d, eff=%lu, alloc=%lu, f=%d)", 1, (long unsigned int)effective_msg_length, (long unsigned int)allocated_msg_length, msg->func);
 	return EINVAL;
   }
 

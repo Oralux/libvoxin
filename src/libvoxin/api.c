@@ -402,7 +402,7 @@ ECIHand eciNew(void)
   }
 
   if (!vox_list_nb) {
-	unsigned int n;
+	unsigned int n = MSG_VOX_LIST_MAX;
 	if (voxGetVoices(NULL, &n))
 	  return NULL;
   }
@@ -1013,7 +1013,7 @@ ECIHand eciNewEx(enum ECILanguageDialect Value)
   }
   
   if (!vox_list_nb) {
-	unsigned int n;
+	unsigned int n = MSG_VOX_LIST_MAX;
 	if (voxGetVoices(NULL, &n))
 	  return NULL;
   }
@@ -1570,7 +1570,7 @@ static int ttsGetVoices(msg_tts_id id, vox_t *list, unsigned int *nbVoices) {
   max = *nbVoices;
   *nbVoices = 0;
   dbg("ENTER(%p,max=%d)", list, max);
-  
+
   msg_set_header(&header, MSG_DST(id), MSG_VOX_GET_VOICES, 0);
   if (process_func1(api, &header, NULL, &eci_res, false, false) || eci_res)
 	return 1;
@@ -1625,7 +1625,7 @@ int voxGetVoices(vox_t *list, unsigned int *nbVoices) {
 	return 1;
   }
 
-  dbg("ENTER(%p,%d)", list, *nbVoices);
+  dbg("ENTER(list=%p, nbVoices=%d)", list, *nbVoices);
 
   if (!IS_API(api)) {
 	err("LEAVE, error %d", res);
