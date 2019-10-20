@@ -233,7 +233,7 @@ int fileCat(file_t *self, file_t *src) {
 	size = statbuf.st_size;
   }
 
-  if (self->fd) {
+  if (self->fd && !self->fifo) {
 	if ((self->mode & (FILE_WRITABLE|FILE_APPEND)) != (FILE_WRITABLE|FILE_APPEND)) {
 	  fclose(self->fd);
 	  self->fd = NULL;

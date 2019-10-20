@@ -170,7 +170,7 @@ static obj_t *objCreate(const char *input, const char *output, int jobs, const c
   if (!self)
 	return NULL;
 
-  self->voiceName = voiceName;
+  self->voiceName = voiceName ? strdup(voiceName) : NULL;
   self->speed = speed;
   self->text = textfileCreate(input, &jobs, sentence);
   if (!self->text)
@@ -205,7 +205,7 @@ int main(int argc, char *argv[])
   obj_t *self = NULL;
 	
   ENTER();
- 
+
   while ((opt = getopt(argc, argv, "df:hj:l:Ls:S:w:")) != -1) {
     switch (opt) {
     case 'w':
