@@ -57,7 +57,7 @@ static eciLocale eciLocales[] = { // +1 for a null element
 	{"Castilian_Spanish", "es", "ES", eciCastilianSpanish, "ISO-8859-1"},
 	{"Mexican_Spanish", "es", "MX", eciMexicanSpanish, "ISO-8859-1"},
 	{"French", "fr", "FR", eciStandardFrench, "ISO-8859-1"},
-	{"Canadian_French", "ca", "FR", eciCanadianFrench, "ISO-8859-1"},
+	{"Canadian_French", "fr", "CA", eciCanadianFrench, "ISO-8859-1"},
 	{"German", "de", "DE", eciStandardGerman, "ISO-8859-1"},
 	{"Italian", "it", "IT", eciStandardItalian, "ISO-8859-1"},
 	{"Mandarin_Chinese", "zh", "CN", eciMandarinChinese, "GBK"},
@@ -640,6 +640,8 @@ int main(int argc, char **argv)
   /* for (i = 1; i < NSIG; i++) { */
   /*   sigaction(i, &act, NULL); */
   /* } */
+
+  dbg("voxin api=%d.%d.%d", LIBVOXIN_VERSION_MAJOR, LIBVOXIN_VERSION_MINOR, LIBVOXIN_VERSION_PATCH);
   
   my_voxind = calloc(1, sizeof(struct voxind_t));
   if (!my_voxind) {
