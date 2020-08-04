@@ -1632,10 +1632,12 @@ int voxGetVoices(vox_t *list, unsigned int *nbVoices) {
 	return 1;
   }
   
-  if (!vox_list_nb) {
+  if (!vox_list_nb) {      
 	if (api_lock(api))
 	  return 1;
-	
+
+	dbg("voxin api=%d.%d.%d", LIBVOXIN_VERSION_MAJOR, LIBVOXIN_VERSION_MINOR, LIBVOXIN_VERSION_PATCH);
+
 	int i;
 	for (i=0; i<api->tts_len; i++) {
 	  unsigned int n = MSG_VOX_LIST_MAX - vox_list_nb;
@@ -1663,14 +1665,55 @@ int voxGetVoices(vox_t *list, unsigned int *nbVoices) {
   return 0;
 }
 
-int voxString(vox_t *v, char *s, size_t len) {
+int voxToString(vox_t *data, char *string, size_t *size) {
   //  ENTER();
-  snprintf(s, len, "0x%0x, n=%s, l=%s, v=%s, r=%d, s=%d, c=%s, g=%s, a=%s, q=%s",
-		   v->id, v->name, v->lang, v->variant,
-		   v->rate, v->size, v->charset,
-		   (v->gender==voxFemale) ? "Female" : "Male",
-		   (v->age == voxAdult) ? "Adult" : "???",
-		   v->quality ? v->quality : "null");
-  s[len-1] = 0;
+  char c;
+  char *str0;
+
+  if (!data || !size)
+    return 1;
+  
+  if (string) {
+    str0 = string;
+  } else {
+    str0 = &c;
+    *size = 1;
+  }
+  size_t size0 = snprintf(str0, *size, "0x%0x, n=%s, l=%s, v=%s, r=%d, s=%d, c=%s, g=%s, a=%s, q=%s",
+			  data->id, data->name, data->lang, data->variant,
+			  data->rate, data->size, data->charset,
+			  (data->gender == voxFemale) ? "Female" : "Male",
+			  (data->age == voxAdult) ? "Adult" : "???",
+			  data->quality ? data->quality : "null");
+  *size = size0 + 1;
   return 0;
 }
+
+int voxSetParam(void *handle, voxParam param, int value) {
+  dbg("ENTER(param=%d, value=%d)", param, value);
+
+  // TODO: VOX_CAPITALS
+  return eciSetParam(handle, (enum ECIParam) param, value);
+}
+
+int voxGetVersion(int *major, int *minor, int *patch) {
+//    ENTER();
+    if (!major || !minor || !patch)
+	return 1;
+
+    *major = LIBVOXIN_VERSION_MAJOR;
+    *minor = LIBVOXIN_VERSION_MINOR;
+    *patch = LIBVOXIN_VERSION_PATCH;
+
+    dbg("voxin api=%d.%d.%d", LIBVOXIN_VERSION_MAJOR, LIBVOXIN_VERSION_MINOR, LIBVOXIN_VERSION_PATCH);
+    
+    return 0;
+}
+
+// deprecated
+int voxString(vox_t *v, char *s, size_t len) {
+  //  ENTER();
+    size_t size = len;
+    return voxToString(v, s, &size);
+}
+

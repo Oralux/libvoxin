@@ -47,6 +47,16 @@ int main(int argc, char** argv)
   /*   } */
   /* } */
 
+  {
+    int major=0, minor=0, patch=0;
+    voxGetVersion(&major, &minor, &patch);
+    if ((major != LIBVOXIN_VERSION_MAJOR)
+	|| (minor != LIBVOXIN_VERSION_MINOR)
+	|| (patch != LIBVOXIN_VERSION_PATCH)) {
+      return __LINE__;      
+    }
+  }
+  
   enum {NB_VOICES=30};
   vox_t list[NB_VOICES];
   unsigned int nbVoices = NB_VOICES;
@@ -83,7 +93,7 @@ int main(int argc, char** argv)
    
   //  eciSetOutputFilename(handle, PATHNAME_RAW_DATA);
 
-  eciSetParam(handle, eciLanguageDialect, id_compact);  
+  voxSetParam(handle, eciLanguageDialect, id_compact);  
   if (eciAddText(handle, vh_quote) == ECIFalse)
     return __LINE__;
 
@@ -93,7 +103,7 @@ int main(int argc, char** argv)
   if (eciSynchronize(handle) == ECIFalse)
     return __LINE__;
 
-  eciSetParam(handle, eciLanguageDialect, id_high);  
+  voxSetParam(handle, eciLanguageDialect, id_high);  
   if (eciAddText(handle, vh_quote) == ECIFalse)
     return __LINE__;
 
