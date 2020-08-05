@@ -35,6 +35,7 @@
 #ifndef VOXIN_H
 #define VOXIN_H
 
+#include <stdlib.h>
 #include <stdint.h>
 #include "eci.h"
 
