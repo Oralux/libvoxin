@@ -33,12 +33,7 @@ if [ -n "$WITH_DBG" ]; then
 	export STRIP=test;
 fi
 
-case "$ARCH" in
-	x86|i386|i586|i686) ARCH=i686;;	
-	*)
-		# [ -n "$DEB_HOST_ARCH" ] && ARCH="$DEB_HOST_ARCH"
-		ARCH=$(uname -m);;
-esac
+getArch
 
 [ -n "$HELP" ] && usage && exit 0
 
@@ -73,7 +68,10 @@ fi
 #libinote
 getLibinote
 buildLibinote $ARCH "$DESTDIR" "$WITH_DBG"
-buildLibinote i686 "$DESTDIR_RFS32" "$WITH_DBG"
+case $ARCH in
+    arm*) ;;
+    *) buildLibinote i686 "$DESTDIR_RFS32" "$WITH_DBG";;
+esac
 
 # add access to inote.h
 CFLAGS="$CFLAGS -I$DESTDIR/include"
@@ -81,10 +79,14 @@ CFLAGS="$CFLAGS -I$DESTDIR/include"
 # libcommon
 echo "Entering common"
 cd "$SRCDIR"/common
-DESTDIR="$DESTDIR_RFS32" make clean
-DESTDIR="$DESTDIR_RFS32" CFLAGS="$CFLAGS -m32" LDFLAGS="-m32" make all
-DESTDIR="$DESTDIR_RFS32" make install
-
+case $ARCH in
+    arm*) ;;
+    *) 
+	DESTDIR="$DESTDIR_RFS32" make clean
+	DESTDIR="$DESTDIR_RFS32" CFLAGS="$CFLAGS -m32" LDFLAGS="-m32" make all
+	DESTDIR="$DESTDIR_RFS32" make install
+	;;
+esac
 make clean
 make all
 make install
@@ -101,19 +103,24 @@ cd "$SRCDIR"/api
 make clean
 make install
 
-# libibmeci (moc)
-echo "Entering libibmeci"
-cd "$SRCDIR"/libibmeci
-DESTDIR=$IBMTTSDIR make clean
-DESTDIR=$IBMTTSDIR make all
-DESTDIR=$IBMTTSDIR make install
-
 # voxind
-echo "Entering voxind"
-cd "$SRCDIR"/voxind
-DESTDIR=$DESTDIR_RFS32 IBMTTSDIR=$IBMTTSDIR make clean
-DESTDIR=$DESTDIR_RFS32 IBMTTSDIR=$IBMTTSDIR make all
-DESTDIR=$DESTDIR_RFS32 IBMTTSDIR=$IBMTTSDIR make install
+case $ARCH in
+    arm*) ;;
+    *) 
+	# libibmeci (moc)
+	echo "Entering libibmeci"
+	cd "$SRCDIR"/libibmeci
+	DESTDIR=$IBMTTSDIR make clean
+	DESTDIR=$IBMTTSDIR make all
+	DESTDIR=$IBMTTSDIR make install
+
+	echo "Entering voxind"
+	cd "$SRCDIR"/voxind
+	DESTDIR=$DESTDIR_RFS32 IBMTTSDIR=$IBMTTSDIR make clean
+	DESTDIR=$DESTDIR_RFS32 IBMTTSDIR=$IBMTTSDIR make all
+	DESTDIR=$DESTDIR_RFS32 IBMTTSDIR=$IBMTTSDIR make install
+	;;
+esac
 
 #say
 echo "Entering say"
@@ -140,8 +147,11 @@ ln -sf ../../$VOXINDIR/lib/libvoxin.so.$LIBVOXIN_VERSION_MAJOR usr/lib/libvoxin.
 ln -sf ../../$VOXINDIR/lib/libvoxin.so.$LIBVOXIN_VERSION_MAJOR usr/lib/libvoxin.so.$LIBVOXIN_VERSION_MAJOR
 ln -sf ../../$VOXINDIR/include usr/include/voxin
 ln -sf ../../$VOXINDIR/bin/voxin-say usr/bin/voxin-say
-ln -sf ../../../../var/opt/IBM/ibmtts/cfg/eci.ini $VOXINDIR/rfs32/eci.ini
-
+case $ARCH in
+    arm*) ;;
+    *) ln -sf ../../../../var/opt/IBM/ibmtts/cfg/eci.ini $VOXINDIR/rfs32/eci.ini
+       ;;
+esac
 if [ -n "$RELEASE" ]; then
 	mkdir -p "$RELDIR"
 
