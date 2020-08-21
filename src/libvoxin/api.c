@@ -566,7 +566,7 @@ static int replayText(struct engine_t *engine, inote_slice_t *text, int skip_byt
   } else {
 	t = text;
 	t->length = text->length - *text_left;
-	dbg("replay text up to %x byte (excluded) (text_left=%lu)", t->buffer[t->length + 1], *text_left);
+	dbg("replay text up to %x byte (excluded) (text_left=%lu)", t->buffer[t->length + 1], (long unsigned int)*text_left);
   }
   
   engine_init_buffers(engine);	

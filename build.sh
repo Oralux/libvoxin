@@ -147,9 +147,11 @@ ln -sf ../../$VOXINDIR/lib/libvoxin.so.$LIBVOXIN_VERSION_MAJOR usr/lib/libvoxin.
 ln -sf ../../$VOXINDIR/lib/libvoxin.so.$LIBVOXIN_VERSION_MAJOR usr/lib/libvoxin.so.$LIBVOXIN_VERSION_MAJOR
 ln -sf ../../$VOXINDIR/include usr/include/voxin
 ln -sf ../../$VOXINDIR/bin/voxin-say usr/bin/voxin-say
+
 case $ARCH in
-    arm*) ;;
-    *) ln -sf ../../../../var/opt/IBM/ibmtts/cfg/eci.ini $VOXINDIR/rfs32/eci.ini
+    arm*) unset LIBIBMECI;;
+    *) LIBIBMECI=usr/lib/libibmeci.so
+	ln -sf ../../../../var/opt/IBM/ibmtts/cfg/eci.ini $VOXINDIR/rfs32/eci.ini
        ;;
 esac
 if [ -n "$RELEASE" ]; then
@@ -166,12 +168,15 @@ if [ -n "$RELEASE" ]; then
 tar -C \"$RFSDIR\" \
 	   -Jcf \"$RELDIR/libvoxin-pkg_$VERSION.all.txz\" \
 	   usr/lib/libvoxin.so usr/lib/libvoxin.so.$LIBVOXIN_VERSION_MAJOR \
-	   usr/lib/libibmeci.so usr/include/voxin \
-	   usr/bin/voxin-say && \
+	   $LIBIBMECI usr/include/voxin \
+	   usr/bin/voxin-say
+"
+	[ -n "$LIBIBMECI" ] && fakeroot bash -c "\
 tar -C \"$RFSDIR\" \
 	   -Jcf \"$RELDIR/libibmeci-fake_$VERSION.all.txz\" \
 	   opt/IBM
 "
+
 	buildLibVoxinTarball
 	
 	printf "\nTarballs available in $RELDIR\n"	

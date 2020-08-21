@@ -86,11 +86,12 @@ static char *absolutePath(ECIHand handle, char *filename)
 {
 #define PATH_DICT (2*PATH_MAX)
 	static char path[PATH_DICT];
+	size_t len = 0;
 	*path = 0;
 	if (!getcwd(path, PATH_DICT))
 	  return NULL;
-	strncat(path, "/", 2*PATH_MAX);
-	strncat(path, filename, 2*PATH_MAX);
+	len = strlen(path);
+	snprintf(path+len, PATH_DICT-len, "/%s", filename);
 	path[PATH_DICT-1] = 0;
 }
 
