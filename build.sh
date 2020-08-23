@@ -69,7 +69,7 @@ fi
 getLibinote
 buildLibinote $ARCH "$DESTDIR" "$WITH_DBG"
 case $ARCH in
-    arm*) ;;
+    aarch64|arm*) ;;
     *) buildLibinote i686 "$DESTDIR_RFS32" "$WITH_DBG";;
 esac
 
@@ -80,7 +80,7 @@ CFLAGS="$CFLAGS -I$DESTDIR/include"
 echo "Entering common"
 cd "$SRCDIR"/common
 case $ARCH in
-    arm*) ;;
+    aarch64|arm*) ;;
     *) 
 	DESTDIR="$DESTDIR_RFS32" make clean
 	DESTDIR="$DESTDIR_RFS32" CFLAGS="$CFLAGS -m32" LDFLAGS="-m32" make all
@@ -105,7 +105,7 @@ make install
 
 # voxind
 case $ARCH in
-    arm*) ;;
+    aarch64|arm*) ;;
     *) 
 	# libibmeci (moc)
 	echo "Entering libibmeci"
@@ -149,7 +149,7 @@ ln -sf ../../$VOXINDIR/include usr/include/voxin
 ln -sf ../../$VOXINDIR/bin/voxin-say usr/bin/voxin-say
 
 case $ARCH in
-    arm*) unset LIBIBMECI;;
+    aarch64|arm*) unset LIBIBMECI;;
     *) LIBIBMECI=usr/lib/libibmeci.so
 	ln -sf ../../../../var/opt/IBM/ibmtts/cfg/eci.ini $VOXINDIR/rfs32/eci.ini
        ;;
