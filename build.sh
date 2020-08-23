@@ -37,9 +37,6 @@ getArch
 
 [ -n "$HELP" ] && usage && exit 0
 
-cleanup
-[ -n "$CLEAN" ] && exit 0
-
 cd "$BASE"
 SRCDIR="$BASE/src"
 ARCHDIR="$BASE/build/$ARCH"
@@ -53,6 +50,9 @@ RFS32="$DESTDIR/rfs32"
 DESTDIR_RFS32="$RFS32/usr"
 IBMTTSDIR=$RFSDIR/opt/IBM/ibmtts
 DOCDIR=$DESTDIR/share/doc/libvoxin
+
+cleanup
+[ -n "$CLEAN" ] && exit 0
 
 mkdir -p "$DESTDIR_RFS32"
 
