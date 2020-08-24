@@ -44,7 +44,7 @@ getArch() {
     ARCH=$(uname -m)
     case "$ARCH" in
 	x86|i386|i586|i686) ARCH=i686;;	
-	armv7l) ARCH=armhf;;
+#	armv7l) ARCH=armhf;;
     esac
 }
 
