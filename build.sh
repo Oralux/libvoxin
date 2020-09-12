@@ -60,8 +60,8 @@ export CFLAGS="$DBG_FLAGS"
 export CXXFLAGS="$DBG_FLAGS"
 unset LDFLAGS
 if [ "$ARCH" = "i686" ]; then
-	export CFLAGS="$CFLAGS -m32"
-	export CXXFLAGS="$CXXFLAGS -m32"
+	export CFLAGS="$CFLAGS -m32 -I/usr/i686-linux-gnu/include"
+	export CXXFLAGS="$CXXFLAGS -m32 -I/usr/i686-linux-gnu/include"
 	export LDFLAGS="-m32"
 fi
 
@@ -83,7 +83,7 @@ case $ARCH in
     aarch64|arm*) ;;
     *) 
 	DESTDIR="$DESTDIR_RFS32" make clean
-	DESTDIR="$DESTDIR_RFS32" CFLAGS="$CFLAGS -m32" LDFLAGS="-m32" make all
+	DESTDIR="$DESTDIR_RFS32" CFLAGS="$CFLAGS -m32 -I/usr/i686-linux-gnu/include" LDFLAGS="-m32" make all
 	DESTDIR="$DESTDIR_RFS32" make install
 	;;
 esac

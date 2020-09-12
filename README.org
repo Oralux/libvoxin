@@ -8,6 +8,8 @@ Below we detail how to compile libvoxin and test it.
 By default, a fake libibmeci.so is provided.
 
 * Compil
+Note that a crosscompil environment is needed to build the x86 binaries (Install package gcc-multilib).
+
 ** Build the libvoxin tarballs
  
 #+BEGIN_SRC shell
