@@ -1,0 +1,97 @@
+@startuml
+title text with capital letters
+skinparam monochrome true
+legend top
+	Insert a sound icon before each capitalized word.
+
+	These words are encapsulated by libinote in TLV messages of
+	type INOTE_TYPE_CAPITAL.
+	
+	New attributes/variables:
+	- tlv_number: identify each tlv, incremented for each tlv processed.
+	  Note: the ADD_TLV message can be composed of several tlv.
+	  Set to 0 at init or after the completion of eciSynchronize.
+	- first_tlv_type: stores the type of the first tlv (tlv_number == 0)
+	- audio_sample_received: set to TRUE when an audio sample is
+	  received from the engine.
+	  Set to FALSE at init or after the completion of eciSynchronize.
+
+	INOTE_TYPE_CAPITALS (several contiguous caps) follows
+	the same sequence (with a different sound icon).
+end legend
+api -> voxind : ADD_TLV
+note right
+	First TLV sent after completion
+	of eciSynchronize
+			
+	Set first_tlv_type to the type of this TVL
+end note
+voxind -> inote : inote_convert_tlv_to_text
+inote -> voxind : add_capital
+note right
+	since tlv_number == 0
+	do not insert an index since the
+	index has to follow text.
+end note	
+voxind -> voxind : add_text
+note right
+	++tlv_number
+end note	
+voxind -> engine : eciAddText
+|||
+api -> voxind : ADD_TLV
+note right
+	Next TLV
+	If type == INOTE_TYPE_CAPITAL
+	then insert index INDEX_CAPITAL + tlv_number
+end note
+voxind -> inote : inote_convert_tlv_to_text
+inote -> voxind : add_capital
+note right
+	since tlv_number != 0
+	insert an index.
+end note	
+voxind -> engine : eciInsertIndex
+voxind -> voxind : add_text
+note right
+	++tlv_number
+end note	
+voxind -> engine : eciAddText
+|||
+api -> voxind : SYNCHRONIZE
+activate voxind
+voxind -> engine : eciSynchronize
+engine -> voxind : callback #1 (eciWaveformBuffer, length)
+note left
+	First audio sample
+
+	If audio_sample_received == FALSE
+	and first_tlv_type == INOTE_TYPE_CAPITAL
+	then add tag MSG_PREPEND_CAPITAL
+
+	audio_sample_received = TRUE
+end note
+voxind -> api : callback #1 (eciWaveformBuffer, length, MSG_PREPEND_CAPITAL)
+api --> voxind : result cb #1
+|||
+engine -> voxind: callback #n (eciIndexReply)
+note left
+	If index & INDEX_CAPITAL
+	then add tag MSG_PREPEND_CAPITAL
+end note
+voxind -> api : callback #n (eciWaveformBuffer, 0, MSG_PREPEND_CAPITAL)
+api --> voxind : result cb #n
+|||
+engine -> voxind : callback #z (eciWaveformBuffer, length)
+voxind -> api : callback #z (eciWaveformBuffer, length)
+api --> voxind : result cb #z
+
+engine --> voxind : return eciSynchronize
+voxind --> api : result SYNCHRONIZE
+note right
+	tlv_number = 0
+	first_tlv_type = INOTE_TYPE_UNDEFINED		
+	audio_sample_received = FALSE
+end note
+deactivate voxind
+@enduml

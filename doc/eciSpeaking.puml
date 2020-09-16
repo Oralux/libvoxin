@@ -1,4 +1,4 @@
-#+begin_src plantuml :file eciSpeaking.png
+@startuml
 title nominal eciSpeaking call
 skinparam monochrome true
 actor client 
@@ -14,5 +14,5 @@ actor client
  api -> api_mutex : unlock
  api --> client : result eciSpeaking
  deactivate client
-#+end_src
+@enduml
 

@@ -1,4 +1,4 @@
-#+begin_src plantuml :file eciStop.png
+@startuml
 title libvoxin: nominal eciStop call
 skinparam monochrome true
 actor client
@@ -25,9 +25,4 @@ end legend
  api -> stop_mutex : unlock
  client <-- api : result eciStop
  deactivate client
-
-#+end_src
-
-#+RESULTS:
-[[file:eciStop.png]]
-
+@enduml

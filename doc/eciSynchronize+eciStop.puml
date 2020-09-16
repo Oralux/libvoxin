@@ -1,4 +1,4 @@
-#+begin_src plantuml :file eciSynchronize+eciStop.png
+@startuml
 title nominal eciSynchronize + eciStop 
 skinparam monochrome true
 legend
@@ -43,5 +43,4 @@ end note
  api2 -> stop_mutex : unlock
  api2 --> client2 : result eciStop
  deactivate client2
-#+end_src
-
+@enduml

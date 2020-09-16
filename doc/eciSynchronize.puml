@@ -1,4 +1,4 @@
-#+begin_src plantuml :file eciSynchronize.png
+@startuml
 title nominal eciSynchronize call
 skinparam monochrome true
 actor client 
@@ -19,5 +19,5 @@ actor client
  api -> api_mutex : unlock
  api --> client : result eciSynchronize
  deactivate client
-#+end_src
+@enduml
 
