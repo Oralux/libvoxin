@@ -62,6 +62,19 @@ static vox_t vox_list[MSG_VOX_LIST_MAX];
 static int vox_list_nb;
 static int eciDefaultParam[eciNumParams];
 
+// TODO: in conf
+#define WAV_HEADER_SIZE 0x2c
+#define SOUND_CAPITAL_PATH "/opt/oralux/voxin/share/sounds/capital.11k.wav"
+#define SOUND_SIZE_MAX 4096
+typedef struct {
+  uint8_t buf[SOUND_SIZE_MAX];
+  size_t len; // length in bytes really used
+  size_t cap; // max allocated size
+} sound_t;
+
+static sound_t sound_capital = {.cap = SOUND_SIZE_MAX};
+static sound_t sound_capitals = {.cap = SOUND_SIZE_MAX};
+
 static inote_charset_t getCharset(enum ECILanguageDialect lang)
 {
   inote_charset_t charset = INOTE_CHARSET_UTF_8; // default for other engine
@@ -313,9 +326,28 @@ static void engine_init_buffers(struct engine_t *self) {
 static struct engine_t *engine_create(uint32_t handle, struct api_t *api, msg_tts_id tts_id)
 {
   struct engine_t *self = NULL;
+  static int once = 0;
   
   ENTER();
 
+  if (!once) {
+      FILE *fd = fopen(SOUND_CAPITAL_PATH, "r");
+      if (fd) {
+	  size_t len;
+	  fseek(fd, WAV_HEADER_SIZE, SEEK_SET);
+	  len = sound_capital.len = fread(sound_capital.buf, 1, SOUND_SIZE_MAX, fd);
+	  fclose(fd);
+
+	  memcpy(sound_capitals.buf, sound_capital.buf, len);
+	  if (sound_capitals.cap >= 2*len) {
+	      memcpy(sound_capitals.buf + len, sound_capital.buf, len);
+	      len = 2*len;
+	  }
+	  sound_capitals.len = len;
+      }
+      dbg("sound capital: len=%lu (%s)", (unsigned long)sound_capital.len, SOUND_CAPITAL_PATH);
+  }
+  
   self = (struct engine_t*)calloc(1, sizeof(*self));
   if (self) {
 	self->id = ENGINE_ID;
@@ -776,6 +808,18 @@ static Boolean synchronize(struct engine_t *engine, enum msg_type type)
 
 	  switch(Msg) {
 	  case eciWaveformBuffer:
+		if (m->args.cb.lParam == MSG_PREPEND_CAPITAL) {
+		    dbg("prepend capital");
+		    lParam = sound_capital.len/2;
+		    memcpy(engine->samples, sound_capital.buf, sound_capital.len);
+		    m->res = (enum ECICallbackReturn)cb((ECIHand)((char*)NULL+engine->handle), Msg, lParam, engine->data_cb);
+		} else if (m->args.cb.lParam == MSG_PREPEND_CAPITALS) {
+		    dbg("prepend capitals");
+		    lParam = sound_capitals.len/2;
+		    memcpy(engine->samples, sound_capitals.buf, sound_capitals.len);
+		    m->res = (enum ECICallbackReturn)cb((ECIHand)((char*)NULL+engine->handle), Msg, lParam, engine->data_cb);
+		}
+		
 		lParam = m->effective_data_length/2;
 		memcpy(engine->samples, m->data, m->effective_data_length);
 		break;

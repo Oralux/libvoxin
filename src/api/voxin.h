@@ -1,15 +1,15 @@
 /*
   Copyright 2016-2020, Gilles Casse <gcasse@oralux.org>
 
-  This is free software; you can redistribute it and/or modify it under the
-  terms of the GNU Lesser General Public License as published by the Free
-  Software Foundation; either version 2.1, or (at your option) any later
-  version.
+  This is free software; you can redistribute it and/or modify it
+  under the terms of the GNU Lesser General Public License as
+  published by the Free Software Foundation; either version 2.1, or
+  (at your option) any later version.
 
-  This software is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-  General Public License for more details.
+  This software is distributed in the hope that it will be useful, but
+  WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+  Lesser General Public License for more details.
 
 */
 
@@ -22,9 +22,8 @@
    Voxin offers the following features:
    
    - a choice of voices among IBM TTS and Vocalizer Embedded,    
-   - complementary features added to the original proprietary text-to-speech. 
-   - compatibility of the legacy x86 IBM TTS binaries in an x86_64
-   environment,
+   - complementary features added to the original proprietary text-to-speech,
+   - compatibility of the legacy x86 IBM TTS binaries in an x86_64 environment.
    
    Links:
    - Libvoxin sources: https://github.com/Oralux/libvoxin 
@@ -41,7 +40,7 @@
 
 #define LIBVOXIN_VERSION_MAJOR 1
 #define LIBVOXIN_VERSION_MINOR 5
-#define LIBVOXIN_VERSION_PATCH 0
+#define LIBVOXIN_VERSION_PATCH 1
 
 /**
    @brief Extends ECIParam (eci.h)

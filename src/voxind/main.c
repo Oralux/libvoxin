@@ -16,7 +16,8 @@
 #define VOXIND_ID 0x05000A01 
 #define ENGINE_ID 0x15000A01 
 #define READ_TIMEOUT_IN_MS 0
-
+#define INDEX_CAPITAL  0x00010000
+#define INDEX_CAPITALS 0x00020000
 struct voxind_t {
   uint32_t id;
   struct pipe_t *pipe_command;
@@ -35,6 +36,20 @@ struct engine_t {
   inote_cb_t cb;
   uint8_t tlv_message_buffer[TLV_MESSAGE_LENGTH_MAX]; // tlv internal buffer
   inote_slice_t tlv_message;
+
+  // tlv_number:
+  // Identify each tlv, incremented for each tlv received.
+  // Set to 0 at init or after the completion of eciSynchronize.
+  int tlv_number;
+
+  // first_tlv_type:
+  // stores the type of the first tlv (tlv_number == 0)
+  inote_type_t first_tlv_type;
+  
+  // audio_sample_received:
+  // Set to TRUE when an audio sample is received from the engine.
+  // Set to FALSE at init or after the completion of eciSynchronize.
+  int audio_sample_received;
 };
 
 #define ENGINE_INDEX 0xEA61AE00 
@@ -44,57 +59,85 @@ static size_t engine_number; // number of created engines (and not yet deleted)
 
 // eciLocale, eciLocales from speech-dispatcher (ibmtts.c)
 typedef struct _eciLocale {
-	char *name;
-	char *lang;
-	char *dialect;
-	enum ECILanguageDialect langID;
-	char *charset;
+  char *name;
+  char *lang;
+  char *dialect;
+  enum ECILanguageDialect langID;
+  char *charset;
 } eciLocale;
 
 static eciLocale eciLocales[] = { // +1 for a null element
-	{"American_English", "en", "US", eciGeneralAmericanEnglish, "ISO-8859-1"},
-	{"British_English", "en", "GB", eciBritishEnglish, "ISO-8859-1"},
-	{"Castilian_Spanish", "es", "ES", eciCastilianSpanish, "ISO-8859-1"},
-	{"Mexican_Spanish", "es", "MX", eciMexicanSpanish, "ISO-8859-1"},
-	{"French", "fr", "FR", eciStandardFrench, "ISO-8859-1"},
-	{"Canadian_French", "fr", "CA", eciCanadianFrench, "ISO-8859-1"},
-	{"German", "de", "DE", eciStandardGerman, "ISO-8859-1"},
-	{"Italian", "it", "IT", eciStandardItalian, "ISO-8859-1"},
-	{"Mandarin_Chinese", "zh", "CN", eciMandarinChinese, "GBK"},
-	{"Mandarin_Chinese GB", "zh", "CN_GB", eciMandarinChineseGB, "GBK"},
-	{"Mandarin_Chinese PinYin", "zh", "CN_PinYin", eciMandarinChinesePinYin,"GBK"},
-	{"Mandarin_Chinese UCS", "zh", "CN_UCS", eciMandarinChineseUCS, "UCS2"},
-	{"Taiwanese_Mandarin", "zh", "TW", eciTaiwaneseMandarin, "BIG5"},
-	{"Taiwanese_Mandarin Big 5", "zh", "TW_Big5", eciTaiwaneseMandarinBig5,"BIG5"},
-	{"Taiwanese_Mandarin ZhuYin", "zh", "TW_ZhuYin",eciTaiwaneseMandarinZhuYin, "BIG5"},
-	{"Taiwanese_Mandarin PinYin", "zh", "TW_PinYin",eciTaiwaneseMandarinPinYin, "BIG5"},
-	{"Taiwanese_Mandarin UCS", "zh", "TW_UCS", eciTaiwaneseMandarinUCS, "UCS2"},
-	{"Brazilian_Portuguese", "pt", "BR", eciBrazilianPortuguese, "ISO-8859-1"},
-	{"Japanese", "ja", "JP", eciStandardJapanese, "SJIS"},
-	{"Japanese_SJIS", "ja", "JP_SJIS", eciStandardJapaneseSJIS, "SJIS"},
-	{"Japanese_UCS", "ja", "JP_UCS", eciStandardJapaneseUCS, "UCS2"},
-	{"Finnish", "fi", "FI", eciStandardFinnish, "ISO-8859-1"},
-	{NULL, 0, NULL}	
+  {"American_English", "en", "US", eciGeneralAmericanEnglish, "ISO-8859-1"},
+  {"British_English", "en", "GB", eciBritishEnglish, "ISO-8859-1"},
+  {"Castilian_Spanish", "es", "ES", eciCastilianSpanish, "ISO-8859-1"},
+  {"Mexican_Spanish", "es", "MX", eciMexicanSpanish, "ISO-8859-1"},
+  {"French", "fr", "FR", eciStandardFrench, "ISO-8859-1"},
+  {"Canadian_French", "fr", "CA", eciCanadianFrench, "ISO-8859-1"},
+  {"German", "de", "DE", eciStandardGerman, "ISO-8859-1"},
+  {"Italian", "it", "IT", eciStandardItalian, "ISO-8859-1"},
+  {"Mandarin_Chinese", "zh", "CN", eciMandarinChinese, "GBK"},
+  {"Mandarin_Chinese GB", "zh", "CN_GB", eciMandarinChineseGB, "GBK"},
+  {"Mandarin_Chinese PinYin", "zh", "CN_PinYin", eciMandarinChinesePinYin,"GBK"},
+  {"Mandarin_Chinese UCS", "zh", "CN_UCS", eciMandarinChineseUCS, "UCS2"},
+  {"Taiwanese_Mandarin", "zh", "TW", eciTaiwaneseMandarin, "BIG5"},
+  {"Taiwanese_Mandarin Big 5", "zh", "TW_Big5", eciTaiwaneseMandarinBig5,"BIG5"},
+  {"Taiwanese_Mandarin ZhuYin", "zh", "TW_ZhuYin",eciTaiwaneseMandarinZhuYin, "BIG5"},
+  {"Taiwanese_Mandarin PinYin", "zh", "TW_PinYin",eciTaiwaneseMandarinPinYin, "BIG5"},
+  {"Taiwanese_Mandarin UCS", "zh", "TW_UCS", eciTaiwaneseMandarinUCS, "UCS2"},
+  {"Brazilian_Portuguese", "pt", "BR", eciBrazilianPortuguese, "ISO-8859-1"},
+  {"Japanese", "ja", "JP", eciStandardJapanese, "SJIS"},
+  {"Japanese_SJIS", "ja", "JP_SJIS", eciStandardJapaneseSJIS, "SJIS"},
+  {"Japanese_UCS", "ja", "JP_UCS", eciStandardJapaneseUCS, "UCS2"},
+  {"Finnish", "fi", "FI", eciStandardFinnish, "ISO-8859-1"},
+  {NULL, 0, NULL}	
 };
 
 #define MAX_NB_OF_LANGUAGES (sizeof(eciLocales)/sizeof(eciLocales[0]) - 1)
 
-
 static inote_error add_text(inote_tlv_t *tlv, void *user_data) {
   ENTER();
-
-  ECIHand handle = (ECIHand *)user_data;  
+  
+  struct engine_t *self = user_data;
   uint8_t *t = inote_tlv_get_value(tlv);
   inote_error ret = INOTE_OK;
 
-  if (t && handle) {
-	uint8_t x = t[tlv->length];
-	t[tlv->length] = 0; // possible since (PIPE_MAX_BLOCK > TLV_MESSAGE_LENGTH_MAX)
-	dbg("length=%d, text=%s", tlv->length, t);
-	dbgText(t, tlv->length);
-	Boolean eci_res = (uint32_t)eciAddText(handle, t);
-	ret = (eci_res == ECITrue) ? INOTE_OK : INOTE_IO_ERROR;	
-	t[tlv->length] = x;
+  if (t && self && self->handle) {
+    uint8_t x = t[tlv->length];
+    t[tlv->length] = 0; // possible since (PIPE_MAX_BLOCK > TLV_MESSAGE_LENGTH_MAX)
+    dbg("length=%d, text=%s", tlv->length, t);
+    dbgText(t, tlv->length);
+    Boolean eci_res = (uint32_t)eciAddText(self->handle, t);
+    ret = (eci_res == ECITrue) ? INOTE_OK : INOTE_IO_ERROR;	
+    t[tlv->length] = x;
+    self->tlv_number++;
+    dbg("tlv_number=%d", self->tlv_number);
+  }
+  
+  return ret;
+}
+
+static inote_error add_capital(inote_tlv_t *tlv, bool capitals, void *user_data) {
+  ENTER();
+
+  struct engine_t *self = user_data;
+  inote_error ret = INOTE_OK;
+
+  if (self) {
+    dbg("self=%p", self);
+    if (self->tlv_number) {
+      dbg("tlv_number=%x", self->tlv_number);
+      // insert an index (except for the first tlv since an index
+      // must follow text)
+      uint32_t res;
+      int index = self->tlv_number;
+      index += capitals ? INDEX_CAPITALS : INDEX_CAPITAL;
+      dbg("insert index = 0x%x", index);
+      res = (uint32_t)eciInsertIndex(self->handle, index);
+      if (!res) {
+	dbg("error insert index");
+      }
+    }
+    ret = add_text(tlv, user_data);
   }
   
   return ret;
@@ -102,14 +145,15 @@ static inote_error add_text(inote_tlv_t *tlv, void *user_data) {
 
 static void engine_init_buffers(struct engine_t *self) {
   if (self) {
-	self->tlv_message.buffer = self->tlv_message_buffer;
-	self->tlv_message.end_of_buffer = self->tlv_message_buffer + sizeof(self->tlv_message_buffer);	  
-	self->tlv_message.length = 0;
-	self->cb.add_annotation = add_text;
-	self->cb.add_charset = add_text;
-	self->cb.add_punctuation = add_text;
-	self->cb.add_text = add_text;  
-	self->cb.user_data = self->handle;  
+    self->tlv_message.buffer = self->tlv_message_buffer;
+    self->tlv_message.end_of_buffer = self->tlv_message_buffer + sizeof(self->tlv_message_buffer);	  
+    self->tlv_message.length = 0;
+    self->cb.add_annotation = add_text;
+    self->cb.add_charset = add_text;
+    self->cb.add_punctuation = add_text;
+    self->cb.add_text = add_text;  
+    self->cb.add_capital = add_capital;  
+    self->cb.user_data = self;  
   }
 }
 
@@ -120,15 +164,15 @@ static struct engine_t *engine_create(void *handle)
   ENTER();
 
   if (!handle)
-	return NULL;
+    return NULL;
   
   self = (struct engine_t*)calloc(1, sizeof(*self));
   if (self) {
-	self->id = ENGINE_ID;
-	self->handle = handle;
-	engine_init_buffers(self);
+    self->id = ENGINE_ID;
+    self->handle = handle;
+    engine_init_buffers(self);
   } else {
-	err("mem error (%d)", errno);
+    err("mem error (%d)", errno);
   }
 
   LEAVE();
@@ -168,14 +212,14 @@ static enum ECICallbackReturn my_callback(ECIHand hEngine, enum ECIMessage Msg, 
   uint32_t func_sav;
   struct engine_t *engine = (struct engine_t*)pData;
   static const char* msgString[] = {
-	"eciWaveformBuffer",
-	"eciPhonemeBuffer",
-	"eciIndexReply",
-	"eciPhonemeIndexReply",
-	"eciWordIndexReply",
-	"eciStringIndexReply",
-	"eciAudioIndexReply",
-	"eciSynthesisBreak"};
+    "eciWaveformBuffer",
+    "eciPhonemeBuffer",
+    "eciIndexReply",
+    "eciPhonemeIndexReply",
+    "eciWordIndexReply",
+    "eciStringIndexReply",
+    "eciAudioIndexReply",
+    "eciSynthesisBreak"};
   const char *msgType;
 
   ENTER();
@@ -187,19 +231,47 @@ static enum ECICallbackReturn my_callback(ECIHand hEngine, enum ECIMessage Msg, 
 
   switch(Msg) {
   case eciWaveformBuffer:
-	engine->cb_msg->effective_data_length = 2*lParam;  
-	break;
+    if (!engine->audio_sample_received) {
+      size_t speech_len = 2*lParam;
+      engine->audio_sample_received = 1;
+      dbg("audio_sample_received=%d, first_tlv_type: 0x%02x",
+	  engine->audio_sample_received,
+	  engine->first_tlv_type);
+      if (engine->first_tlv_type == INOTE_TYPE_CAPITAL) {
+	engine->cb_msg->args.cb.lParam = MSG_PREPEND_CAPITAL;
+      } else if (engine->first_tlv_type == INOTE_TYPE_CAPITALS) {
+	engine->cb_msg->args.cb.lParam = MSG_PREPEND_CAPITALS;
+      }
+    } else {
+      engine->cb_msg->args.cb.lParam = 0;      
+    }
+    engine->cb_msg->effective_data_length = 2*lParam;  
+    break;
   case eciPhonemeBuffer:
-	engine->cb_msg->effective_data_length = lParam;  
-	break;
+    engine->cb_msg->effective_data_length = lParam;  
+    break;
   case eciIndexReply:
   case eciPhonemeIndexReply:
   case eciWordIndexReply:
   case eciStringIndexReply:
   case eciSynthesisBreak:
-	engine->cb_msg->effective_data_length = sizeof(uint32_t);
-	engine->cb_msg->args.cb.lParam = htole32(lParam);
-  break;
+    engine->cb_msg->effective_data_length = sizeof(uint32_t);
+    engine->cb_msg->args.cb.lParam = htole32(lParam);
+
+    if (eciIndexReply) {
+      uint32_t index = engine->cb_msg->args.cb.lParam;
+      dbg("index=0x%02x", index);    
+      if (index & INDEX_CAPITALS) {
+	Msg = eciWaveformBuffer;
+	engine->cb_msg->args.cb.lParam = MSG_PREPEND_CAPITALS;
+	engine->cb_msg->effective_data_length = lParam = 0;
+      } else if (index & INDEX_CAPITAL) {
+	Msg = eciWaveformBuffer;
+	engine->cb_msg->args.cb.lParam = MSG_PREPEND_CAPITAL;
+	engine->cb_msg->effective_data_length = lParam = 0;
+      }
+    }
+    break;
   default:
     err("LEAVE, unknown eci message (%d)", Msg);
     return eciDataAbort;	
@@ -310,44 +382,44 @@ static int unserialize(struct msg_t *msg, size_t *msg_length)
 
   engine_index = msg->engine;
   if (engine_index) {
-	engine_index -= ENGINE_INDEX;
-	if (engine_index >= ENGINE_MAX_NB) {
-	  msg("recv erroneous engine"); 
-	  return 0;
-	}
+    engine_index -= ENGINE_INDEX;
+    if (engine_index >= ENGINE_MAX_NB) {
+      msg("recv erroneous engine"); 
+      return 0;
+    }
   }
 
   engine = engines[engine_index];
   {
-	int err = 0;
-	if (*msg_length < MIN_MSG_SIZE) {
-	  msg("msg_length=%d (%d)", *msg_length, MIN_MSG_SIZE); 
-	  err=1;
-	} else if (msg->id != MSG_TO_ECI_ID) {
-	  msg("id=%d (%d)", msg->id, MSG_TO_ECI_ID); 
-	  err=2;
-	} else if (!msg_string(msg->func)) {
-	  msg("func=%d", msg->func); 
-	  err=3;
-	} else if (*msg_length < MSG_HEADER_LENGTH + msg->effective_data_length) {
-		msg("length=%d (%d)", *msg_length, MSG_HEADER_LENGTH + msg->effective_data_length); 
-	  err=4;
-	} else if (engine && !check_engine(engine)) {
-	  msg("id=0x%x, h=0x%x",engine->id, (unsigned int)engine->handle);
-	  err=5;
-	}
+    int err = 0;
+    if (*msg_length < MIN_MSG_SIZE) {
+      msg("msg_length=%d (%d)", *msg_length, MIN_MSG_SIZE); 
+      err=1;
+    } else if (msg->id != MSG_TO_ECI_ID) {
+      msg("id=%d (%d)", msg->id, MSG_TO_ECI_ID); 
+      err=2;
+    } else if (!msg_string(msg->func)) {
+      msg("func=%d", msg->func); 
+      err=3;
+    } else if (*msg_length < MSG_HEADER_LENGTH + msg->effective_data_length) {
+      msg("length=%d (%d)", *msg_length, MSG_HEADER_LENGTH + msg->effective_data_length); 
+      err=4;
+    } else if (engine && !check_engine(engine)) {
+      msg("id=0x%x, h=0x%x",engine->id, (unsigned int)engine->handle);
+      err=5;
+    }
 
-	if (err) {
-	  msg("recv erroneous msg (err=%d)", err); 
-	  memset(msg, 0, MIN_MSG_SIZE);
-	  msg->id = MSG_TO_APP_ID;
-	  msg->func = MSG_UNDEFINED;
-	  *msg_length = MIN_MSG_SIZE;
-	  msg->res = ECIFalse;
-	  dbg("send msg '%s', length=%d, res=0x%x (#%d)", msg_string(msg->func), msg->effective_data_length, msg->res, msg->count);    
-	  LEAVE();
-	  return 0;
-	}
+    if (err) {
+      msg("recv erroneous msg (err=%d)", err); 
+      memset(msg, 0, MIN_MSG_SIZE);
+      msg->id = MSG_TO_APP_ID;
+      msg->func = MSG_UNDEFINED;
+      *msg_length = MIN_MSG_SIZE;
+      msg->res = ECIFalse;
+      dbg("send msg '%s', length=%d, res=0x%x (#%d)", msg_string(msg->func), msg->effective_data_length, msg->res, msg->count);    
+      LEAVE();
+      return 0;
+    }
   }
 
   dbg("recv msg '%s', length=%d, engine=%p (#%d)", msg_string(msg->func), msg->effective_data_length, engine, msg->count); 
@@ -358,24 +430,32 @@ static int unserialize(struct msg_t *msg, size_t *msg_length)
 
   switch(msg->func) {
   case MSG_ADD_TLV: {
-	if (!engine || (length > TLV_MESSAGE_LENGTH_MAX)) {
-	  msg->res = ECIFalse;	  
-	  break;
-	}
-	inote_slice_t *t = &(engine->tlv_message);
-	t->buffer = msg->data;
-	t->length = length;
-	t->charset = INOTE_CHARSET_UTF_8; // TODO;
-	t->end_of_buffer = t->buffer + t->length;
-	dbg("data len=%lu", (long unsigned int)t->length);
-	int ret = inote_convert_tlv_to_text(t, &(engine->cb));	
-	msg->res = (!ret) ? ECITrue : ECIFalse; 
+    if (!engine || (length > TLV_MESSAGE_LENGTH_MAX)) {
+      msg->res = ECIFalse;	  
+      break;
+    }
+    inote_slice_t *t = &(engine->tlv_message);
+    t->buffer = msg->data;
+    t->length = length;
+    t->charset = INOTE_CHARSET_UTF_8; // TODO;
+    t->end_of_buffer = t->buffer + t->length;
+    dbg("data len=%lu", (long unsigned int)t->length);
+
+    if (engine->tlv_number == 0) {
+      engine->first_tlv_type = INOTE_TYPE_UNDEFINED;
+      inote_slice_get_type(t, &engine->first_tlv_type);
+      dbg("first_tlv_type: 0x%02x", engine->first_tlv_type);
+    }
+
+    dbg("calling inote_convert_tlv_to_text");
+    int ret = inote_convert_tlv_to_text(t, &(engine->cb));	
+    msg->res = (!ret) ? ECITrue : ECIFalse;
   }
     break;
 
   case MSG_ADD_TEXT:
-	dbg("text=%s", (char*)msg->data);
-	msg->res = (uint32_t)eciAddText(engine->handle, msg->data);
+    dbg("text=%s", (char*)msg->data);
+    msg->res = (uint32_t)eciAddText(engine->handle, msg->data);
     break;
 
   case MSG_CLEAR_ERRORS:
@@ -437,15 +517,15 @@ static int unserialize(struct msg_t *msg, size_t *msg_length)
     break;
 
   case MSG_NEW:
-	if (engine_number >= ENGINE_MAX_NB) {
-	  err("error: max number of engines allocated");
-	  return 0;
-	}
-	engines[engine_number] = engine_create(eciNew());
-	// return index + ENGINE_INDEX (0 considered as error)
-	engine_index = engines[engine_number] ? ENGINE_INDEX + engine_number: 0;
-	engine_number++;
-	msg->res = engine_index;	
+    if (engine_number >= ENGINE_MAX_NB) {
+      err("error: max number of engines allocated");
+      return 0;
+    }
+    engines[engine_number] = engine_create(eciNew());
+    // return index + ENGINE_INDEX (0 considered as error)
+    engine_index = engines[engine_number] ? ENGINE_INDEX + engine_number: 0;
+    engine_number++;
+    msg->res = engine_index;	
     break;
 	
   case MSG_NEW_DICT:
@@ -453,16 +533,16 @@ static int unserialize(struct msg_t *msg, size_t *msg_length)
     break;
 
   case MSG_NEW_EX:
-	if (engine_number >= ENGINE_MAX_NB) {
-	  err("error: max number of engines allocated");
-	  return 0;
-	}
-	engines[engine_number] = engine_create(eciNewEx(msg->args.ne.Value));
-	// return index + ENGINE_INDEX (0 considered as error)
-	engine_index = engines[engine_number] ? ENGINE_INDEX + engine_number: 0;
-	engine_number++;
-	msg->res = engine_index;
-	break;
+    if (engine_number >= ENGINE_MAX_NB) {
+      err("error: max number of engines allocated");
+      return 0;
+    }
+    engines[engine_number] = engine_create(eciNewEx(msg->args.ne.Value));
+    // return index + ENGINE_INDEX (0 considered as error)
+    engine_index = engines[engine_number] ? ENGINE_INDEX + engine_number: 0;
+    engine_number++;
+    msg->res = engine_index;
+    break;
     
   case MSG_PAUSE:
     msg->res = (uint32_t)eciPause(engine->handle, msg->args.p.On);
@@ -519,6 +599,13 @@ static int unserialize(struct msg_t *msg, size_t *msg_length)
 
   case MSG_SYNCHRONIZE:
     msg->res = (uint32_t)eciSynchronize(engine->handle);
+    engine->tlv_number = 0;
+    engine->first_tlv_type = INOTE_TYPE_UNDEFINED;
+    engine->audio_sample_received = 0;
+    dbg("tlv_number=%d, audio_sample_received=%d, first_tlv_type: 0x%02x",
+	engine->tlv_number,
+	engine->audio_sample_received,
+	engine->first_tlv_type);
     break;
 
   case MSG_SPEAKING:
@@ -538,58 +625,58 @@ static int unserialize(struct msg_t *msg, size_t *msg_length)
     
   case MSG_VOX_GET_VOICES: {
     struct msg_vox_get_voices_t *data = (struct msg_vox_get_voices_t *)msg->data;
-	uint32_t languages[MSG_VOX_LIST_MAX];
-	uint32_t nb;
+    uint32_t languages[MSG_VOX_LIST_MAX];
+    uint32_t nb;
     BUILD_ASSERT(MSG_HEADER_LENGTH + sizeof(struct msg_vox_get_voices_t) <= PIPE_MAX_BLOCK);
     nb = MSG_VOX_LIST_MAX;
-	data->nb = 0;
+    data->nb = 0;
     msg->res = eciGetAvailableLanguages(NULL, &nb);
-	memset(languages, 0, sizeof(languages));
-	if (nb >= MSG_VOX_LIST_MAX)
-	  nb = MSG_VOX_LIST_MAX;
+    memset(languages, 0, sizeof(languages));
+    if (nb >= MSG_VOX_LIST_MAX)
+      nb = MSG_VOX_LIST_MAX;
     msg->res = eciGetAvailableLanguages(languages, &nb);
 
     dbg("nb=%d, msg->res=%d", nb, msg->res);
 	
-	if (!msg->res && nb) {
-	  int i;
-	  for (i=0; i<nb; i++) {
-		int j;
-		dbg("languages[%d]=0x%0x", i, languages[i]);
-		for (j=0; j<MAX_NB_OF_LANGUAGES; j++) {
-		  dbg("eciLocales[%d].langID=0x%0x", j, eciLocales[j].langID);
-		  if (languages[i] != eciLocales[j].langID)
-			continue;
+    if (!msg->res && nb) {
+      int i;
+      for (i=0; i<nb; i++) {
+	int j;
+	dbg("languages[%d]=0x%0x", i, languages[i]);
+	for (j=0; j<MAX_NB_OF_LANGUAGES; j++) {
+	  dbg("eciLocales[%d].langID=0x%0x", j, eciLocales[j].langID);
+	  if (languages[i] != eciLocales[j].langID)
+	    continue;
 		  
-		  struct msg_vox_t *vox = data->voices + data->nb;
-		  eciLocale *eci = eciLocales+j;		  
-		  data->nb++;
+	  struct msg_vox_t *vox = data->voices + data->nb;
+	  eciLocale *eci = eciLocales+j;		  
+	  data->nb++;
 
-		  vox->id = eci->langID;		  
-		  vox->tts_id = MSG_TTS_ECI;		  
+	  vox->id = eci->langID;		  
+	  vox->tts_id = MSG_TTS_ECI;		  
 
-		  strncpy(vox->name, eci->name, MSG_VOX_STR_MAX);
-		  vox->name[MSG_VOX_STR_MAX-1] = 0;
+	  strncpy(vox->name, eci->name, MSG_VOX_STR_MAX);
+	  vox->name[MSG_VOX_STR_MAX-1] = 0;
 
-		  strncpy(vox->lang, eci->lang, MSG_VOX_STR_MAX);
-		  vox->lang[MSG_VOX_STR_MAX-1] = 0;
+	  strncpy(vox->lang, eci->lang, MSG_VOX_STR_MAX);
+	  vox->lang[MSG_VOX_STR_MAX-1] = 0;
 
-		  strncpy(vox->variant, eci->dialect, MSG_VOX_STR_MAX);
-		  vox->variant[MSG_VOX_STR_MAX-1] = 0;
+	  strncpy(vox->variant, eci->dialect, MSG_VOX_STR_MAX);
+	  vox->variant[MSG_VOX_STR_MAX-1] = 0;
 
-		  vox->rate = 11025;
-		  vox->size = 16;
+	  vox->rate = 11025;
+	  vox->size = 16;
 
-		  strncpy(vox->charset, eci->charset, MSG_VOX_STR_MAX);
-		  vox->charset[MSG_VOX_STR_MAX-1] = 0;
+	  strncpy(vox->charset, eci->charset, MSG_VOX_STR_MAX);
+	  vox->charset[MSG_VOX_STR_MAX-1] = 0;
 
-		  /* gender, age, multilang, quality */
-		  break;
-		}
-	  }
+	  /* gender, age, multilang, quality */
+	  break;
 	}
+      }
+    }
 	
-	msg->res = 0;	
+    msg->res = 0;	
     msg->effective_data_length = sizeof(struct msg_vox_get_voices_t);
     dbg("nb voices=%d, msg->res=%d", data->nb, msg->res);
   }
@@ -642,7 +729,7 @@ int main(int argc, char **argv)
   /* } */
 
   dbg("voxin api=%d.%d.%d", LIBVOXIN_VERSION_MAJOR, LIBVOXIN_VERSION_MINOR, LIBVOXIN_VERSION_PATCH);
-  
+
   my_voxind = calloc(1, sizeof(struct voxind_t));
   if (!my_voxind) {
     res = errno;
@@ -675,3 +762,7 @@ int main(int argc, char **argv)
   err("LEAVE, (err=%d)",res);
   return res;
 }
+
+/* local variables: */
+/* c-basic-offset: 2 */
+/* end: */
