@@ -46,6 +46,8 @@ static const char *msg[] = {
   "exit",  
   "add_tlv",  
   "vox_get_voices",  
+  "vox_set_param",  
+  "vox_get_versions",  
   "max",
 };
 

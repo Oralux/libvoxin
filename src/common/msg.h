@@ -4,6 +4,9 @@
 #include <stdint.h>
 #include <stddef.h>
 
+// MSG_API defines the version of msg.h
+#define MSG_API                0x00010000
+#define MSG_GET_VERSIONS_MAGIC 0x12345678
 typedef enum {MSG_TTS_UNDEFINED=0, MSG_TTS_ECI, MSG_TTS_NVE, MSG_TTS_MAX} msg_tts_id;
 #define MSG_TO_APP_ID   0x110A0005
 #define MSG_TO_ECI_ID   (MSG_TO_APP_ID+(MSG_TTS_ECI<<8))
@@ -48,13 +51,13 @@ enum msg_type {
   MSG_SET_OUTPUT_DEVICE,
   MSG_SET_OUTPUT_FILENAME,
   MSG_SET_DEFAULT_PARAM,
-  MSG_SET_PARAM,
+  MSG_SET_PARAM, // deprecated by MSG_VOX_SET_PARAM
   MSG_SET_VOICE_PARAM,
   MSG_SPEAKING,
   MSG_STOP,
   MSG_SYNCHRONIZE,
   MSG_SYNTHESIZE,
-  MSG_VERSION,
+  MSG_VERSION, // deprecated by MSG_GET_VERSIONS
   MSG_CB_WAVEFORM_BUFFER, //same order below than in ECIMessage
   MSG_CB_PHONEME_BUFFER,
   MSG_CB_INDEX_REPLY,
@@ -66,6 +69,8 @@ enum msg_type {
   MSG_EXIT,
   MSG_ADD_TLV,
   MSG_VOX_GET_VOICES,
+  MSG_VOX_SET_PARAM,
+  MSG_GET_VERSIONS,
   MSG_MAX
 };
 
@@ -95,6 +100,16 @@ struct msg_vox_t {
 struct msg_vox_get_voices_t {
   uint32_t nb;
   struct msg_vox_t voices[MSG_VOX_LIST_MAX];
+} __attribute__ ((packed));
+
+// supersedes MSG_VERSION
+// coding: 0x0151 = version "1.5.1" 
+struct msg_get_versions_t {
+  uint32_t magic; //equals MSG_GET_VERSIONS_MAGIC
+  uint32_t msg; // equals MSG_API
+  uint32_t voxin; // libvoxin version
+  uint32_t inote; // libinote version
+  uint32_t tts; // tts version
 } __attribute__ ((packed));
 
 struct msg_set_param_t {

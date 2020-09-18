@@ -54,6 +54,7 @@ struct api_t {
   pthread_mutex_t stop_mutex; // to process only one stop command
   pthread_mutex_t api_mutex; // to process exclusively any other command
   struct msg_t *msg; // message for voxind
+  struct msg_get_versions_t tts_version[MSG_TTS_MAX]; // version of the tts and its components
 };
 
 static struct api_t my_api = {.stop_mutex=PTHREAD_MUTEX_INITIALIZER, .api_mutex=PTHREAD_MUTEX_INITIALIZER, NULL};
@@ -1147,7 +1148,7 @@ static int engine_copy(struct engine_t *src, struct engine_t *dst) {
   return ret;
 }
 
-int eciSetParam(ECIHand hEngine, enum ECIParam Param, int iValue)
+int set_param(ECIHand hEngine, uint32_t msg_id, enum ECIParam Param, int iValue)
 {
   int eci_res = -1;
   struct engine_t *self = (struct engine_t *)hEngine;
@@ -1182,7 +1183,7 @@ int eciSetParam(ECIHand hEngine, enum ECIParam Param, int iValue)
 
   engine = self->current_engine;
   
-  msg_set_header(&header, MSG_DST(engine->tts_id), MSG_SET_PARAM, engine->handle);
+  msg_set_header(&header, MSG_DST(engine->tts_id), msg_id, engine->handle);
   header.args.sp.Param = Param;
   header.args.sp.iValue = iValue;
   if (!process_func1(engine->api, &header, NULL, &eci_res, false, true)) {
@@ -1193,6 +1194,18 @@ int eciSetParam(ECIHand hEngine, enum ECIParam Param, int iValue)
   }
 
   return eci_res;
+}
+
+int eciSetParam(ECIHand hEngine, enum ECIParam Param, int iValue)
+{
+    dbg("ENTER(%p, 0x%0x, ENTER(0x%0x)", hEngine, Param, iValue);
+    return set_param(hEngine, MSG_SET_PARAM, Param, iValue);
+}
+
+int voxSetParam(void *handle, voxParam param, int value)
+{
+    dbg("ENTER(%p, 0x%0x, 0x%0x)", handle, param, value);
+    return set_param(handle, MSG_VOX_SET_PARAM, param, value);
 }
 
 int eciGetParam(ECIHand hEngine, enum ECIParam Param)
@@ -1660,6 +1673,45 @@ static int ttsGetVoices(msg_tts_id id, vox_t *list, unsigned int *nbVoices) {
   return 0;
 }
 
+static int ttsGetVersion(msg_tts_id id, struct msg_get_versions_t *versions) {
+	ENTER();
+	struct msg_t header;
+	struct api_t *api = &my_api;
+	int eci_res = 1;
+	// char *ver;
+	// size_t size;
+	// int v[3];
+	
+	if ((id <= MSG_TTS_UNDEFINED) || (id >= MSG_TTS_MAX) || !versions) {
+		err("LEAVE, args error");
+		return 1;
+	}
+	
+	msg_set_header(&header, MSG_DST(id), MSG_GET_VERSIONS, 0);
+	if (process_func1(api, &header, NULL, &eci_res, false, false) || eci_res) {
+		err("LEAVE, response error");
+		return 1;
+	}
+	
+	if (!api || !api->msg || !api->msg->data) {
+		err("LEAVE, unexpected error");
+		return 1;
+	}
+	
+	{
+		struct msg_get_versions_t *data = (struct msg_get_versions_t *)api->msg->data;
+		if ((api->msg->effective_data_length >= sizeof(*data))
+		    && (data->magic == MSG_GET_VERSIONS_MAGIC)) {
+			memcpy(versions, api->msg->data, sizeof(*versions));
+		} else {
+			memset(versions, 0, sizeof(*versions));
+		}
+		dbg("versions: msg=%08x, libvoxin=%08x, libinote=%08x, tts=%08x",
+		    data->msg, data->voxin, data->inote, data->tts);
+	}
+	return 0;
+}
+
 int voxGetVoices(vox_t *list, unsigned int *nbVoices) {
   struct api_t *api = &my_api;
   int res = 0;
@@ -1691,6 +1743,8 @@ int voxGetVoices(vox_t *list, unsigned int *nbVoices) {
 	  } else {		
 		vox_list_nb += n;
 	  }
+
+	  ttsGetVersion(api->tts[i], &api->tts_version[i]);
 	}
 	api_unlock(api);	
   }
@@ -1731,13 +1785,6 @@ int voxToString(vox_t *data, char *string, size_t *size) {
 			  data->quality ? data->quality : "null");
   *size = size0 + 1;
   return 0;
-}
-
-int voxSetParam(void *handle, voxParam param, int value) {
-  dbg("ENTER(param=%d, value=%d)", param, value);
-
-  // TODO: VOX_CAPITALS
-  return eciSetParam(handle, (enum ECIParam) param, value);
 }
 
 int voxGetVersion(int *major, int *minor, int *patch) {

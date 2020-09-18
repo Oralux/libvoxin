@@ -37,6 +37,10 @@ struct engine_t {
   uint8_t tlv_message_buffer[TLV_MESSAGE_LENGTH_MAX]; // tlv internal buffer
   inote_slice_t tlv_message;
 
+  // capital_mode
+  // Set by voxSetParam(VOX_CAPITALS, value)
+  voxCapitalMode capital_mode;
+
   // tlv_number:
   // Identify each tlv, incremented for each tlv received.
   // Set to 0 at init or after the completion of eciSynchronize.
@@ -237,10 +241,12 @@ static enum ECICallbackReturn my_callback(ECIHand hEngine, enum ECIMessage Msg, 
       dbg("audio_sample_received=%d, first_tlv_type: 0x%02x",
 	  engine->audio_sample_received,
 	  engine->first_tlv_type);
-      if (engine->first_tlv_type == INOTE_TYPE_CAPITAL) {
-	engine->cb_msg->args.cb.lParam = MSG_PREPEND_CAPITAL;
-      } else if (engine->first_tlv_type == INOTE_TYPE_CAPITALS) {
-	engine->cb_msg->args.cb.lParam = MSG_PREPEND_CAPITALS;
+      if (engine->capital_mode == voxCapitalSoundIcon) {
+	if (engine->first_tlv_type == INOTE_TYPE_CAPITAL) {
+	  engine->cb_msg->args.cb.lParam = MSG_PREPEND_CAPITAL;
+	} else if (engine->first_tlv_type == INOTE_TYPE_CAPITALS) {
+	  engine->cb_msg->args.cb.lParam = MSG_PREPEND_CAPITALS;
+	}
       }
     } else {
       engine->cb_msg->args.cb.lParam = 0;      
@@ -260,15 +266,17 @@ static enum ECICallbackReturn my_callback(ECIHand hEngine, enum ECIMessage Msg, 
 
     if (eciIndexReply) {
       uint32_t index = engine->cb_msg->args.cb.lParam;
-      dbg("index=0x%02x", index);    
-      if (index & INDEX_CAPITALS) {
-	Msg = eciWaveformBuffer;
-	engine->cb_msg->args.cb.lParam = MSG_PREPEND_CAPITALS;
-	engine->cb_msg->effective_data_length = lParam = 0;
-      } else if (index & INDEX_CAPITAL) {
-	Msg = eciWaveformBuffer;
-	engine->cb_msg->args.cb.lParam = MSG_PREPEND_CAPITAL;
-	engine->cb_msg->effective_data_length = lParam = 0;
+      dbg("index=0x%02x", index);
+      if (engine->capital_mode == voxCapitalSoundIcon) {
+	if (index & INDEX_CAPITALS) {
+	  Msg = eciWaveformBuffer;
+	  engine->cb_msg->args.cb.lParam = MSG_PREPEND_CAPITALS;
+	  engine->cb_msg->effective_data_length = lParam = 0;
+	} else if (index & INDEX_CAPITAL) {
+	  Msg = eciWaveformBuffer;
+	  engine->cb_msg->args.cb.lParam = MSG_PREPEND_CAPITAL;
+	  engine->cb_msg->effective_data_length = lParam = 0;
+	}
       }
     }
     break;
@@ -365,6 +373,23 @@ static void set_output_buffer(struct voxind_t *v, struct engine_t *engine, struc
 static int check_engine(struct engine_t *engine)
 {  
   return (engine && (engine->id == ENGINE_ID) && engine->handle);
+}
+
+int voxSetParam(void *handle, voxParam param, int value)
+{
+  int ret;
+  struct engine_t *engine = handle;  
+
+  if (!check_engine(engine))
+    return -1;
+  
+  if (param == VOX_CAPITALS) {
+    ret = engine->capital_mode;
+    engine->capital_mode = value;
+  } else {
+    ret = eciSetParam(engine->handle, param, value);
+  }
+  return ret;
 }
 
 static int unserialize(struct msg_t *msg, size_t *msg_length)
@@ -581,6 +606,10 @@ static int unserialize(struct msg_t *msg, size_t *msg_length)
     msg->res = (uint32_t)eciSetParam(engine->handle, msg->args.sp.Param, msg->args.sp.iValue);
     break;
 
+  case MSG_VOX_SET_PARAM:
+    msg->res = (uint32_t)voxSetParam(engine, msg->args.sp.Param, msg->args.sp.iValue);
+    break;
+
   case MSG_SET_VOICE_PARAM:
     msg->res = (uint32_t)eciSetVoiceParam(engine->handle, msg->args.svp.iVoice, msg->args.svp.Param, msg->args.svp.iValue);
     break;
@@ -621,6 +650,36 @@ static int unserialize(struct msg_t *msg, size_t *msg_length)
     eciVersion(msg->data);
     msg->effective_data_length = MAX_VERSION;
     dbg("version=%s", msg->data);
+    break;
+    
+  case MSG_GET_VERSIONS: {
+    struct msg_get_versions_t *data = (struct msg_get_versions_t *)msg->data;
+    BUILD_ASSERT(MSG_HEADER_LENGTH + sizeof(struct msg_get_versions_t) <= PIPE_MAX_BLOCK);
+    data->magic = MSG_GET_VERSIONS_MAGIC;
+    data->msg = MSG_API;
+    data->voxin = (LIBVOXIN_VERSION_MAJOR<<16) + (LIBVOXIN_VERSION_MINOR<<8) + LIBVOXIN_VERSION_PATCH;
+    data->inote = (INOTE_VERSION_MAJOR<<16) + (INOTE_VERSION_MINOR<<8) + (INOTE_VERSION_PATCH);
+    char ver[20];
+    eciVersion(ver);
+    data->tts = 0;
+    { // convert ver="6.7.4" to 0x060704
+      char *s, *sav = NULL;
+      int i;
+      s = strtok_r(ver, ".", &sav);
+      for (i=0; i<3 && s; i++) {
+	data->tts<<8;
+	if (s) {
+	  data->tts += atoi(s);
+	  s = strtok_r(NULL, ".", &sav);
+	}
+      }
+    }
+    
+    msg->res = 0;	
+    msg->effective_data_length = sizeof(struct msg_get_versions_t);
+    dbg("versions: msg=%08x, libvoxin=%08x, libinote=%08x, tts=%08x",
+	data->msg, data->voxin, data->inote, data->tts);
+  }
     break;
     
   case MSG_VOX_GET_VOICES: {

@@ -8,6 +8,8 @@ legend top
 	type INOTE_TYPE_CAPITAL.
 	
 	New attributes/variables:
+	- capital_mode: indicates if the capital must be ignored, prefixed by a sound icon,...
+	  Can be set up by voxSetCapital() .
 	- tlv_number: identify each tlv, incremented for each tlv processed.
 	  Note: the ADD_TLV message can be composed of several tlv.
 	  Set to 0 at init or after the completion of eciSynchronize.
@@ -67,6 +69,7 @@ note left
 
 	If audio_sample_received == FALSE
 	and first_tlv_type == INOTE_TYPE_CAPITAL
+	and capital_mode == voxCapitalSoundIcon
 	then add tag MSG_PREPEND_CAPITAL
 
 	audio_sample_received = TRUE
@@ -77,6 +80,7 @@ api --> voxind : result cb #1
 engine -> voxind: callback #n (eciIndexReply)
 note left
 	If index & INDEX_CAPITAL
+	and capital_mode == voxCapitalSoundIcon	
 	then add tag MSG_PREPEND_CAPITAL
 end note
 voxind -> api : callback #n (eciWaveformBuffer, 0, MSG_PREPEND_CAPITAL)

@@ -61,6 +61,7 @@ typedef enum {
 
 typedef enum {voxFemale, voxMale} voxGender;
 typedef enum {voxAdult, voxChild, voxSenior} voxAge;
+typedef enum {voxCapitalNone=0, voxCapitalSoundIcon=1, voxCapitalSpell=2, voxCapitalPitch=3} voxCapitalMode;
 
 #define VOX_STR_MAX 128
 #define VOX_OK 0
@@ -128,11 +129,8 @@ int voxGetVoices(vox_t *list, unsigned int *nbVoices);
    * VOX_CAPITALS: define the action to execute with capital
    letters. Similar to espeakCAPITALS in the eSpeak API.
 
-   Expected value for VOX_CAPITALS:
-   0 = no action
-   1 = play a sound icon 
-   2 = spell the capital letter
-   3 or higher: raise pitch
+   Expected value for VOX_CAPITALS: see enum voxCapitalMode.
+   Value greater than voxCapitalPitch should be accepted and raise pitch.
 
    By default the sound icon is /usr/share/sounds/sound-icons/capital
    (provided by the sounds-icon package of your distribution).

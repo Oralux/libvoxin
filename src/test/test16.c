@@ -79,8 +79,25 @@ int main(int argc, char **argv)
   if (res < 0)
     return __LINE__;
 
-  voxSetParam(handle, VOX_CAPITALS, 1); // sound icon
+  voxSetParam(handle, VOX_CAPITALS, voxCapitalSoundIcon); // sound icon
+  if (eciAddText(handle, "play a sound icon before capital letters") == ECIFalse)
+    return __LINE__;
   
+  for (i=0; i<sizeof(test)/sizeof(*test); i++) {
+    fprintf(stderr,"-> %s\n", test[i]);
+    if (eciAddText(handle, test[i]) == ECIFalse)
+      return __LINE__;
+
+    if (eciSynthesize(handle) == ECIFalse)
+      return __LINE__;
+
+    if (eciSynchronize(handle) == ECIFalse)
+      return __LINE__;
+  }
+  
+  if (eciAddText(handle, "ignore capital letters") == ECIFalse)
+    return __LINE__;
+  voxSetParam(handle, VOX_CAPITALS, voxCapitalNone); // sound icon
   for (i=0; i<sizeof(test)/sizeof(*test); i++) {
     fprintf(stderr,"-> %s\n", test[i]);
     if (eciAddText(handle, test[i]) == ECIFalse)
