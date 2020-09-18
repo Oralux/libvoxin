@@ -610,8 +610,16 @@ int libvoxin_call_eci(void* handle, struct msg_t *msg) {
 	  sleep(1);
 	  exit(1);
 	  //      res = ECHILD;
+	} else if (msg->func == MSG_UNDEFINED) {
+	  dbg("recv msg undefined");
+	  res = EIO;
 	} else {
-	  dbg("recv msg '%s', length=%d, res=0x%x (#%d)", msg_string((enum msg_type)(msg->func)), msg->effective_data_length, msg->res, msg->count);
+	  char *s = msg_string((enum msg_type)(msg->func));
+	  dbg("recv msg '%s', length=%d, res=0x%x (#%d)",
+	      s ? s : "?",
+	      msg->effective_data_length,
+	      msg->res,
+	      msg->count);
 	}
   }
   
