@@ -7,7 +7,7 @@ LIBINOTE_URL=https://github.com/Oralux/libinote/archive
 # LIBINOTE_VERSION indicates the git tag of libinote to use; if unset, its git HEAD is chosen 
 #LIBINOTE_VERSION=
 LIBINOTE_VERSION=1.1.0
-LIBINOTE_SHA512=c2954a57c34571562a28795fd2628f83babfd276a74be3f67b6e724aca284ad42a85968b6b5982be37dbbd4b14487fcb818f3861d478cb781f8ed9eec2f43911
+LIBINOTE_SHA512=20ec661bc8989424d82500ce82f7e02e3f9f3e2a7ee2b4b9beea2fcf080830ebaa10abf9af511cd20acfc330f26e7fdcbac9821b44183a17b92c9d06c832a9dd
 
 usage() {
 	echo "

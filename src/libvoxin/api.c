@@ -21,6 +21,20 @@
   
 #define MAX_LANG 2 // RFU
 #define VOICE_PARAM_UNCHANGED 0x1000
+
+typedef struct {
+  int major;
+  int minor;
+  int patch;
+} version_t;
+
+typedef struct {
+  version_t msg;
+  version_t voxin;
+  version_t inote;
+  version_t tts;
+} voxind_version_t;
+
 struct engine_t {
   uint32_t id; // structure identifier
   struct api_t *api; // parent api
@@ -54,7 +68,7 @@ struct api_t {
   pthread_mutex_t stop_mutex; // to process only one stop command
   pthread_mutex_t api_mutex; // to process exclusively any other command
   struct msg_t *msg; // message for voxind
-  struct msg_get_versions_t tts_version[MSG_TTS_MAX]; // version of the tts and its components
+  voxind_version_t voxind_version[MSG_TTS_MAX]; // version of voxind and its components
 };
 
 static struct api_t my_api = {.stop_mutex=PTHREAD_MUTEX_INITIALIZER, .api_mutex=PTHREAD_MUTEX_INITIALIZER, NULL};
@@ -75,6 +89,16 @@ typedef struct {
 
 static sound_t sound_capital = {.cap = SOUND_SIZE_MAX};
 static sound_t sound_capitals = {.cap = SOUND_SIZE_MAX};
+
+static void conv_int_to_version(int src, version_t *dst) {
+  if (dst) {
+    *dst = (version_t){
+      .major = (src>>16) & 0xff,
+      .minor = (src>>8) & 0xff,
+      .patch = src & 0xff,
+    };
+  }
+}
 
 static inote_charset_t getCharset(enum ECILanguageDialect lang)
 {
@@ -357,6 +381,10 @@ static struct engine_t *engine_create(uint32_t handle, struct api_t *api, msg_tt
 	self->api = api;
 	self->tts_id = tts_id;
 	self->inote = inote_create();
+	{
+	  version_t *v = &api->voxind_version[tts_id].inote;
+	  inote_set_compatibility(self->inote, v->major, v->minor, v->patch);
+	}
 	int i;
 	for (i=0; i<sizeof(self->voice_param)/sizeof(*self->voice_param); i++)
 	  self->voice_param[i] = VOICE_PARAM_UNCHANGED;
@@ -1673,43 +1701,45 @@ static int ttsGetVoices(msg_tts_id id, vox_t *list, unsigned int *nbVoices) {
   return 0;
 }
 
-static int ttsGetVersion(msg_tts_id id, struct msg_get_versions_t *versions) {
-	ENTER();
-	struct msg_t header;
-	struct api_t *api = &my_api;
-	int eci_res = 1;
-	// char *ver;
-	// size_t size;
-	// int v[3];
+static int ttsGetVersion(msg_tts_id id) {
+  ENTER();
+  struct msg_t header;
+  struct api_t *api = &my_api;
+  int eci_res = 1;
 	
-	if ((id <= MSG_TTS_UNDEFINED) || (id >= MSG_TTS_MAX) || !versions) {
-		err("LEAVE, args error");
-		return 1;
-	}
-	
-	msg_set_header(&header, MSG_DST(id), MSG_GET_VERSIONS, 0);
-	if (process_func1(api, &header, NULL, &eci_res, false, false) || eci_res) {
-		err("LEAVE, response error");
-		return 1;
-	}
-	
-	if (!api || !api->msg || !api->msg->data) {
-		err("LEAVE, unexpected error");
-		return 1;
-	}
-	
-	{
-		struct msg_get_versions_t *data = (struct msg_get_versions_t *)api->msg->data;
-		if ((api->msg->effective_data_length >= sizeof(*data))
-		    && (data->magic == MSG_GET_VERSIONS_MAGIC)) {
-			memcpy(versions, api->msg->data, sizeof(*versions));
-		} else {
-			memset(versions, 0, sizeof(*versions));
-		}
-		dbg("versions: msg=%08x, libvoxin=%08x, libinote=%08x, tts=%08x",
-		    data->msg, data->voxin, data->inote, data->tts);
-	}
-	return 0;
+  if ((id <= MSG_TTS_UNDEFINED) || (id >= MSG_TTS_MAX)) {
+    err("LEAVE, args error");
+    return 1;
+  }
+  
+  msg_set_header(&header, MSG_DST(id), MSG_GET_VERSIONS, 0);
+  if (process_func1(api, &header, NULL, &eci_res, false, false)
+      || eci_res) {
+    err("LEAVE, response error");
+    return 1;
+  }
+  
+  if (!api || !api->msg || !api->msg->data) {
+    err("LEAVE, unexpected error");
+    return 1;
+  }
+  
+  {
+    struct msg_get_versions_t *data = (struct msg_get_versions_t *)api->msg->data;
+    voxind_version_t *v = &api->voxind_version[id];
+    if ((api->msg->effective_data_length >= sizeof(*data))
+	&& (data->magic == MSG_GET_VERSIONS_MAGIC)) {
+      conv_int_to_version(data->msg, &v->msg);
+      conv_int_to_version(data->voxin, &v->voxin);
+      conv_int_to_version(data->inote, &v->inote);
+      conv_int_to_version(data->tts, &v->tts);
+    } else {
+      memset(v, 0, sizeof(*v));
+    }
+    dbg("versions: msg=%08x, voxin=%08x, inote=%08x, tts=%08x",
+	data->msg, data->voxin, data->inote, data->tts);
+  }
+  return 0;
 }
 
 int voxGetVoices(vox_t *list, unsigned int *nbVoices) {
@@ -1744,7 +1774,7 @@ int voxGetVoices(vox_t *list, unsigned int *nbVoices) {
 		vox_list_nb += n;
 	  }
 
-	  ttsGetVersion(api->tts[i], &api->tts_version[i]);
+	  ttsGetVersion(api->tts[i]);
 	}
 	api_unlock(api);	
   }
@@ -1789,7 +1819,7 @@ int voxToString(vox_t *data, char *string, size_t *size) {
 
 int voxGetVersion(int *major, int *minor, int *patch) {
 //    ENTER();
-    if (!major || !minor || !patch)
+  if (!major || !minor || !patch)
 	return 1;
 
     *major = LIBVOXIN_VERSION_MAJOR;
@@ -1808,3 +1838,6 @@ int voxString(vox_t *v, char *s, size_t len) {
     return voxToString(v, s, &size);
 }
 
+/* local variables: */
+/* c-file-style: "gnu" */
+/* end: */

@@ -614,7 +614,7 @@ int libvoxin_call_eci(void* handle, struct msg_t *msg) {
 	  dbg("recv msg undefined");
 	  res = EIO;
 	} else {
-	  char *s = msg_string((enum msg_type)(msg->func));
+	  const char *s = msg_string((enum msg_type)(msg->func));
 	  dbg("recv msg '%s', length=%d, res=0x%x (#%d)",
 	      s ? s : "?",
 	      msg->effective_data_length,
