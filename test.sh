@@ -212,16 +212,20 @@ if [ -n "$BUILD" ]; then
 	mkdir -p "$RFSDIR" 
 	
 	touch $HOME/libvoxin.ok $HOME/libinote.ok
-	rsync -av --delete "$ARCHDIR"/rfs/ "$RFSDIR"
-
-	for LIST in $BUILD; do
-		t=$(readlink -e "$LIST") || leave "Error: the list file does not exist (-b $LIST)" 1
-		LIST=$t
-		for i in $(cat "$LIST"); do
-			tarball=$(eval echo $i)
-			tar --exclude "libvoxin.so*" --exclude "voxind*" -C "$RFSDIR" -xf $tarball
-			tree "$RFSDIR"
-		done
+	rsync -av --delete "$ARCHDIR"/rfs/ "$RFSDIR"    
+	for LIST in $BUILD; do	    	    
+	    t=$(readlink -e "$LIST")
+	    if [ $? != 0 ]; then
+		    echo "Error: the list file does not exist (-b $LIST)"
+		    exit 1
+	    fi
+	    
+	    LIST=$t
+	    for i in $(cat "$LIST"); do
+		tarball=$(eval echo $i)
+		tar --exclude "libvoxin.so*" --exclude "voxind*" -C "$RFSDIR" -xf $tarball
+		tree "$RFSDIR"
+	    done
 	done
 	
 	ECI="$RFSDIR"/var/opt/IBM/ibmtts/cfg/eci.ini
@@ -233,5 +237,4 @@ if [ -n "$BUILD" ]; then
 		echo "Warning: $ECI not found (necessary only for IBM TTS"
 	fi
 fi
-
 

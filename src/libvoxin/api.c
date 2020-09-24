@@ -78,17 +78,27 @@ static int vox_list_nb;
 static int eciDefaultParam[eciNumParams];
 
 // TODO: in conf
+#define SOUNDS_DIR "/opt/oralux/voxin/share/sounds"
+
 #define WAV_HEADER_SIZE 0x2c
-#define SOUND_CAPITAL_PATH "/opt/oralux/voxin/share/sounds/capital.11k.wav"
 #define SOUND_SIZE_MAX 4096
+static const char *sound_filename[] = {"capitals.wav", "capital.wav"}; // longest word first (for realloc)
+typedef enum {SOUND_CAPITALS, SOUND_CAPITAL, SOUND_MAX} sound_id; // identify sounds_filename
+
 typedef struct {
   uint8_t buf[SOUND_SIZE_MAX];
   size_t len; // length in bytes really used
   size_t cap; // max allocated size
+  int freq; // 11025, 22050
 } sound_t;
 
-static sound_t sound_capital = {.cap = SOUND_SIZE_MAX};
-static sound_t sound_capitals = {.cap = SOUND_SIZE_MAX};
+typedef struct {
+  sound_t sound[SOUND_MAX][MSG_TTS_MAX];
+} sounds_t;
+
+static sounds_t sounds;
+
+static int frequence[MSG_TTS_MAX] = {0, 11025, 22050};
 
 static void conv_int_to_version(int src, version_t *dst) {
   if (dst) {
@@ -138,6 +148,61 @@ static inote_charset_t getCharset(enum ECILanguageDialect lang)
   return charset;
 }
 
+static void sound_create() {
+  ENTER();
+  static bool once = false;
+  char *pathname = NULL;
+  int i;
+
+  if (once)
+    return;
+
+  once = true;
+  memset(&sounds, 0, sizeof(sounds));
+
+  for (i=0; i<SOUND_MAX; i++) {
+    int j;
+    for (j=1; j<MSG_TTS_MAX; j++) {
+      sound_t *sound = &sounds.sound[i][j];
+      { // get wav pathname
+	static char c[40]; // 40 to silent gcc warning      
+	size_t size = snprintf(c, sizeof(c), "%s/%d/%s", SOUNDS_DIR, frequence[j], sound_filename[i]);
+	if (size<0) {
+	  break;
+	}
+	size++; // terminator
+	char *buf = realloc(pathname, size);
+	if (!buf) {
+	  break;
+	}
+	pathname = buf;
+	size = snprintf(pathname, size, "%s/%d/%s", SOUNDS_DIR, frequence[j], sound_filename[i]);
+	if (size<0) {
+	  break;
+	}
+      }
+      
+      sound->cap = sizeof(sound->buf);
+      sound->freq = frequence[j];
+
+      { // read wav
+	FILE *fd = fopen(pathname, "r");
+	if (fd) {
+	  fseek(fd, WAV_HEADER_SIZE, SEEK_SET);
+	  sound->len = fread(sound->buf, 1, sound->cap, fd);
+	  fclose(fd);
+	  dbg("sounds[%d][%d]: len=%lu (%s)", i, j, (unsigned long)sound->len, pathname);
+	}
+      }
+    }
+  }
+
+  if (pathname) {
+    free(pathname);
+    pathname = NULL;
+  }  
+}
+
 static int api_create(struct api_t *api) {
   int res = 0;
 
@@ -172,7 +237,7 @@ static int api_create(struct api_t *api) {
 	res = errno;
 	goto exit0;
   }
-
+  
   api->my_instance = libvoxin_create(&api->my_instance);
   res = libvoxin_list_tts(api->my_instance, NULL, &api->tts_len);
   if (!res && api->tts_len) {
@@ -180,6 +245,8 @@ static int api_create(struct api_t *api) {
 	  res = libvoxin_list_tts(api->my_instance, api->tts, &api->tts_len);
 	}
   }
+
+  sound_create();  
   
  exit0:
   if ((!api->my_instance) && api->msg) {
@@ -347,32 +414,13 @@ static void engine_init_buffers(struct engine_t *self) {
 	self->state.expected_lang = self->state_expected_lang;
   }
 }
-  
+
 static struct engine_t *engine_create(uint32_t handle, struct api_t *api, msg_tts_id tts_id)
 {
   struct engine_t *self = NULL;
-  static int once = 0;
   
   ENTER();
-
-  if (!once) {
-      FILE *fd = fopen(SOUND_CAPITAL_PATH, "r");
-      if (fd) {
-	  size_t len;
-	  fseek(fd, WAV_HEADER_SIZE, SEEK_SET);
-	  len = sound_capital.len = fread(sound_capital.buf, 1, SOUND_SIZE_MAX, fd);
-	  fclose(fd);
-
-	  memcpy(sound_capitals.buf, sound_capital.buf, len);
-	  if (sound_capitals.cap >= 2*len) {
-	      memcpy(sound_capitals.buf + len, sound_capital.buf, len);
-	      len = 2*len;
-	  }
-	  sound_capitals.len = len;
-      }
-      dbg("sound capital: len=%lu (%s)", (unsigned long)sound_capital.len, SOUND_CAPITAL_PATH);
-  }
-  
+ 
   self = (struct engine_t*)calloc(1, sizeof(*self));
   if (self) {
 	self->id = ENGINE_ID;
@@ -836,16 +884,18 @@ static Boolean synchronize(struct engine_t *engine, enum msg_type type)
 	  enum ECIMessage Msg = (enum ECIMessage)(m->func - MSG_CB_WAVEFORM_BUFFER + eciWaveformBuffer);
 
 	  switch(Msg) {
-	  case eciWaveformBuffer:
+	  case eciWaveformBuffer: 
 		if (m->args.cb.lParam == MSG_PREPEND_CAPITAL) {
 		    dbg("prepend capital");
-		    lParam = sound_capital.len/2;
-		    memcpy(engine->samples, sound_capital.buf, sound_capital.len);
+		    sound_t *sound = &sounds.sound[SOUND_CAPITAL][engine->tts_id];
+		    lParam = sound->len/2;
+		    memcpy(engine->samples, sound->buf, sound->len);
 		    m->res = (enum ECICallbackReturn)cb((ECIHand)((char*)NULL+engine->handle), Msg, lParam, engine->data_cb);
 		} else if (m->args.cb.lParam == MSG_PREPEND_CAPITALS) {
 		    dbg("prepend capitals");
-		    lParam = sound_capitals.len/2;
-		    memcpy(engine->samples, sound_capitals.buf, sound_capitals.len);
+		    sound_t *sound = &sounds.sound[SOUND_CAPITALS][engine->tts_id];
+		    lParam = sound->len/2;
+		    memcpy(engine->samples, sound->buf, sound->len);
 		    m->res = (enum ECICallbackReturn)cb((ECIHand)((char*)NULL+engine->handle), Msg, lParam, engine->data_cb);
 		}
 		

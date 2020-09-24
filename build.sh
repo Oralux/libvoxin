@@ -44,6 +44,7 @@ TMPDIR=$BASE/build/tmp
 DWLDIR=$BASE/download
 RELDIR="$ARCHDIR/release"
 RFSDIR="$ARCHDIR/rfs"
+SOUNDS_DIR="$BASE/sounds"
 VOXINDIR=opt/oralux/voxin
 export DESTDIR="$RFSDIR/$VOXINDIR"
 RFS32="$DESTDIR/rfs32"
@@ -121,6 +122,11 @@ case $ARCH in
 	DESTDIR=$DESTDIR_RFS32 IBMTTSDIR=$IBMTTSDIR make install
 	;;
 esac
+
+# sounds
+echo "Entering sounds"
+cd "$SOUNDS_DIR"
+DESTDIR=$DESTDIR make install
 
 #say
 echo "Entering say"

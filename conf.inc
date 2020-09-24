@@ -111,7 +111,8 @@ getLibinote() {
 	if [ ! -e "$archivep" ]; then
 		wget -P "$DWLDIR" "$LIBINOTE_URL/$archive"
 		if [ ! -e "$archivep" ]; then
-			leave "$archivep not found" 1
+		    echo "$archivep not found"
+		    exit 1
 		fi
 	fi
 
@@ -134,7 +135,10 @@ getLibinote() {
 		dir=libinote-$version
 	fi
 
-	[ ! -d "$dir" ] && leave "Can't cd to $dir" 1
+	if [ ! -d "$dir" ]; then
+	    echo "Can't cd to $dir"
+	    exit 1
+	fi
 	ln -sf "$dir" current
 	cd "$pwd"
 	return 0
