@@ -212,8 +212,10 @@ struct msg_t {
 #define MIN_MSG_SIZE MSG_HEADER_LENGTH
 #define MAX_ERROR_MESSAGE 100
 #define MAX_VERSION 20
-#define MSG_PREPEND_CAPITAL 1
-#define MSG_PREPEND_CAPITALS 2
+// MSG_PREPEND_CAPITAL and MSG_PREPEND_CAPITALS:
+// value must be different than index value
+#define MSG_PREPEND_CAPITAL  0xFFFE0001 
+#define MSG_PREPEND_CAPITALS 0xFFFE0002 
 
 extern const char *msg_string(enum msg_type m);
 

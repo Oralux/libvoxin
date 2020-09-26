@@ -16,8 +16,8 @@
 #define VOXIND_ID 0x05000A01 
 #define ENGINE_ID 0x15000A01 
 #define READ_TIMEOUT_IN_MS 0
-#define INDEX_CAPITAL  0x00010000
-#define INDEX_CAPITALS 0x00020000
+#define INDEX_CAPITAL  MSG_PREPEND_CAPITAL
+#define INDEX_CAPITALS MSG_PREPEND_CAPITALS
 struct voxind_t {
   uint32_t id;
   struct pipe_t *pipe_command;
