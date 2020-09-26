@@ -21,6 +21,10 @@ legend top
 	INOTE_TYPE_CAPITALS (several contiguous caps) follows
 	the same sequence (with a different sound icon).
 end legend
+api -> voxind : VOX_SET_PARAM
+note right
+	capital_mode = voxCapitalSoundIcon
+end note
 api -> voxind : ADD_TLV
 note right
 	First TLV sent after completion

@@ -235,6 +235,7 @@ static enum ECICallbackReturn my_callback(ECIHand hEngine, enum ECIMessage Msg, 
 
   switch(Msg) {
   case eciWaveformBuffer:
+    engine->cb_msg->args.cb.lParam = 0;      
     if (!engine->audio_sample_received) {
       size_t speech_len = 2*lParam;
       engine->audio_sample_received = 1;
@@ -248,8 +249,6 @@ static enum ECICallbackReturn my_callback(ECIHand hEngine, enum ECIMessage Msg, 
 	  engine->cb_msg->args.cb.lParam = MSG_PREPEND_CAPITALS;
 	}
       }
-    } else {
-      engine->cb_msg->args.cb.lParam = 0;      
     }
     engine->cb_msg->effective_data_length = 2*lParam;  
     break;
@@ -377,6 +376,7 @@ static int check_engine(struct engine_t *engine)
 
 int voxSetParam(void *handle, voxParam param, int value)
 {
+  ENTER();
   int ret;
   struct engine_t *engine = handle;  
 
@@ -386,6 +386,7 @@ int voxSetParam(void *handle, voxParam param, int value)
   if (param == VOX_CAPITALS) {
     ret = engine->capital_mode;
     engine->capital_mode = value;
+    dbg("capital_mode=%d", value);
   } else {
     ret = eciSetParam(engine->handle, param, value);
   }

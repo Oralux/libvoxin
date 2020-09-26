@@ -28,16 +28,16 @@ supplied file.\n\
 EXAMPLES :\n\
 \n\
 # Say 'hello world' and redirect output to an external audio player:\n\
-./voxin-say \"hello world\" | aplay\n\
+voxin-say \"hello world\" | aplay\n\
 # Read file.txt and save speech to an audio file:\n\
-./voxin-say -f file.txt -w file.wav\n\
-./voxin-say -f file.txt > file.wav\n\
+voxin-say -f file.txt -w file.wav\n\
+voxin-say -f file.txt > file.wav\n\
 # The following command is incorrect because no output is supplied:\n\
-./voxin-say \"Hello all\"\n\
+voxin-say \"Hello all\"\n\
 # Correct command to read a file in French at 500 words per minute,\n\
   use 4 jobs to speed\n\
   up conversion\n\
-./voxin-say -f file.txt -l fr -s 500 -j 4 -w audio.wav\n\
+voxin-say -f file.txt -l fr -s 500 -j 4 -w audio.wav\n\
 \n\
 \n\
 OPTIONS :\n\

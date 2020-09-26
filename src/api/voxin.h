@@ -132,9 +132,6 @@ int voxGetVoices(vox_t *list, unsigned int *nbVoices);
    Expected value for VOX_CAPITALS: see enum voxCapitalMode.
    Value greater than voxCapitalPitch should be accepted and raise pitch.
 
-   By default the sound icon is /usr/share/sounds/sound-icons/capital
-   (provided by the sounds-icon package of your distribution).
-
    @param handle  instance created by eciNew() or eciNewEx()
    @param param
    @param value
