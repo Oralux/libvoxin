@@ -256,28 +256,29 @@ static enum ECICallbackReturn my_callback(ECIHand hEngine, enum ECIMessage Msg, 
     engine->cb_msg->effective_data_length = lParam;  
     break;
   case eciIndexReply:
+    {
+      engine->cb_msg->effective_data_length = sizeof(uint32_t);
+      engine->cb_msg->args.cb.lParam = htole32(lParam);
+      uint32_t index = engine->cb_msg->args.cb.lParam;
+      dbg("index=0x%02x", index);
+      if (index & (INDEX_CAPITAL|INDEX_CAPITALS)) {
+	if (engine->capital_mode == voxCapitalSoundIcon) {
+	  bool is_capitals = !((index & INDEX_CAPITALS)^INDEX_CAPITALS);
+	  Msg = eciWaveformBuffer;
+	  engine->cb_msg->effective_data_length = lParam = 0;
+	  engine->cb_msg->args.cb.lParam = is_capitals ? MSG_PREPEND_CAPITALS : MSG_PREPEND_CAPITAL;
+	} else {
+	  return eciDataProcessed;
+	}
+      }
+    }
+    break;
   case eciPhonemeIndexReply:
   case eciWordIndexReply:
   case eciStringIndexReply:
   case eciSynthesisBreak:
     engine->cb_msg->effective_data_length = sizeof(uint32_t);
     engine->cb_msg->args.cb.lParam = htole32(lParam);
-
-    if (eciIndexReply) {
-      uint32_t index = engine->cb_msg->args.cb.lParam;
-      dbg("index=0x%02x", index);
-      if (engine->capital_mode == voxCapitalSoundIcon) {
-	if (index & INDEX_CAPITALS) {
-	  Msg = eciWaveformBuffer;
-	  engine->cb_msg->args.cb.lParam = MSG_PREPEND_CAPITALS;
-	  engine->cb_msg->effective_data_length = lParam = 0;
-	} else if (index & INDEX_CAPITAL) {
-	  Msg = eciWaveformBuffer;
-	  engine->cb_msg->args.cb.lParam = MSG_PREPEND_CAPITAL;
-	  engine->cb_msg->effective_data_length = lParam = 0;
-	}
-      }
-    }
     break;
   default:
     err("LEAVE, unknown eci message (%d)", Msg);
@@ -376,7 +377,7 @@ static int check_engine(struct engine_t *engine)
 
 int voxSetParam(void *handle, voxParam param, int value)
 {
-  ENTER();
+  dbg("ENTER(%p, 0x%0x, 0x%0x)", handle, param, value);
   int ret;
   struct engine_t *engine = handle;  
 
