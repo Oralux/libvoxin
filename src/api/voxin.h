@@ -64,7 +64,9 @@ typedef enum {voxAdult, voxChild, voxSenior} voxAge;
 typedef enum {voxCapitalNone=0, voxCapitalSoundIcon=1, voxCapitalSpell=2, voxCapitalPitch=3} voxCapitalMode;
 
 #define VOX_STR_MAX 128
+
 #define VOX_OK 0
+#define VOX_PARAM_OUT_OF_RANGE -1
 
 /**
    @brief Describe a voice.
@@ -135,7 +137,7 @@ int voxGetVoices(vox_t *list, unsigned int *nbVoices);
    @param handle  instance created by eciNew() or eciNewEx()
    @param param
    @param value
-   @return int  VOX_OK on success
+   @return int  previous voxParam value on success, VOX_PARAM_OUT_OF_RANGE otherwise 
 */
 int voxSetParam(void *handle, voxParam param, int value);
 

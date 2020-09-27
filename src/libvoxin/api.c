@@ -1233,7 +1233,7 @@ int set_param(ECIHand hEngine, uint32_t msg_id, enum ECIParam Param, int iValue)
   struct engine_t *engine = self;
   struct msg_t header;
    
-  dbg("ENTER(%d,0x%0x)", Param, iValue);  
+  dbg("ENTER(%d, 0x%0x)", Param, iValue);  
 
   if (!IS_ENGINE(engine)) {
 	err("LEAVE, args error");
@@ -1276,7 +1276,7 @@ int set_param(ECIHand hEngine, uint32_t msg_id, enum ECIParam Param, int iValue)
 
 int eciSetParam(ECIHand hEngine, enum ECIParam Param, int iValue)
 {
-    dbg("ENTER(%p, 0x%0x, ENTER(0x%0x)", hEngine, Param, iValue);
+    dbg("ENTER(%p, 0x%0x, 0x%0x)", hEngine, Param, iValue);
     return set_param(hEngine, MSG_SET_PARAM, Param, iValue);
 }
 
