@@ -214,8 +214,8 @@ struct msg_t {
 #define MAX_VERSION 20
 // MSG_PREPEND_CAPITAL and MSG_PREPEND_CAPITALS:
 // value must be different than index value
-#define MSG_PREPEND_CAPITAL  0xFFFE0000 
-#define MSG_PREPEND_CAPITALS 0xFFFF0000 
+#define MSG_PREPEND_CAPITAL  0x7FFE0000 
+#define MSG_PREPEND_CAPITALS 0x7FFF0000 
 
 extern const char *msg_string(enum msg_type m);
 
