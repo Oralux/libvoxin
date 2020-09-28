@@ -267,7 +267,9 @@ static enum ECICallbackReturn my_callback(ECIHand hEngine, enum ECIMessage Msg, 
 	  Msg = eciWaveformBuffer;
 	  engine->cb_msg->effective_data_length = lParam = 0;
 	  engine->cb_msg->args.cb.lParam = is_capitals ? MSG_PREPEND_CAPITALS : MSG_PREPEND_CAPITAL;
+	  dbg("lParam=0x%08x", engine->cb_msg->args.cb.lParam);
 	} else {
+	  dbg("LEAVE, data processed (mode=%d)", engine->capital_mode);
 	  return eciDataProcessed;
 	}
       }

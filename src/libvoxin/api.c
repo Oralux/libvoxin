@@ -512,15 +512,20 @@ ECIHand eciNew(void)
 
   if (!vox_list_nb) {
 	unsigned int n = MSG_VOX_LIST_MAX;
-	if (voxGetVoices(NULL, &n))
+	if (voxGetVoices(NULL, &n)) {
+	  err("LEAVE, error getting voices");    
 	  return NULL;
+	}	  
   }
   if (!vox_list_nb) {
+	err("LEAVE, error no voice");    
 	return NULL;
   }
   res = api_lock(api);
-  if (res)
+  if (res) {
+	err("LEAVE, error api lock");    
 	return NULL;
+  }
   //  usleep(1000);
 
   // look for the first available tts
@@ -536,8 +541,10 @@ ECIHand eciNew(void)
 	dbg("no tts available");
 	return NULL;	
   }
-  if (msg_set_header(&header, MSG_DST(tts_id), MSG_NEW, 0))
+  if (msg_set_header(&header, MSG_DST(tts_id), MSG_NEW, 0)) {
+	err("LEAVE, error set header");        
 	return NULL;
+  }
 
   if (!process_func1(api, &header, NULL, &eci_res, false, false)) {
 	if (eci_res != 0) {
@@ -884,11 +891,13 @@ static Boolean synchronize(struct engine_t *engine, enum msg_type type)
 	  enum ECIMessage Msg = (enum ECIMessage)(m->func - MSG_CB_WAVEFORM_BUFFER + eciWaveformBuffer);
 
 	  switch(Msg) {
-	  case eciWaveformBuffer: 
+	  case eciWaveformBuffer:
+	    	dbg("lParam=0x%08x)", m->args.cb.lParam);	    
 		if (m->args.cb.lParam == MSG_PREPEND_CAPITAL) {
 		    dbg("prepend capital");
 		    sound_t *sound = &sounds.sound[SOUND_CAPITAL][engine->tts_id];
 		    lParam = sound->len/2;
+		    dbg("len audio[%d]=%d", engine->tts_id, lParam);
 		    memcpy(engine->samples, sound->buf, sound->len);
 		    m->res = (enum ECICallbackReturn)cb((ECIHand)((char*)NULL+engine->handle), Msg, lParam, engine->data_cb);
 		} else if (m->args.cb.lParam == MSG_PREPEND_CAPITALS) {
@@ -1137,10 +1146,13 @@ ECIHand eciNewEx(enum ECILanguageDialect Value)
   
   if (!vox_list_nb) {
 	unsigned int n = MSG_VOX_LIST_MAX;
-	if (voxGetVoices(NULL, &n))
+	if (voxGetVoices(NULL, &n)) {
+	  err("LEAVE, error getting voices");    
 	  return NULL;
+	}
   }
   if (!vox_list_nb) {
+	err("LEAVE, error no voice");    
 	return NULL;
   }
   int i,j;
@@ -1150,16 +1162,22 @@ ECIHand eciNewEx(enum ECILanguageDialect Value)
 	  break;
 	}
   }
-  if (j == -1)
+  if (j == -1) {
+	err("LEAVE, error voice not found");    
 	return NULL;
+  }
     
   res = api_lock(api);
-  if (res)
+  if (res) {
+	err("LEAVE, error api lock");    
 	return NULL;
+  }
   //  usleep(1000);
 
-  if (msg_set_header(&header, MSG_DST(vox_list[j].tts_id), MSG_NEW_EX, 0))
+  if (msg_set_header(&header, MSG_DST(vox_list[j].tts_id), MSG_NEW_EX, 0)) {
+	err("LEAVE, error set header");        
 	return NULL;
+  }
 
   header.args.ne.Value = Value;
 
