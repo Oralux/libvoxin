@@ -234,7 +234,7 @@ static enum ECICallbackReturn my_callback(ECIHand hEngine, enum ECIMessage Msg, 
     return eciDataAbort;
   }
 
-  engine->cb_msg_to_pipe->args.cb.lParam = 0;
+  engine->cb_msg->args.cb.lParam = 0;
   switch(Msg) {
   case eciWaveformBuffer:
     if (!engine->audio_sample_received) {
@@ -309,7 +309,7 @@ static enum ECICallbackReturn my_callback(ECIHand hEngine, enum ECIMessage Msg, 
       msgType,
       msg_string(engine->cb_msg->func),
       engine->cb_msg->effective_data_length,
-      engine->cb_msg_to_pipe->args.cb.lParam,
+      engine->cb_msg->args.cb.lParam,
       engine,
       engine->cb_msg->count);
   res = pipe_write(my_voxind->pipe_command, engine->cb_msg, &effective_msg_length);
