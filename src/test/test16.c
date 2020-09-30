@@ -44,7 +44,7 @@ enum ECICallbackReturn my_client_callback(ECIHand hEngine, enum ECIMessage Msg, 
 
   if (Msg == eciWaveformBuffer) {
       ssize_t len = write(fd, my_samples, 2*lParam);
-      fprintf(stderr, "cb: %lu written\n", (unsigned long)2*lParam);
+      //      fprintf(stderr, "cb: %lu written\n", (unsigned long)2*lParam);
   }
   return eciDataProcessed;
 }

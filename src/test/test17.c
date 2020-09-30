@@ -37,10 +37,11 @@ static data_cb_t data_cb;
 
 
 #define nveEnglishNathan 0x2d0000
+#define nveEnglishTomCompact 0x2d3000
 #define nveFrenchThomas 0x380000
 #define nveSpanishMarisol 0x340000
 
-#define nve_lang_id nveEnglishNathan
+#define nve_lang_id nveEnglishTomCompact
 #define eci_lang_id eciGeneralAmericanEnglish
 //#define eci_lang_id eciStandardFrench
 
@@ -49,8 +50,8 @@ static enum ECICallbackReturn my_client_callback(ECIHand hEngine, enum ECIMessag
 static int get_voices();
   
 int main(int argc, char** argv) {
-  int voice[] = {eci_lang_id};
-  //  int voice[] = {nve_lang_id};
+  //  int voice[] = {eci_lang_id};
+  int voice[] = {nve_lang_id};
   //  int voice[] = {eci_lang_id, nve_lang_id};
   int i;
   int voice_max = sizeof(voice)/sizeof(*voice);
@@ -146,7 +147,10 @@ static int test(void *handle) {
   
   for (i=0; i<MAX_TEXT; i++) {
     fprintf(stderr,"add index %d\n", i);
-    if (!eciInsertIndex(handle, i))
+    //    if (!eciInsertIndex(handle, i))
+    if (!eciInsertIndex(handle, i+1))
+      return __LINE__;
+    if (!eciInsertIndex(handle, i+1000))
       return __LINE__;
 
     fprintf(stderr,"add text %s\n", text[i]);
@@ -155,8 +159,11 @@ static int test(void *handle) {
   }
 
   fprintf(stderr,"add index %d\n", i);
-  if (!eciInsertIndex(handle, i))
+  //  if (!eciInsertIndex(handle, i))
+  if (!eciInsertIndex(handle, i+1))
 	return __LINE__;
+    if (!eciInsertIndex(handle, i+1000))
+      return __LINE__;
 
   if (eciSynthesize(handle) == ECIFalse)
     return __LINE__;
