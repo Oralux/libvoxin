@@ -128,7 +128,8 @@ static inote_error add_capital(inote_tlv_t *tlv, bool capitals, void *user_data)
 
   if (self) {
     dbg("self=%p", self);
-    if (self->tlv_number) {
+    if ((self->capital_mode == voxCapitalSoundIcon)
+	&& (self->tlv_number)) {
       dbg("tlv_number=%x", self->tlv_number);
       // insert an index (except for the first tlv since an index
       // must follow text)
@@ -233,9 +234,9 @@ static enum ECICallbackReturn my_callback(ECIHand hEngine, enum ECIMessage Msg, 
     return eciDataAbort;
   }
 
+  engine->cb_msg_to_pipe->args.cb.lParam = 0;
   switch(Msg) {
   case eciWaveformBuffer:
-    engine->cb_msg->args.cb.lParam = 0;      
     if (!engine->audio_sample_received) {
       size_t speech_len = 2*lParam;
       engine->audio_sample_received = 1;
@@ -267,7 +268,6 @@ static enum ECICallbackReturn my_callback(ECIHand hEngine, enum ECIMessage Msg, 
 	  Msg = eciWaveformBuffer;
 	  engine->cb_msg->effective_data_length = lParam = 0;
 	  engine->cb_msg->args.cb.lParam = is_capitals ? MSG_PREPEND_CAPITALS : MSG_PREPEND_CAPITAL;
-	  dbg("lParam=0x%08x", engine->cb_msg->args.cb.lParam);
 	} else {
 	  dbg("LEAVE, data processed (mode=%d)", engine->capital_mode);
 	  return eciDataProcessed;
@@ -305,8 +305,13 @@ static enum ECICallbackReturn my_callback(ECIHand hEngine, enum ECIMessage Msg, 
   ++engine->cb_msg->count;
     
   engine->cb_msg->res = 0;
-  dbg("%s send cb msg '%s', length=%d, engine=%p (#%d)", msgType, msg_string(engine->cb_msg->func),
-      engine->cb_msg->effective_data_length, engine, engine->cb_msg->count);
+  dbg("%s send cb msg '%s', length=%d, lParam=%08x, engine=%p (#%d)",
+      msgType,
+      msg_string(engine->cb_msg->func),
+      engine->cb_msg->effective_data_length,
+      engine->cb_msg_to_pipe->args.cb.lParam,
+      engine,
+      engine->cb_msg->count);
   res = pipe_write(my_voxind->pipe_command, engine->cb_msg, &effective_msg_length);
   if (res) {
     err("LEAVE, write error (%d)", res);

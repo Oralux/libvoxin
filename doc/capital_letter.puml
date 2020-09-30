@@ -55,6 +55,7 @@ voxind -> inote : inote_convert_tlv_to_text
 inote -> voxind : add_capital
 note right
 	since tlv_number != 0
+	and capital_mode == voxCapitalSoundIcon
 	insert an index.
 end note	
 voxind -> engine : eciInsertIndex
