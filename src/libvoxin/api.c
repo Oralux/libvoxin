@@ -893,18 +893,23 @@ static Boolean synchronize(struct engine_t *engine, enum msg_type type)
 	  switch(Msg) {
 	  case eciWaveformBuffer:
 	    	dbg("lParam=0x%08x)", m->args.cb.lParam);	    
-		if (m->args.cb.lParam == MSG_PREPEND_CAPITAL) {
+		if (m->args.cb.lParam == MSG_PREPEND_CAPITAL) {		  
 		    dbg("prepend capital");
 		    sound_t *sound = &sounds.sound[SOUND_CAPITAL][engine->tts_id];
-		    lParam = sound->len/2;
+		    size_t sound_length = (sound->len <= 2*engine->nb_samples) ?
+		      sound->len : 2*engine->nb_samples;
+		    lParam = sound_length/2;
 		    dbg("len audio[%d]=%d", engine->tts_id, lParam);
-		    memcpy(engine->samples, sound->buf, sound->len);
-		    m->res = (enum ECICallbackReturn)cb((ECIHand)((char*)NULL+engine->handle), Msg, lParam, engine->data_cb);
+		    memcpy(engine->samples, sound->buf, sound_length);
+		    m->res = (enum ECICallbackReturn)cb((ECIHand)((char*)NULL+engine->handle),
+							Msg, lParam, engine->data_cb);
 		} else if (m->args.cb.lParam == MSG_PREPEND_CAPITALS) {
 		    dbg("prepend capitals");
 		    sound_t *sound = &sounds.sound[SOUND_CAPITALS][engine->tts_id];
-		    lParam = sound->len/2;
-		    memcpy(engine->samples, sound->buf, sound->len);
+		    size_t sound_length = (sound->len <= 2*engine->nb_samples) ?
+		      sound->len : 2*engine->nb_samples;
+		    lParam = sound_length/2;
+		    memcpy(engine->samples, sound->buf, sound_length);
 		    m->res = (enum ECICallbackReturn)cb((ECIHand)((char*)NULL+engine->handle), Msg, lParam, engine->data_cb);
 		}
 		
