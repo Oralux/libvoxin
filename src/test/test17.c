@@ -1,4 +1,6 @@
 // Capital letters + insert index/marker
+// - first without sound icon enabled
+// - second with sound 
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -18,13 +20,13 @@
 #define MAX_SAMPLES 1024
 static short my_samples[MAX_SAMPLES];
 
-
 const char* text[] = {
-  "one letter",
-  "Capital letter",
-  "one Capital ",
-  "Capital Letter, ",
-  "CAPITALS ",
+  "first line ",
+  "Second line ",
+  "third Line ",
+  "Fourth Line ",
+  "FIFTH line ",
+  "SIXTH LINE ",
 };
 
 #define MAX_TEXT (sizeof(text)/sizeof(*text))
@@ -42,15 +44,15 @@ static data_cb_t data_cb;
 #define nveSpanishMarisol 0x340000
 
 #define nve_lang_id nveEnglishTomCompact
-#define eci_lang_id eciGeneralAmericanEnglish
-//#define eci_lang_id eciStandardFrench
+//#define eci_lang_id eciGeneralAmericanEnglish
+#define eci_lang_id eciStandardFrench
 
 static int test(void *handle);
 static enum ECICallbackReturn my_client_callback(ECIHand hEngine, enum ECIMessage Msg, long lParam, void *pData);
 static int get_voices();
   
 int main(int argc, char** argv) {
-  //  int voice[] = {eci_lang_id};
+  //int voice[] = {eci_lang_id};
   int voice[] = {nve_lang_id};
   //  int voice[] = {eci_lang_id, nve_lang_id};
   int i;
@@ -102,14 +104,17 @@ static enum ECICallbackReturn my_client_callback(ECIHand hEngine, enum ECIMessag
 {
   data_cb_t *data_cb = (data_cb_t *)pData;
 
+  //  fprintf(stderr, "ENTER %s\n", __func__);
+  
   switch(Msg) {
   case eciWaveformBuffer:
     if (data_cb) {
+      //      fprintf(stderr, "write fd=0x%0x size=%d (data_cb=%p)\n", data_cb->fd, 2*lParam, data_cb);
       write(data_cb->fd, my_samples, 2*lParam);
     }
     break;
   case eciIndexReply:
-    fprintf(stderr, "index reply=0x%08lx\n", lParam);
+    //    fprintf(stderr, "index reply=0x%08lx\n", lParam);
     break;
   default:
     break;
@@ -147,7 +152,6 @@ static int test(void *handle) {
   
   for (i=0; i<MAX_TEXT; i++) {
     fprintf(stderr,"add index %d\n", i);
-    //    if (!eciInsertIndex(handle, i))
     if (!eciInsertIndex(handle, i+1))
       return __LINE__;
     if (!eciInsertIndex(handle, i+1000))
@@ -159,7 +163,6 @@ static int test(void *handle) {
   }
 
   fprintf(stderr,"add index %d\n", i);
-  //  if (!eciInsertIndex(handle, i))
   if (!eciInsertIndex(handle, i+1))
 	return __LINE__;
     if (!eciInsertIndex(handle, i+1000))

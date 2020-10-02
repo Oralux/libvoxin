@@ -54,6 +54,7 @@ struct engine_t {
   // Set to TRUE when an audio sample is received from the engine.
   // Set to FALSE at init or after the completion of eciSynchronize.
   int audio_sample_received;
+
 };
 
 #define ENGINE_INDEX 0xEA61AE00 
@@ -612,6 +613,7 @@ static int unserialize(struct msg_t *msg, size_t *msg_length)
     break;
 
   case MSG_SET_PARAM:
+    dbg("handle=%p, param=0x%0x, value=0x%0x)", engine->handle, msg->args.sp.Param, msg->args.sp.iValue);
     msg->res = (uint32_t)eciSetParam(engine->handle, msg->args.sp.Param, msg->args.sp.iValue);
     break;
 
