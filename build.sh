@@ -66,6 +66,11 @@ if [ "$ARCH" = "i686" ]; then
 	export LDFLAGS="-m32"
 fi
 
+
+#libinih
+getInih
+buildInih $ARCH "$DESTDIR" "$WITH_DBG"
+
 #libinote
 getLibinote
 buildLibinote $ARCH "$DESTDIR" "$WITH_DBG"

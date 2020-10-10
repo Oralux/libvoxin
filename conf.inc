@@ -9,6 +9,10 @@ LIBINOTE_URL=https://github.com/Oralux/libinote/archive
 LIBINOTE_VERSION=1.1.0
 LIBINOTE_SHA512=208666b9ab3124a53f958163332d9ea29dd3bfebfb4493f26c6270976a93e6f4c8d9b4dd29b1d5635898b06dec2e5a6f51295f4cd3bfaf73a5eb9055bb925b11
 
+INIH_URL=https://github.com/benhoyt/inih/archive
+INIH_VERSION=r51
+INIH_SHA512=eb2f58979d93e51a09326e6c187828643887ac1a239d4b12205567c7d87a671c9c49ca99db376c031d366bc680e579c30dcea9f3eb130ec802597411b2cb3cf4
+
 usage() {
 	echo "
 Usage: 
@@ -157,3 +161,69 @@ buildLibinote() {
 	[ -n "$withdbg" ] && flag=-d
 	./build.sh $flag -m "$arch" -i "$destdir"
 }
+
+# download, build and install inih
+getInih() {
+    local workdir=$TMPDIR/inih
+    local archive	
+    local archivep
+    local version
+    local pwd=$PWD
+    local downloadDir=$DWLDIR/inih
+    
+    version=$INIH_VERSION
+    archive=$version.tar.gz		
+    archivep="$downloadDir/$archive"
+    
+    [ ! -d "$downloadDir" ] && mkdir -p "$downloadDir"
+    
+    rm -rf "$workdir"
+    mkdir -p "$workdir"
+    cd "$workdir"
+    
+    # download	
+    if [ ! -e "$archivep" ]; then
+	wget -P "$downloadDir" "$INIH_URL/$archive"
+	if [ ! -e "$archivep" ]; then
+	    echo "$archivep not found"
+	    exit 1
+	fi
+    fi
+    
+    local a=$(sha512sum "$archivep" | cut -f1 -d" ")
+    if [ "$a" != "$INIH_SHA512" ]; then
+	echo "$archivep: sha512 mismatch !"
+	exit 1
+    fi
+    [ ! -d inih-$version ] && tar -zxf "$archivep" || true
+	
+    cd "$pwd"
+    return 0
+}
+
+buildInih() {
+    [ "$#" -lt 2 ] && return 1
+    local arch=$1
+    local destdir=$2
+    local withdbg=$3
+    local workdir=$TMPDIR/inih/inih-$INIH_VERSION
+    local flag
+    local pwd=$PWD
+    local lib=libinih.a
+    
+    cd "$workdir"
+    rm -f *o *~ "$lib"    
+    [ -n "$withdbg" ] && flag=-g
+    [ -n "$destdir" ] && rm -f "$destdir"/lib/$lib "$destdir"/include/ini.h
+
+    gcc $flag -c ini.c -o ini.o
+    ar rcs $lib ini.o
+
+    install --target-directory="$destdir"/lib -D -m 644 $lib
+    install --target-directory="$destdir"/include -D ini.h
+    install --target-directory="$destdir"/share/doc/inih -D LICENSE.txt
+    
+    cd "$pwd"
+    return 0
+}
+
