@@ -7,14 +7,14 @@ SONAME=libvoxin.so.$(LIBVOXIN_VERSION_MAJOR)
 MIN=$(LIBVOXIN_VERSION_MINOR)
 REV=$(LIBVOXIN_VERSION_PATCH)
 
-BIN := api.o libvoxin.o
+BIN := api.o libvoxin.o config.o
 CC ?= gcc
 CFLAGS += $(DEBUG) -fPIC -I../api -I../common -Wno-int-to-pointer-cast -Wall
 #CC = gcc
 STRIP ?= strip --strip-unneeded
 
 all: $(BIN)
-	$(CC) -shared -Wl,-soname,libvoxin.so.$(LIBVOXIN_VERSION_MAJOR) -o $(SONAME).$(MIN).$(REV) -Wl,--version-script=libvoxin.ld $(^) $(LDFLAGS) -L$(DESTDIR)/lib -lcommon -linote 
+	$(CC) -shared -Wl,-soname,libvoxin.so.$(LIBVOXIN_VERSION_MAJOR) -o $(SONAME).$(MIN).$(REV) -Wl,--version-script=libvoxin.ld $(^) $(LDFLAGS) -L$(DESTDIR)/lib -lcommon -linote -linih
 	$(STRIP) $(SONAME).$(MIN).$(REV)
 
 clean:

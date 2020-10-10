@@ -11,6 +11,7 @@
 #include "libvoxin.h"
 #include "msg.h"
 #include "inote.h"
+#include "config.h"
 
 #define FILTER_SSML 1
 #define FILTER_PUNC 2
@@ -69,6 +70,7 @@ struct api_t {
   pthread_mutex_t api_mutex; // to process exclusively any other command
   struct msg_t *msg; // message for voxind
   voxind_version_t voxind_version[MSG_TTS_MAX]; // version of voxind and its components
+  config_t *my_config;
 };
 
 static struct api_t my_api = {.stop_mutex=PTHREAD_MUTEX_INITIALIZER, .api_mutex=PTHREAD_MUTEX_INITIALIZER, NULL};
@@ -247,6 +249,7 @@ static int api_create(struct api_t *api) {
   }
 
   sound_create();  
+  config_create(&api->my_config);
   
  exit0:
   if ((!api->my_instance) && api->msg) {
