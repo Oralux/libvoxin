@@ -6,6 +6,7 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <endian.h>
+#include <ctype.h>
 #include "voxin.h"
 #include "debug.h"
 #include "libvoxin.h"
@@ -498,6 +499,72 @@ static int getCurrentLanguage(struct engine_t *engine)
   return res;  
 }
 
+static void setPunctuationMode(struct engine_t *engine, inote_punct_mode_t mode, const char *punctuation_list)
+{
+  const char *fmt = " `Pf%d%s ";
+  enum {CHAR_MAX = 20};
+  char text[CHAR_MAX];
+  const char *list = punctuation_list;
+  ENTER();
+
+  if (!IS_ENGINE(engine)) {
+    err("LEAVE, args error");
+    return;
+  }
+  engine = engine->current_engine;
+
+  if (list) {
+    int i;
+    for (i=0; i<CHAR_MAX && list[i]; i++) {
+      if (!ispunct(list[i])) {
+	list = NULL;
+	break;
+      }
+    }
+  }
+  
+  if (!list) {
+    config_t init = CONFIG_DEFAULT;
+    list = init.some_punctuation;
+  }
+  
+  snprintf(text, CHAR_MAX, fmt, mode, list);
+  
+  text[CHAR_MAX-2] = ' ';
+  text[CHAR_MAX-1] = 0;
+  eciAddText(engine, text);
+}
+
+// set value of parameters according to the configuration file
+static void setConfiguredValues(struct engine_t *engine)
+{
+  struct api_t *api;
+  
+  ENTER();
+
+  if (!IS_ENGINE(engine)) {
+    err("LEAVE, args error");
+    return;
+  }
+  engine = engine->current_engine;
+
+  api = engine->api;
+
+  if (!engine || !api || !api->my_config)
+    return;
+
+  {
+    config_t *config = api->my_config;
+    config_t init = CONFIG_DEFAULT;
+    if (config->capital_mode != init.capital_mode) {
+      voxSetParam(engine, VOX_CAPITALS, config->capital_mode);
+    }
+    if (config->punctuation_mode != init.punctuation_mode) {
+      setPunctuationMode(engine, config->punctuation_mode, config->some_punctuation);
+    }
+  }
+}
+
 ECIHand eciNew(void)
 {
   int eci_res = 0;
@@ -559,6 +626,8 @@ ECIHand eciNew(void)
 	  api_unlock(api);
   }
 
+  setConfiguredValues(engine);
+  
   dbg("LEAVE, engine=%p", engine);
   return (ECIHand)engine;
 }
@@ -971,7 +1040,6 @@ static Boolean synchronize(struct engine_t *engine, enum msg_type type)
   return eci_res;
 }
 
-
 Boolean eciSynchronize(ECIHand hEngine)
 {
   Boolean eci_res = ECIFalse;
@@ -1136,7 +1204,6 @@ int eciGetAvailableLanguages(enum ECILanguageDialect *aLanguages, int *nLanguage
   return 0;
 }
 
-
 ECIHand eciNewEx(enum ECILanguageDialect Value)
 {
   int eci_res;
@@ -1197,6 +1264,8 @@ ECIHand eciNewEx(enum ECILanguageDialect Value)
 	api_unlock(api);
   }
 
+  setConfiguredValues(engine);
+  
   dbg("LEAVE, engine=%p", engine);
   return (ECIHand)engine;
 }
