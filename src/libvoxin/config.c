@@ -17,17 +17,30 @@ static int config_cb(void *user, const char *section, const char *name, const ch
 
   dbg("[%s] %s=%s", section, name, value);
   
-  if (!strcmp(section, "general")) {
-    if (!strcmp(name, "capitalization")) {
-      conf->capital_mode = atoi(value);
-      dbg("capital_mode=%d", conf->capital_mode);
-    } else if (!strcmp(name, "punctuation")) {
+  if (!strcasecmp(section, "general")) {
+    if (!strcasecmp(name, "capitalization")) {
       bool updated = true;
-      if (!strcmp(value,"none")) {
+      if (!strcasecmp(value, "none")) {
+	conf->capital_mode = voxCapitalNone;
+      } else if (!strcasecmp(value, "icon")) {
+	conf->capital_mode = voxCapitalSoundIcon;
+      } else if (!strcasecmp(value, "spell")) {
+	conf->capital_mode = voxCapitalSpell;
+      } else if (!strcasecmp(value, "pitch")) {
+	conf->capital_mode = voxCapitalPitch;
+      } else {
+	updated = false;
+      }
+      if (updated) {
+	dbg("capital_mode=%d", conf->capital_mode);
+      }
+    } else if (!strcasecmp(name, "punctuation")) {
+      bool updated = true;
+      if (!strcasecmp(value, "none")) {
 	conf->punctuation_mode = INOTE_PUNCT_MODE_NONE;
-      } else if (!strcmp(value,"all")) {
+      } else if (!strcasecmp(value, "all")) {
 	conf->punctuation_mode = INOTE_PUNCT_MODE_ALL;
-      } else if (!strcmp(value,"some")) {
+      } else if (!strcasecmp(value, "some")) {
 	conf->punctuation_mode = INOTE_PUNCT_MODE_SOME;
       } else {
 	updated = false;
@@ -35,6 +48,22 @@ static int config_cb(void *user, const char *section, const char *name, const ch
       if (updated) {
 	dbg("punctuation_mode=%d", conf->punctuation_mode);
       }
+    }
+  } else if (!strcasecmp(name, "somePunctuation")) {
+    bool updated = false;
+    if (conf->some_punctuation) {
+      if (!value || strcmp(conf->some_punctuation, value)) {
+	free(conf->some_punctuation);
+	conf->some_punctuation = NULL;
+	updated = true;
+      }
+    }
+    if (value && !conf->some_punctuation) {
+      conf->some_punctuation = strdup(value);
+      updated = true;
+    }
+    if (updated) {
+      dbg("some_punctuation=%s", conf->some_punctuation ? conf->some_punctuation : "NULL");
     }
   }
   return 1;
@@ -53,6 +82,8 @@ config_error config_create(config_t **config) {
   if (!conf)
     return CONFIG_SYS_ERROR;
 
+  *conf = CONFIG_DEFAULT;
+  
   { // get filename
     char c[30];
     size_t size = 1 + snprintf(c, sizeof(c), "%s/%s", home, CONFIG_FILE);
@@ -104,6 +135,9 @@ config_error config_delete(config_t **config) {
   conf = *config;
   if (conf->filename) {
     free(conf->filename);
+  }
+  if (conf->some_punctuation) {
+    free(conf->some_punctuation);
   }
 
   memset(conf, 0, sizeof(*conf));
