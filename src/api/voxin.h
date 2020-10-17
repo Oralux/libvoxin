@@ -40,7 +40,7 @@
 
 #define LIBVOXIN_VERSION_MAJOR 1
 #define LIBVOXIN_VERSION_MINOR 5
-#define LIBVOXIN_VERSION_PATCH 2
+#define LIBVOXIN_VERSION_PATCH 3
 
 /**
    @brief Extends ECIParam (eci.h)
@@ -56,7 +56,8 @@ typedef enum {
   VOX_LANGUAGE_DIALECT = 9, /**< eciLanguageDialect */
   VOX_NUMBER_MODE = 10, /**< eciNumberMode */
   VOX_WANT_WORD_INDEX = 12, /**< eciWantWordIndex */
-  VOX_CAPITALS = 17, /**< new param extending the eci interface */
+  VOX_CAPITALS = 17, /**< capitalization style; first param extending ECIParam  */
+  VOX_NUM_PARAMS,
 } voxParam;
 
 typedef enum {voxFemale, voxMale} voxGender;
@@ -126,7 +127,7 @@ int voxGetVoices(vox_t *list, unsigned int *nbVoices);
 /**
    @brief Set param to the specified value.
 
-   This function extends eciSetParam() to process this new parameter:   
+   This function extends eciSetParam() to process new parameters (voxParam).
 
    * VOX_CAPITALS: define the action to execute with capital
    letters. Similar to espeakCAPITALS in the eSpeak API.

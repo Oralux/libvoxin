@@ -78,7 +78,7 @@ static struct api_t my_api = {.stop_mutex=PTHREAD_MUTEX_INITIALIZER, .api_mutex=
 
 static vox_t vox_list[MSG_VOX_LIST_MAX];
 static int vox_list_nb;
-static int eciDefaultParam[eciNumParams];
+static int voxDefaultParam[VOX_NUM_PARAMS];
 
 // TODO: in conf
 #define SOUNDS_DIR "/opt/oralux/voxin/share/sounds"
@@ -1321,7 +1321,7 @@ static int engine_copy(struct engine_t *src, struct engine_t *dst) {
   return ret;
 }
 
-int set_param(ECIHand hEngine, uint32_t msg_id, enum ECIParam Param, int iValue)
+int set_param(ECIHand hEngine, uint32_t msg_id, voxParam Param, int iValue)
 {
   int eci_res = -1;
   struct engine_t *self = (struct engine_t *)hEngine;
@@ -1330,12 +1330,12 @@ int set_param(ECIHand hEngine, uint32_t msg_id, enum ECIParam Param, int iValue)
    
   dbg("ENTER(%d, 0x%0x)", Param, iValue);  
 
-  if (!IS_ENGINE(engine)) {
+  if (!IS_ENGINE(engine) || (Param < 0) || (Param >= VOX_NUM_PARAMS)) {
 	err("LEAVE, args error");
 	return eci_res;
   }
 
-  if (Param == eciLanguageDialect) {
+  if (Param == VOX_LANGUAGE_DIALECT) {
 	if (!ttsIsIdCompatible(iValue, self->current_engine->tts_id)) {
 	  if (self->current_engine == self) {	  
 		if (!self->other_engine) {
@@ -1360,7 +1360,7 @@ int set_param(ECIHand hEngine, uint32_t msg_id, enum ECIParam Param, int iValue)
   header.args.sp.Param = Param;
   header.args.sp.iValue = iValue;
   if (!process_func1(engine->api, &header, NULL, &eci_res, false, true)) {
-	if (Param == eciLanguageDialect) {
+	if (Param == VOX_LANGUAGE_DIALECT) {
 	  engine->to_charset = getCharset((enum ECILanguageDialect)iValue);
 	}
 	api_unlock(engine->api);	      
@@ -1383,13 +1383,13 @@ int voxSetParam(void *handle, voxParam param, int value)
 
 int eciGetParam(ECIHand hEngine, enum ECIParam Param)
 {
-  int eci_res = -1;
+  int eci_res = VOX_PARAM_OUT_OF_RANGE;
   struct engine_t *engine = (struct engine_t *)hEngine;
   struct msg_t header;
    
   dbg("ENTER(%d)", Param);  
 
-  if (!IS_ENGINE(engine)) {
+  if (!IS_ENGINE(engine) || (Param < 0) || (Param >= eciNumParams)) {
 	err("LEAVE, args error");
 	return eci_res;
   }
@@ -1407,8 +1407,8 @@ int eciSetDefaultParam(enum ECIParam parameter, int value)
   ENTER();
   int res = -1;
   if ((parameter >= 0) && (parameter < eciNumParams)) {
-	res = eciDefaultParam[parameter];
-	eciDefaultParam[parameter] = value;
+	res = voxDefaultParam[parameter];
+	voxDefaultParam[parameter] = value;
   }  
   return res;
 }
@@ -1416,7 +1416,7 @@ int eciSetDefaultParam(enum ECIParam parameter, int value)
 // TODO eciGetDefaultParam
 int eciGetDefaultParam(enum ECIParam parameter)
 {
-  int res = ((parameter >= 0) && (parameter < eciNumParams)) ? eciDefaultParam[parameter] : -1; 
+  int res = ((parameter >= 0) && (parameter < eciNumParams)) ? voxDefaultParam[parameter] : -1; 
   dbg("res = %d", res);
   return res;
 }
