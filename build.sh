@@ -45,6 +45,7 @@ DWLDIR=$BASE/download
 RELDIR="$ARCHDIR/release"
 RFSDIR="$ARCHDIR/rfs"
 SOUNDS_DIR="$BASE/sounds"
+CONF_DIR="$BASE/conf"
 VOXINDIR=opt/oralux/voxin
 export DESTDIR="$RFSDIR/$VOXINDIR"
 RFS32="$DESTDIR/rfs32"
@@ -131,6 +132,11 @@ esac
 # sounds
 echo "Entering sounds"
 cd "$SOUNDS_DIR"
+DESTDIR=$DESTDIR make install
+
+# conf
+echo "Entering conf"
+cd "$CONF_DIR"
 DESTDIR=$DESTDIR make install
 
 #say
