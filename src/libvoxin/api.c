@@ -7,6 +7,8 @@
 #include <unistd.h>
 #include <endian.h>
 #include <ctype.h>
+#include <sys/types.h>
+#include <dirent.h>
 #include "voxin.h"
 #include "debug.h"
 #include "libvoxin.h"
@@ -25,6 +27,7 @@
 #define VOICE_PARAM_UNCHANGED 0x1000
 
 #define CONFIG_FILE ".config/voxin/voxin.ini"
+#define VOX_INDEX_UNDEFINED UINT32_MAX
 
 typedef struct {
   int major;
@@ -55,7 +58,7 @@ struct engine_t {
   void *inote; // inote handle
   inote_charset_t from_charset; // charset of the text supplied by the caller
   inote_charset_t to_charset; // charset expected by the tts engine
-  uint32_t voice_id; // voice identifier, e.g.: 0x2d0002
+  uint32_t vox_index; // index of the voice in vox_list[tts_id][]
   uint32_t voice_param[eciNumVoiceParams];
   uint32_t state_expected_lang[MAX_LANG]; // state internal buffer 
   uint8_t tlv_message_buffer[TLV_MESSAGE_LENGTH_MAX]; // tlv internal buffer
@@ -107,6 +110,8 @@ static sounds_t sounds;
 
 static int frequence[MSG_TTS_MAX] = {0, 11025, 22050};
 
+static int set_param(ECIHand hEngine, uint32_t msg_id, voxParam Param, int iValue);
+
 static void conv_int_to_version(int src, version_t *dst) {
   if (dst) {
     *dst = (version_t){
@@ -119,6 +124,7 @@ static void conv_int_to_version(int src, version_t *dst) {
 
 static inote_charset_t getCharset(uint32_t lang)
 {
+  dbg("ENTER lang=0x%x", lang);
   inote_charset_t charset = INOTE_CHARSET_UTF_8; // default for other engine
   if ((lang <= eciStandardItalian)
 	  || (lang == eciBrazilianPortuguese)
@@ -468,6 +474,7 @@ static struct engine_t *engine_create(uint32_t handle, struct api_t *api, msg_tt
 	// input text: by default ssml/utf-8 is expected 
 	self->state.ssml = 1;
 	self->from_charset = self->to_charset = INOTE_CHARSET_UTF_8;
+	self->vox_index = VOX_INDEX_UNDEFINED;
   } else {
 	err("mem error (%d)", errno);
   }
@@ -497,6 +504,25 @@ static struct engine_t *engine_delete(struct engine_t *self)
   return self;
 }
 
+static void engine_set_vox_index(struct engine_t *engine, uint32_t voice_id)
+{
+  struct engine_t *self = engine;
+  int i=0;
+  if (!IS_ENGINE(engine)) {
+    err("LEAVE, args error");
+    return;
+  }
+  self = self->current_engine;
+  self->vox_index = VOX_INDEX_UNDEFINED;  
+  for (i=0; i<vox_list_nb; i++) {
+    if (vox_list[i].id == voice_id) {
+      self->vox_index = i;
+      break;
+    }
+  }
+  dbg("vox_index=%d", self->vox_index);
+}
+
 // to be called with a lock on api
 static int getCurrentLanguage(struct engine_t *engine)    
 {
@@ -513,8 +539,9 @@ static int getCurrentLanguage(struct engine_t *engine)
   header.args.gp.Param = eciLanguageDialect;
   res = process_func1(engine->api, &header, NULL, &eci_res, false, false);
   if (!res) {    
-	engine->voice_id = eci_res;
-	engine->to_charset = getCharset(engine->voice_id);
+	uint32_t voiceId = eci_res;
+	engine->to_charset = getCharset(voiceId);
+	engine_set_vox_index(engine, voiceId);
   }    
   return res;  
 }
@@ -555,6 +582,126 @@ static void setPunctuationMode(struct engine_t *engine, inote_punct_mode_t mode,
   eciAddText(engine, text);
 }
 
+static bool is_directory(const char *pathname)
+{
+  DIR *d = opendir(pathname);
+  if (d) {
+    closedir(d);
+  }
+  return (d != NULL);
+}
+
+static bool is_file(const char *pathname)
+{
+  FILE *fd = fopen(pathname, "r");
+  if (fd) {
+    fclose(fd);
+  }
+  return (fd != NULL);
+}
+
+// *dir must be freed by the caller
+static void find_dictionary_dir_by_language(struct engine_t *engine, const char *topdir, char **dir)
+{
+  ENTER();
+  vox_t *voice = NULL;
+  char *pathname = NULL;
+  size_t size = 0;
+    
+  if (!IS_ENGINE(engine) || !topdir || !dir
+      || (engine->vox_index == VOX_INDEX_UNDEFINED)
+      || (engine->vox_index >= vox_list_nb)) {
+    err("LEAVE, args error");
+    return;
+  }    
+
+  *dir = NULL;
+  voice = &vox_list[engine->vox_index];
+
+  size = strlen("%s/%s_%s") + strlen(topdir) + strlen(voice->lang) + strlen(voice->variant) + 10;
+  pathname = calloc(1, size);
+  if (!pathname)
+    return;
+  
+  if (*voice->lang && *voice->variant) {
+    snprintf(pathname, size, "%s/%s_%s", topdir, voice->lang, voice->variant);
+    if (is_directory(pathname)) {
+      *dir = pathname;
+      goto exit0;
+    }
+  }
+  
+  if (*voice->lang) {
+    snprintf(pathname, size, "%s/%s", topdir, voice->lang);
+    if (is_directory(pathname)) {
+      *dir = pathname;
+      goto exit0;
+    }
+  }
+
+  snprintf(pathname, size, "%s", topdir);
+  if (is_directory(pathname)) {
+      *dir = pathname;
+  }
+
+ exit0:
+  if (*dir) {
+    dbg("dirname=%s", *dir);
+  }
+  
+}
+
+static char *dictionaries[] = {
+  "main.dct",
+  "root.dct",
+  "abbreviation.dct",
+  "extension.dct"
+};
+
+static void  load_eci_dictionaries(struct engine_t *engine, const char *topdir)
+{
+  ENTER();
+  int i;
+  size_t size;
+  char *pathname = NULL;
+  bool dictionary_loaded = false;
+  ECIDictHand eciDict = NULL;
+
+  if (!IS_ENGINE(engine) || !topdir) {
+    err("LEAVE, args error");
+    return;
+  }    
+
+  eciDict = eciGetDict(engine);
+  if (eciDict) {
+    eciDeleteDict(engine, eciDict);
+  }
+
+  eciDict = eciNewDict(engine);
+  if (!eciDict) {
+    return;
+  }
+  
+  size = strlen("%s/%s") + strlen(topdir) + 20;
+  pathname = calloc(1, size);
+  if (!pathname)
+    return;
+
+  for (i=0; i<4; i++) {
+    snprintf(pathname, size, "%s/%s", topdir, dictionaries[i]);
+    if (is_file(pathname)) {
+      if (!eciLoadDict(engine, eciDict, i, pathname)) {
+	dictionary_loaded = true;
+      }
+    }
+  }
+  if (dictionary_loaded) {
+    eciSetDict(engine, eciDict);
+  }
+  free(pathname);    
+}
+
+
 // set value of parameters according to the configuration file
 static void setConfiguredValues(struct engine_t *engine)
 {
@@ -562,6 +709,7 @@ static void setConfiguredValues(struct engine_t *engine)
   config_t *config = NULL;
   config_t *config_default = NULL;
   config_eci_t *eci = NULL;
+  config_eci_t *eci_default = NULL;
   
   ENTER();
 
@@ -580,6 +728,7 @@ static void setConfiguredValues(struct engine_t *engine)
   config_default = api->my_default_config;
   if (config && config_default) {
     eci = config->eci;
+    eci_default = config_default->eci;
     if (config->capital_mode != config_default->capital_mode) {
       voxSetParam(engine, VOX_CAPITALS, config->capital_mode);
     }
@@ -587,7 +736,20 @@ static void setConfiguredValues(struct engine_t *engine)
       setPunctuationMode(engine, config->punctuation_mode, config->some_punctuation);
     }
   }
-  if (eci) {
+  
+  if ((engine->tts_id == MSG_TTS_ECI) && eci && eci_default) {
+    if (eci->use_abbreviation != eci_default->use_abbreviation) {
+      set_param(engine, MSG_VOX_SET_PARAM, eciDictionary, eci->use_abbreviation ? 0 : 1);
+    }
+    
+    if (eci->dictionary_dir) {
+      char *dir = NULL;
+      find_dictionary_dir_by_language(engine, eci->dictionary_dir, &dir);
+      if (dir) {
+	load_eci_dictionaries(engine, dir);
+	free(dir);
+      }
+    }
   }
 }
 
@@ -1286,7 +1448,7 @@ ECIHand eciNewEx(enum ECILanguageDialect Value)
 	if (eci_res != 0) {
 	  engine = engine_create(eci_res, api, vox_list[j].tts_id);
 	  engine->to_charset = getCharset(Value);
-	  engine->voice_id = Value;
+	  engine_set_vox_index(engine, Value);
 	}
 	api_unlock(api);
   }
@@ -1348,7 +1510,7 @@ static int engine_copy(struct engine_t *src, struct engine_t *dst) {
   return ret;
 }
 
-int set_param(ECIHand hEngine, uint32_t msg_id, voxParam Param, int iValue)
+static int set_param(ECIHand hEngine, uint32_t msg_id, voxParam Param, int iValue)
 {
   int eci_res = -1;
   struct engine_t *self = (struct engine_t *)hEngine;
@@ -1388,8 +1550,8 @@ int set_param(ECIHand hEngine, uint32_t msg_id, voxParam Param, int iValue)
   header.args.sp.iValue = iValue;
   if (!process_func1(engine->api, &header, NULL, &eci_res, false, true)) {
 	if (Param == VOX_LANGUAGE_DIALECT) {
-	  engine->voice_id = iValue;	  
-	  engine->to_charset = getCharset(engine->voice_id);
+	  engine->to_charset = getCharset(iValue);
+	  engine_set_vox_index(engine, iValue);	  
 	}
 	api_unlock(engine->api);	      
   }
