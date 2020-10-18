@@ -53,6 +53,7 @@ struct engine_t {
   void *inote; // inote handle
   inote_charset_t from_charset; // charset of the text supplied by the caller
   inote_charset_t to_charset; // charset expected by the tts engine
+  uint32_t voice_id; // voice identifier, e.g.: 0x2d0002
   uint32_t voice_param[eciNumVoiceParams];
   uint32_t state_expected_lang[MAX_LANG]; // state internal buffer 
   uint8_t tlv_message_buffer[TLV_MESSAGE_LENGTH_MAX]; // tlv internal buffer
@@ -145,7 +146,7 @@ static inote_charset_t getCharset(enum ECILanguageDialect lang)
 	charset = INOTE_CHARSET_SJIS; // 1 or 2 bytes
 	break;
   default:
-	dbg("unexpected eci value:%x", lang);
+	dbg("extended eci value:%x", lang);
 	break;
   }
   return charset;
@@ -493,8 +494,9 @@ static int getCurrentLanguage(struct engine_t *engine)
   msg_set_header(&header, MSG_DST(engine->tts_id), MSG_GET_PARAM, engine->handle);
   header.args.gp.Param = eciLanguageDialect;
   res = process_func1(engine->api, &header, NULL, &eci_res, false, false);
-  if (!res) {
-	engine->to_charset = getCharset((enum ECILanguageDialect)eci_res);
+  if (!res) {    
+	engine->voice_id = eci_res;
+	engine->to_charset = getCharset((enum ECILanguageDialect)engine->voice_id);
   }    
   return res;  
 }
@@ -1260,6 +1262,7 @@ ECIHand eciNewEx(enum ECILanguageDialect Value)
 	if (eci_res != 0) {
 	  engine = engine_create(eci_res, api, vox_list[j].tts_id);
 	  engine->to_charset = getCharset(Value);
+	  engine->voice_id = Value;
 	}
 	api_unlock(api);
   }
@@ -1361,7 +1364,8 @@ int set_param(ECIHand hEngine, uint32_t msg_id, voxParam Param, int iValue)
   header.args.sp.iValue = iValue;
   if (!process_func1(engine->api, &header, NULL, &eci_res, false, true)) {
 	if (Param == VOX_LANGUAGE_DIALECT) {
-	  engine->to_charset = getCharset((enum ECILanguageDialect)iValue);
+	  engine->voice_id = iValue;	  
+	  engine->to_charset = getCharset((enum ECILanguageDialect)engine->voice_id);
 	}
 	api_unlock(engine->api);	      
   }
