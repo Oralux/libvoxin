@@ -6,18 +6,16 @@
 #include "inote.h"
 
 typedef struct {
+  char *dictionary_folder;
+  char *use_abbreviation;
+} eci_config_t;
+
+typedef struct {
   voxCapitalMode capital_mode;
   inote_punct_mode_t punctuation_mode;
   char *some_punctuation;
   char *filename;
 } config_t;
-
-
-#define CONFIG_DEFAULT (config_t){		\
-    .capital_mode=voxCapitalNone,		\
-      .punctuation_mode=INOTE_PUNCT_MODE_NONE,	\
-      .some_punctuation="(),?",			\
-};
 
 typedef enum {
   CONFIG_OK=0,
@@ -28,6 +26,7 @@ typedef enum {
 } config_error;
 
 config_error config_create(config_t **config);
+config_error config_get_default(config_t **config);
 config_error config_delete(config_t **config);
 
 #endif

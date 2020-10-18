@@ -73,6 +73,7 @@ struct api_t {
   struct msg_t *msg; // message for voxind
   voxind_version_t voxind_version[MSG_TTS_MAX]; // version of voxind and its components
   config_t *my_config;
+  config_t *my_default_config;
 };
 
 static struct api_t my_api = {.stop_mutex=PTHREAD_MUTEX_INITIALIZER, .api_mutex=PTHREAD_MUTEX_INITIALIZER, NULL};
@@ -252,6 +253,7 @@ static int api_create(struct api_t *api) {
 
   sound_create();  
   config_create(&api->my_config);
+  config_get_default(&api->my_default_config);
   
  exit0:
   if ((!api->my_instance) && api->msg) {
@@ -507,6 +509,7 @@ static void setPunctuationMode(struct engine_t *engine, inote_punct_mode_t mode,
   enum {CHAR_MAX = 20};
   char text[CHAR_MAX];
   const char *list = punctuation_list;
+
   ENTER();
 
   if (!IS_ENGINE(engine)) {
@@ -526,10 +529,9 @@ static void setPunctuationMode(struct engine_t *engine, inote_punct_mode_t mode,
   }
   
   if (!list) {
-    config_t init = CONFIG_DEFAULT;
-    list = init.some_punctuation;
+    list = "";
   }
-  
+
   snprintf(text, CHAR_MAX, fmt, mode, list);
   
   text[CHAR_MAX-2] = ' ';
@@ -557,11 +559,11 @@ static void setConfiguredValues(struct engine_t *engine)
 
   {
     config_t *config = api->my_config;
-    config_t init = CONFIG_DEFAULT;
-    if (config->capital_mode != init.capital_mode) {
+    config_t *init = api->my_default_config;
+    if (config->capital_mode != init->capital_mode) {
       voxSetParam(engine, VOX_CAPITALS, config->capital_mode);
     }
-    if (config->punctuation_mode != init.punctuation_mode) {
+    if (config->punctuation_mode != init->punctuation_mode) {
       setPunctuationMode(engine, config->punctuation_mode, config->some_punctuation);
     }
   }

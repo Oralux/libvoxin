@@ -7,6 +7,8 @@
 
 #define CONFIG_FILE ".config/voxin/voxin.ini"
 
+#define SOME_DEFAULT_PUNCTUATION "(),?"
+
 static int config_cb(void *user, const char *section, const char *name, const char *value) {
   config_t *conf = user;
 
@@ -48,24 +50,25 @@ static int config_cb(void *user, const char *section, const char *name, const ch
       if (updated) {
 	dbg("punctuation_mode=%d", conf->punctuation_mode);
       }
-    }
-  } else if (!strcasecmp(name, "somePunctuation")) {
-    bool updated = false;
-    if (conf->some_punctuation) {
-      if (!value || strcmp(conf->some_punctuation, value)) {
-	free(conf->some_punctuation);
-	conf->some_punctuation = NULL;
+    } else if (!strcasecmp(name, "somePunctuation")) {
+      bool updated = false;
+      if (conf->some_punctuation) {
+	if (!value || strcmp(conf->some_punctuation, value)) {
+	  free(conf->some_punctuation);
+	  conf->some_punctuation = NULL;
+	  updated = true;
+	}
+      }
+      if (value && !conf->some_punctuation) {
+	conf->some_punctuation = strdup(value);
 	updated = true;
       }
-    }
-    if (value && !conf->some_punctuation) {
-      conf->some_punctuation = strdup(value);
-      updated = true;
-    }
-    if (updated) {
-      dbg("some_punctuation=%s", conf->some_punctuation ? conf->some_punctuation : "NULL");
+      if (updated) {
+	dbg("some_punctuation=%s", conf->some_punctuation ? conf->some_punctuation : "NULL");
+      }
     }
   }
+  
   return 1;
 }
 
@@ -75,14 +78,14 @@ config_error config_create(config_t **config) {
   config_t *conf = NULL;
   int err = CONFIG_OK;
   
-  if (!home || !config)
+  if (!home || !config) {
+    dbg("args error");
     return CONFIG_ARGS_ERROR;
+  }
 
-  conf = calloc(1, sizeof(*conf));
-  if (!conf)
-    return CONFIG_SYS_ERROR;
-
-  *conf = CONFIG_DEFAULT;
+  err = config_get_default(&conf);
+  if (err)
+    return err;
   
   { // get filename
     char c[30];
@@ -106,7 +109,7 @@ config_error config_create(config_t **config) {
       err = CONFIG_FILE_ERROR;
       break;
     case -2:
-      dbg("memory allocation error\n");
+      dbg("memory allocation error");
       err = CONFIG_SYS_ERROR;
       break;
     default:
@@ -144,4 +147,31 @@ config_error config_delete(config_t **config) {
   free(conf);
   *config = NULL;
   return CONFIG_OK;
+}
+
+config_error config_get_default(config_t **config) {
+  ENTER();
+  config_t *conf = NULL;
+  int err = CONFIG_OK;
+  
+  if (!config) {
+    dbg("args error");    
+    return CONFIG_ARGS_ERROR;
+  }
+
+  conf = calloc(1, sizeof(*conf));
+  if (!conf) {
+    dbg("memory allocation error");    
+    return CONFIG_SYS_ERROR;
+  }
+
+  *conf =  (config_t) {
+    .capital_mode = voxCapitalNone,
+    .punctuation_mode = INOTE_PUNCT_MODE_NONE,
+  };
+
+  conf->some_punctuation = strdup(SOME_DEFAULT_PUNCTUATION);
+  
+  *config = conf;
+  return err;
 }
