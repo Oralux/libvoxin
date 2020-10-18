@@ -6,15 +6,16 @@
 #include "inote.h"
 
 typedef struct {
-  char *dictionary_folder;
-  char *use_abbreviation;
-} eci_config_t;
+  char *dictionary_dir;
+  bool use_abbreviation;
+} config_eci_t;
 
 typedef struct {
   voxCapitalMode capital_mode;
   inote_punct_mode_t punctuation_mode;
   char *some_punctuation;
   char *filename;
+  config_eci_t *eci;
 } config_t;
 
 typedef enum {

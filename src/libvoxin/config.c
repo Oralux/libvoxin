@@ -1,6 +1,8 @@
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
+#include <sys/stat.h>
 #include "config.h"
 #include "ini.h"
 #include "debug.h"
@@ -67,6 +69,34 @@ static int config_cb(void *user, const char *section, const char *name, const ch
 	dbg("some_punctuation=%s", conf->some_punctuation ? conf->some_punctuation : "NULL");
       }
     }
+  } else if (!strcasecmp(section, "viavoice")) {
+    config_eci_t *eci = conf->eci;
+    if (!eci) {
+      err("internal error");
+    } else if (!strcasecmp(name, "dictionaryDir")) {
+      struct stat buf;
+      if (stat(value, &buf)) {
+	int err = errno;
+	dbg("err=%s", strerror(err));	
+      } else if ((buf.st_mode & S_IFMT) != S_IFDIR) {
+	dbg("mode=0x%x", buf.st_mode & S_IFMT);
+      } else {
+	eci->dictionary_dir = strdup(value);
+	dbg("viavoice.dictionaryDir=%s", eci->dictionary_dir);
+      }
+    } else if (!strcasecmp(name, "useAbbreviation")) {
+      bool updated = true;
+      if (!strcasecmp(value, "yes")) {
+	eci->use_abbreviation = true;
+      } else if (!strcasecmp(value, "no")) {
+	eci->use_abbreviation = false;
+      } else {
+	updated = false;
+      }
+      if (updated) {
+	dbg("use_abbreviation=%d", eci->use_abbreviation);
+      }
+    }
   }
   
   return 1;
@@ -128,19 +158,18 @@ config_error config_create(config_t **config) {
   return err;
 }
 
-config_error config_delete(config_t **config) {
+config_error config_eci_delete(config_eci_t **config) {
   ENTER();
-  config_t *conf;
-
-  if (!config)
+  config_eci_t *conf;
+  
+  if (!config) {
+    dbg("args error");    
     return CONFIG_ARGS_ERROR;
+  }
 
   conf = *config;
-  if (conf->filename) {
-    free(conf->filename);
-  }
-  if (conf->some_punctuation) {
-    free(conf->some_punctuation);
+  if (conf->dictionary_dir) {
+    free(conf->dictionary_dir);
   }
 
   memset(conf, 0, sizeof(*conf));
@@ -148,7 +177,58 @@ config_error config_delete(config_t **config) {
   *config = NULL;
   return CONFIG_OK;
 }
+ 
+config_error config_eci_create(config_eci_t **config) {
+  ENTER();
+  config_eci_t *conf = NULL;
+  int err = CONFIG_OK;
+  
+  if (!config) {
+    dbg("args error");    
+    return CONFIG_ARGS_ERROR;
+  }
 
+  *config = NULL;
+  
+  conf = calloc(1, sizeof(*conf));
+  if (!conf) {
+    dbg("memory allocation error");    
+    return CONFIG_SYS_ERROR;
+  }
+
+  *config = conf;
+  return err;
+}
+
+config_error config_delete(config_t **config) {
+  ENTER();
+  config_t *conf;
+  config_error err = CONFIG_OK;
+  
+  if (!config)
+    return CONFIG_ARGS_ERROR;
+  
+  conf = *config;
+  if (conf->filename) {
+    free(conf->filename);
+    conf->filename = NULL;
+  }
+  if (conf->some_punctuation) {
+    free(conf->some_punctuation);
+    conf->some_punctuation = NULL;
+  }
+  if (conf->eci) {
+    err = config_eci_delete(&conf->eci);
+  }
+
+  if (!err) {
+    memset(conf, 0, sizeof(*conf));
+    free(conf);
+    *config = NULL;
+  }
+  return err;
+}
+ 
 config_error config_get_default(config_t **config) {
   ENTER();
   config_t *conf = NULL;
@@ -159,19 +239,33 @@ config_error config_get_default(config_t **config) {
     return CONFIG_ARGS_ERROR;
   }
 
+  *config = NULL;
+  
   conf = calloc(1, sizeof(*conf));
   if (!conf) {
     dbg("memory allocation error");    
     return CONFIG_SYS_ERROR;
   }
 
-  *conf =  (config_t) {
+  *conf = (config_t) {
     .capital_mode = voxCapitalNone,
     .punctuation_mode = INOTE_PUNCT_MODE_NONE,
   };
 
   conf->some_punctuation = strdup(SOME_DEFAULT_PUNCTUATION);
-  
-  *config = conf;
+  if (!conf->some_punctuation) {
+    dbg("memory allocation error");    
+    err = CONFIG_SYS_ERROR;
+    goto exit0;
+  }
+
+  err = config_eci_create(&conf->eci);
+
+ exit0:
+  if (err) {
+    config_delete(&conf);
+  } else {  
+    *config = conf;
+  }
   return err;
 }
