@@ -26,8 +26,7 @@ typedef enum {
   CONFIG_SYNTAX_ERROR,
 } config_error;
 
-config_error config_create(config_t **config);
-config_error config_get_default(config_t **config);
+config_error config_create(config_t **config, const char *filename);
 config_error config_delete(config_t **config);
 
 #endif

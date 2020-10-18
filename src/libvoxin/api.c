@@ -24,6 +24,8 @@
 #define MAX_LANG 2 // RFU
 #define VOICE_PARAM_UNCHANGED 0x1000
 
+#define CONFIG_FILE ".config/voxin/voxin.ini"
+
 typedef struct {
   int major;
   int minor;
@@ -251,9 +253,23 @@ static int api_create(struct api_t *api) {
 	}
   }
 
-  sound_create();  
-  config_create(&api->my_config);
-  config_get_default(&api->my_default_config);
+  sound_create();
+
+  { // get config
+    char *home = getenv("HOME");
+    char c[30];
+    size_t size = 1 + snprintf(c, sizeof(c), "%s/%s", home, CONFIG_FILE);
+    char *filename = calloc(1, size);
+    if (filename) {
+      snprintf(filename, size, "%s/%s", home, CONFIG_FILE);
+    }
+    config_create(&api->my_config, filename);
+    if (filename) {
+      free(filename);
+    }
+    
+    config_create(&api->my_default_config, NULL);
+  }    
   
  exit0:
   if ((!api->my_instance) && api->msg) {
@@ -543,6 +559,9 @@ static void setPunctuationMode(struct engine_t *engine, inote_punct_mode_t mode,
 static void setConfiguredValues(struct engine_t *engine)
 {
   struct api_t *api;
+  config_t *config = NULL;
+  config_t *config_default = NULL;
+  config_eci_t *eci = NULL;
   
   ENTER();
 
@@ -557,15 +576,18 @@ static void setConfiguredValues(struct engine_t *engine)
   if (!engine || !api || !api->my_config)
     return;
 
-  {
-    config_t *config = api->my_config;
-    config_t *init = api->my_default_config;
-    if (config->capital_mode != init->capital_mode) {
+  config = api->my_config;
+  config_default = api->my_default_config;
+  if (config && config_default) {
+    eci = config->eci;
+    if (config->capital_mode != config_default->capital_mode) {
       voxSetParam(engine, VOX_CAPITALS, config->capital_mode);
     }
-    if (config->punctuation_mode != init->punctuation_mode) {
+    if (config->punctuation_mode != config_default->punctuation_mode) {
       setPunctuationMode(engine, config->punctuation_mode, config->some_punctuation);
     }
+  }
+  if (eci) {
   }
 }
 
