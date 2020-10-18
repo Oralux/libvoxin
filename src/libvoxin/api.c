@@ -114,7 +114,7 @@ static void conv_int_to_version(int src, version_t *dst) {
   }
 }
 
-static inote_charset_t getCharset(enum ECILanguageDialect lang)
+static inote_charset_t getCharset(uint32_t lang)
 {
   inote_charset_t charset = INOTE_CHARSET_UTF_8; // default for other engine
   if ((lang <= eciStandardItalian)
@@ -496,7 +496,7 @@ static int getCurrentLanguage(struct engine_t *engine)
   res = process_func1(engine->api, &header, NULL, &eci_res, false, false);
   if (!res) {    
 	engine->voice_id = eci_res;
-	engine->to_charset = getCharset((enum ECILanguageDialect)engine->voice_id);
+	engine->to_charset = getCharset(engine->voice_id);
   }    
   return res;  
 }
@@ -1365,7 +1365,7 @@ int set_param(ECIHand hEngine, uint32_t msg_id, voxParam Param, int iValue)
   if (!process_func1(engine->api, &header, NULL, &eci_res, false, true)) {
 	if (Param == VOX_LANGUAGE_DIALECT) {
 	  engine->voice_id = iValue;	  
-	  engine->to_charset = getCharset((enum ECILanguageDialect)engine->voice_id);
+	  engine->to_charset = getCharset(engine->voice_id);
 	}
 	api_unlock(engine->api);	      
   }
