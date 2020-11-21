@@ -461,7 +461,6 @@ static int unserialize(struct msg_t *msg, size_t *msg_length)
   dbg("recv msg '%s', length=%d, engine=%p (#%d)", msg_string(msg->func), msg->effective_data_length, engine, msg->count); 
   
   msg->id = MSG_TO_APP_ID;
-  length = msg->effective_data_length;
 
   // secu: check length, additional null terminator in case of C string
   length = min_size(msg->effective_data_length, ALLOCATED_MSG_LENGTH - MSG_HEADER_LENGTH - 1);
