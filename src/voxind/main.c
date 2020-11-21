@@ -98,6 +98,7 @@ static eciLocale eciLocales[] = { // +1 for a null element
 };
 
 #define MAX_NB_OF_LANGUAGES (sizeof(eciLocales)/sizeof(eciLocales[0]) - 1)
+#define ALLOCATED_MSG_LENGTH PIPE_MAX_BLOCK
 
 static inote_error add_text(inote_tlv_t *tlv, void *user_data) {
   ENTER();
@@ -461,6 +462,11 @@ static int unserialize(struct msg_t *msg, size_t *msg_length)
   
   msg->id = MSG_TO_APP_ID;
   length = msg->effective_data_length;
+
+  // secu: check length, additional null terminator in case of C string
+  length = min_size(msg->effective_data_length, ALLOCATED_MSG_LENGTH - MSG_HEADER_LENGTH - 1);
+  msg->data[length] = 0;
+
   msg->effective_data_length = 0; 
 
   switch(msg->func) {
