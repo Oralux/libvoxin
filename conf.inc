@@ -216,7 +216,7 @@ buildInih() {
     [ -n "$withdbg" ] && flag=-g
     [ -n "$destdir" ] && rm -f "$destdir"/lib/$lib "$destdir"/include/ini.h
 
-    gcc $flag -c ini.c -o ini.o
+    gcc $flag -fPIC -c ini.c -o ini.o
     ar rcs $lib ini.o
 
     install --target-directory="$destdir"/lib -D -m 644 $lib
