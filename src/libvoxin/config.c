@@ -8,6 +8,7 @@
 #include "debug.h"
 
 #define SOME_DEFAULT_PUNCTUATION "(),?"
+#define DEFAULT_ECI_DICTIONARY_DIR "/var/opt/IBM/ibmtts/dict"
 
 static int config_cb(void *user, const char *section, const char *name, const char *value) {
   config_t *conf = user;
@@ -53,13 +54,13 @@ static int config_cb(void *user, const char *section, const char *name, const ch
     } else if (!strcasecmp(name, "somePunctuation")) {
       bool updated = false;
       if (conf->some_punctuation) {
-	if (!value || strcmp(conf->some_punctuation, value)) {
+	if (strcmp(conf->some_punctuation, value)) {
 	  free(conf->some_punctuation);
 	  conf->some_punctuation = NULL;
 	  updated = true;
 	}
       }
-      if (value && !conf->some_punctuation) {
+      if (!conf->some_punctuation) {
 	conf->some_punctuation = strdup(value);
 	updated = true;
       }
@@ -72,15 +73,33 @@ static int config_cb(void *user, const char *section, const char *name, const ch
     if (!eci) {
       err("internal error");
     } else if (!strcasecmp(name, "dictionaryDir")) {
+      bool updated = false;
       struct stat buf;
-      if (stat(value, &buf)) {
-	int err = errno;
-	dbg("err=%s", strerror(err));	
-      } else if ((buf.st_mode & S_IFMT) != S_IFDIR) {
-	dbg("mode=0x%x", buf.st_mode & S_IFMT);
-      } else {
+      if (eci->dictionary_dir
+	  && strcmp(eci->dictionary_dir, value)) {
+	if (!*value
+	    || (!stat(value, &buf)
+		&& ((buf.st_mode & S_IFMT) == S_IFDIR))) {
+	  free(eci->dictionary_dir);
+	  eci->dictionary_dir = NULL;
+	  updated = true;
+	} else {
+	  // unexpected value: keep the default value
+	  int err = errno; // ignore this value
+	  dbg("erroneous dictionary dir, err=%s (%s)", strerror(err), value);
+	}
+      }
+      if (!eci->dictionary_dir) {
+	// note: value == valid dir path or *value == 0
 	eci->dictionary_dir = strdup(value);
-	dbg("viavoice.dictionaryDir=%s", eci->dictionary_dir);
+	updated = true;
+	if (!eci->dictionary_dir) {
+	  dbg("memory allocation error");    
+	  return CONFIG_SYS_ERROR;
+	}
+      }
+      if (updated) {
+	dbg("viavoice.dictionaryDir=%s", eci->dictionary_dir ? eci->dictionary_dir : "NULL");
       }
     } else if (!strcasecmp(name, "useAbbreviation")) {
       bool updated = true;
@@ -138,6 +157,13 @@ static config_error _config_eci_create(config_eci_t **config) {
     return CONFIG_SYS_ERROR;
   }
 
+  conf->dictionary_dir = strdup(DEFAULT_ECI_DICTIONARY_DIR);
+  if (!conf->dictionary_dir) {
+    dbg("memory allocation error");    
+    return CONFIG_SYS_ERROR;
+  }
+  dbg("viavoice.dictionaryDir=%s", conf->dictionary_dir);
+  
   *config = conf;
   return err;
 }

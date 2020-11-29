@@ -26,7 +26,8 @@
 #define MAX_LANG 2 // RFU
 #define VOICE_PARAM_UNCHANGED 0x1000
 
-#define CONFIG_FILE ".config/voxin/voxin.ini"
+#define LOCAL_CONFIG_FILE  ".config/voxin/voxin.ini"
+#define GLOBAL_CONFIG_FILE "/var/opt/oralux/voxin/voxin.ini"
 #define VOX_INDEX_UNDEFINED UINT32_MAX
 
 typedef struct {
@@ -261,19 +262,23 @@ static int api_create(struct api_t *api) {
 
   sound_create();
 
-  { // get config
+  { // get user and default config
     char *home = getenv("HOME");
     char c[30];
-    size_t size = 1 + snprintf(c, sizeof(c), "%s/%s", home, CONFIG_FILE);
+    size_t size = 1 + snprintf(c, sizeof(c), "%s/%s", home, LOCAL_CONFIG_FILE);
     char *filename = calloc(1, size);
     if (filename) {
-      snprintf(filename, size, "%s/%s", home, CONFIG_FILE);
-    }
-    config_create(&api->my_config, filename);
-    if (filename) {
+      snprintf(filename, size, "%s/%s", home, LOCAL_CONFIG_FILE);
+      // obtain the user config
+      config_error err = config_create(&api->my_config, filename);
+      if (err) {
+	err = config_create(&api->my_config, GLOBAL_CONFIG_FILE);
+      }
       free(filename);
+      filename = NULL;
     }
-    
+
+    // obtain the default config
     config_create(&api->my_default_config, NULL);
   }    
   
@@ -608,7 +613,9 @@ static void find_dictionary_dir_by_language(struct engine_t *engine, const char 
   char *pathname = NULL;
   size_t size = 0;
     
-  if (!IS_ENGINE(engine) || !topdir || !dir
+  if (!IS_ENGINE(engine)
+      || !topdir || !*topdir
+      || !dir
       || (engine->vox_index == VOX_INDEX_UNDEFINED)
       || (engine->vox_index >= vox_list_nb)) {
     err("LEAVE, args error");
@@ -667,7 +674,8 @@ static void  load_eci_dictionaries(struct engine_t *engine, const char *topdir)
   bool dictionary_loaded = false;
   ECIDictHand eciDict = NULL;
 
-  if (!IS_ENGINE(engine) || !topdir) {
+  if (!IS_ENGINE(engine)
+      || !topdir || !*topdir) {
     err("LEAVE, args error");
     return;
   }    
@@ -721,14 +729,16 @@ static void setConfiguredValues(struct engine_t *engine)
 
   api = engine->api;
 
-  if (!engine || !api || !api->my_config)
+  if (!engine || !api || !api->my_default_config)
     return;
 
-  config = api->my_config;
   config_default = api->my_default_config;
-  if (config && config_default) {
+  eci_default = config_default->eci;
+  config = api->my_config;
+  if (config)
     eci = config->eci;
-    eci_default = config_default->eci;
+    
+  if (config && config_default) {  
     if (config->capital_mode != config_default->capital_mode) {
       voxSetParam(engine, VOX_CAPITALS, config->capital_mode);
     }
@@ -737,14 +747,17 @@ static void setConfiguredValues(struct engine_t *engine)
     }
   }
   
-  if ((engine->tts_id == MSG_TTS_ECI) && eci && eci_default) {
-    if (eci->use_abbreviation != eci_default->use_abbreviation) {
+  if (eci_default && (engine->tts_id == MSG_TTS_ECI)) {
+    char *topdir = NULL, *dir = NULL;
+
+    if (eci && (eci->use_abbreviation != eci_default->use_abbreviation)) {
       set_param(engine, MSG_VOX_SET_PARAM, eciDictionary, eci->use_abbreviation ? 0 : 1);
     }
-    
-    if (eci->dictionary_dir) {
-      char *dir = NULL;
-      find_dictionary_dir_by_language(engine, eci->dictionary_dir, &dir);
+
+    // load dictionaries
+    topdir =  (eci && eci->dictionary_dir) ? eci->dictionary_dir : eci_default->dictionary_dir;
+    if (topdir) {
+      find_dictionary_dir_by_language(engine, topdir, &dir);
       if (dir) {
 	load_eci_dictionaries(engine, dir);
 	free(dir);

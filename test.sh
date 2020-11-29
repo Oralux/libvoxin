@@ -44,6 +44,10 @@ HAUTEVILLE HOUSE, 1862.
 
 EOF
 
+		cat <<EOF>"$file_utf_8"
+who is this
+EOF
+
 }
 
 mkdir -p "$LOGDIR"
@@ -182,10 +186,10 @@ if [ -n "$TEST" ]; then
 	elif [ "$PLAY" ]; then
 		getFile
 #		./voxin-say -f "$file_utf_8" -s 500 -w "$file_utf_8.$$.wav"		
-
-		gdb -ex "b voxGetVoices" -ex "b libvoxin_create" -ex "set args -f $file_utf_8 -j 2 -s 500 -w $file_utf_8.$$.wav" ./voxin-say
+		./voxin-say -l american_english -f "$file_utf_8" | aplay
+#		gdb -ex "b setConfiguredValues" -ex "set args -f $file_utf_8 -w $file_utf_8.$$.wav" ./voxin-say
+#		gdb -ex "b voxGetVoices" -ex "b libvoxin_create" -ex "set args -f $file_utf_8 -j 2 -s 500 -w $file_utf_8.$$.wav" ./voxin-say
 #		gdb -ex "b eciNew" -ex "set args -f $file_utf_8 -j 2 -s 500 -w $file_utf_8.$$.wav" ./voxin-say
-		
 #		touch /tmp/test_voxind
 #		./voxin-say -f "$file_utf_8" -s 500 -w "$file_utf_8.$$.wav" &
 #		sleep 2
