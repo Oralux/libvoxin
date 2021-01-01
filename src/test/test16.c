@@ -1,5 +1,5 @@
 /*
-  2 languages, eciNew + eciSetParam eci+nve
+  Capital letters
  */
 #include <errno.h>
 #include <fcntl.h>

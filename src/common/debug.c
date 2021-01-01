@@ -18,6 +18,8 @@ static enum libvoxinDebugLevel myDebugLevel = LV_ERROR_LEVEL;
 FILE *libvoxinDebugText = NULL;
 static size_t debugTextCount = 0; // number of bytes written to libvoxinDebugText
 static int checkEnableCount = 0;
+#define MAX_POS 1024*1024
+#define MIN_POS 10*1024
 
 unsigned long libvoxinDebugGetTid() {
   return syscall(SYS_gettid);  
@@ -144,7 +146,12 @@ void libvoxinDebugDisplayTime()
 
   if (!libvoxinDebugFile)
     return;
-  
+
+  //  long pos = ftell(libvoxinDebugFile);
+  if (ftell(libvoxinDebugFile) >= MAX_POS) {
+    fseek(libvoxinDebugFile, MIN_POS, SEEK_SET);
+    fprintf(libvoxinDebugFile, "\nBEGIN\n");
+  }
   gettimeofday(&tv, NULL);
   fprintf(libvoxinDebugFile, "%03ld.%06ld ", tv.tv_sec%1000, tv.tv_usec);
 }
