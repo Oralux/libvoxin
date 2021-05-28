@@ -157,7 +157,7 @@ void libvoxinDebugDisplayTime()
 }
 
 
-void libvoxinDebugDump(const char *label, uint8_t *buf, size_t size)
+void libvoxinDebugDump(const char *label, const uint8_t *buf, size_t size)
 {
 #define MAX_BUF_SIZE 1024 
   size_t i;
@@ -176,17 +176,30 @@ void libvoxinDebugDump(const char *label, uint8_t *buf, size_t size)
     return;
   
   memset(line ,0, sizeof(line));
-  fprintf(libvoxinDebugFile, "\n-------------------\n");
-  fprintf(libvoxinDebugFile, "\nDump %s", label);
+  fprintf(libvoxinDebugFile, "%s\n", label);
 
   for (i=0; i<size; i++) {
     if (!(i%16)) {
-      fprintf(libvoxinDebugFile, "  %s", line);
+      if (i) {
+	fprintf(libvoxinDebugFile, " %s\n", line);
+      }
       memset(line, 0, sizeof(line));
-      fprintf(libvoxinDebugFile, "\n%p  ", buf+i);
+      fprintf(libvoxinDebugFile, "%p  ", buf+i);
     }
+    
     fprintf(libvoxinDebugFile, "%02x ", buf[i]);
     line[i%16] = isprint(buf[i]) ? buf[i] : '.';
+
+    if (i==size-1) {
+      if (size%16) {
+	int j;      
+	for (j=size%16; j<16; j++) {
+	  fprintf(libvoxinDebugFile, "   ");
+	}
+      }
+      
+      fprintf(libvoxinDebugFile, " %s", line);
+    }
   }
 
   fprintf(libvoxinDebugFile, "\n");

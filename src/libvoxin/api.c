@@ -334,9 +334,8 @@ static int msg_copy_bytes(struct msg_t *msg, const struct msg_bytes_t *bytes)
   len = min_size(bytes->len, ALLOCATED_MSG_LENGTH - MSG_HEADER_LENGTH - 1);
   c = (char*)memcpy(msg->data, bytes->b, len);
   c += len;
-
-  dbg_bytes("bytes=", bytes);
-
+  libvoxinDebugDump("bytes:", bytes->b, bytes->len);
+  
   effective_msg_length = (size_t)((char*)c - (char*)msg);
   msg->effective_data_length = effective_msg_length - MSG_HEADER_LENGTH;
   dbg("data length=%d", msg->effective_data_length);
@@ -945,19 +944,28 @@ static int replayText(struct engine_t *engine, inote_slice_t *text, int skip_byt
 	return -1;
   }
   
-  if (skip_byte) {
+  if (skip_byte) { // INOTE_INVALID_MULTIBYTE
 	--*text_left;
 	size_t len = text->length - *text_left;
 	t = &slice;
 	copySlice(text, t, engine->text_buffer, len);
 	t->buffer[len-1] = ' ';
-	dbg("replay text up to the space char (included) (text_left=%lu, skipped byte=0x%02x)", (long unsigned int)*text_left, text->buffer[len-1]);
-  } else {
+	dbg("up to space (included) (text_left=%lu, skipped byte=0x%02x)", (long unsigned int)*text_left, text->buffer[len-1]);
+  } else { // INOTE_INCOMPLETE_MULTIBYTE
 	t = text;
 	t->length = text->length - *text_left;
-	dbg("replay text up to %x byte (excluded) (text_left=%lu)", t->buffer[t->length + 1], (long unsigned int)*text_left);
+	if (!t->length && *text_left) {
+	  // discard only the first char
+	  --*text_left;
+	}
+	dbg("up to %x byte (excluded) (text_left=%lu)", t->buffer[t->length + 1], (long unsigned int)*text_left);
   }
   
+  if (!t->length) {
+    dbg("LEAVE length==0");
+    return -1;
+  }
+
   engine_init_buffers(engine);	
 
   size_t text_left2 = 0;
@@ -1020,7 +1028,7 @@ Boolean eciAddText(ECIHand hEngine, ECIInputText pText)
   int ret_process1 = 0;
 	
   dbg("ENTER (%p,%p)", hEngine, pText);
-
+    
   if (!IS_ENGINE(engine)) {
 	err("LEAVE, args error");
 	return ECIFalse;
@@ -1032,7 +1040,9 @@ Boolean eciAddText(ECIHand hEngine, ECIInputText pText)
 	return ECIFalse;
 
   if (libvoxinDebugEnabled(LV_DEBUG_LEVEL)) {
-	dbgText(pText, strlen(pText));
+	size_t len = strlen(pText);    
+	dbgText(pText, len);
+	libvoxinDebugDump("pText:", pText, len);
   }
   
   engine_init_buffers(engine);	
@@ -1056,6 +1066,7 @@ Boolean eciAddText(ECIHand hEngine, ECIInputText pText)
 	engine_init_buffers(engine);	
 	text_left = 0;
 
+	libvoxinDebugDump("inote_convert_text_to_tlv:", text.buffer, text.length);
 	inote_error ret = inote_convert_text_to_tlv(engine->inote, &text, &(engine->state), &(engine->tlv_message), &text_left);
 	
 	switch (ret) {
