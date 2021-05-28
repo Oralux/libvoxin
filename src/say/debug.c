@@ -1,3 +1,8 @@
+// syscall
+#define _GNU_SOURCE         /* See feature_test_macros(7) */
+#include <unistd.h>
+#include <sys/syscall.h>   /* For SYS_xxx definitions */
+//
 #include <stdlib.h>
 #include "debug.h"
 #include <string.h>
@@ -10,9 +15,15 @@
 
 FILE *libvoxinDebugFile = NULL;
 static enum libvoxinDebugLevel myDebugLevel = LV_ERROR_LEVEL;
-/* FILE *libvoxinDebugText = NULL; */
-/* static size_t debugTextCount = 0; // number of bytes written to libvoxinDebugText */
+FILE *libvoxinDebugText = NULL;
+static size_t debugTextCount = 0; // number of bytes written to libvoxinDebugText
 static int checkEnableCount = 0;
+#define MAX_POS 1024*1024
+#define MIN_POS 10*1024
+
+unsigned long libvoxinDebugGetTid() {
+  return syscall(SYS_gettid);  
+}
 
 static int createDebugFile(const char *filename, FILE **fdi) {
   FILE *fd = NULL;
@@ -95,25 +106,25 @@ static void DebugFileInit()
       myDebugLevel = i;
   }
   fclose(fd);
-  
-  if (snprintf(filename, MAX_FILENAME, LIBVOXINLOG, getpid()) >= MAX_FILENAME)
+
+  if (snprintf(filename, MAX_FILENAME, LIBVOXINLOG, libvoxinDebugGetTid()) >= MAX_FILENAME)
 	return;
   
   if (createDebugFile(filename, &libvoxinDebugFile))
 	return;
   
-  /* if (snprintf(filename, MAX_FILENAME, LIBVOXINLOG ".txt", getpid()) >= MAX_FILENAME) */
-  /* 	return; */
+  if (snprintf(filename, MAX_FILENAME, LIBVOXINLOG ".txt", libvoxinDebugGetTid()) >= MAX_FILENAME)
+	return;
   
-  /* debugTextCount = 0; */
-  /* createDebugFile(filename, &libvoxinDebugText); */
+  debugTextCount = 0;
+  createDebugFile(filename, &libvoxinDebugText);
 }
 
 void libvoxinDebugFinish()
 {
   deleteDebugFile(&libvoxinDebugFile);  
-  /* debugTextCount = 0; */
-  /* deleteDebugFile(&libvoxinDebugText); */
+  debugTextCount = 0;
+  deleteDebugFile(&libvoxinDebugText);
   checkEnableCount = 0;
 }
 
@@ -135,13 +146,18 @@ void libvoxinDebugDisplayTime()
 
   if (!libvoxinDebugFile)
     return;
-  
+
+  //  long pos = ftell(libvoxinDebugFile);
+  if (ftell(libvoxinDebugFile) >= MAX_POS) {
+    fseek(libvoxinDebugFile, MIN_POS, SEEK_SET);
+    fprintf(libvoxinDebugFile, "\nBEGIN\n");
+  }
   gettimeofday(&tv, NULL);
   fprintf(libvoxinDebugFile, "%03ld.%06ld ", tv.tv_sec%1000, tv.tv_usec);
 }
 
 
-void libvoxinDebugDump(const char *label, uint8_t *buf, size_t size)
+void libvoxinDebugDump(const char *label, const uint8_t *buf, size_t size)
 {
 #define MAX_BUF_SIZE 1024 
   size_t i;
@@ -160,38 +176,51 @@ void libvoxinDebugDump(const char *label, uint8_t *buf, size_t size)
     return;
   
   memset(line ,0, sizeof(line));
-  fprintf(libvoxinDebugFile, "\n-------------------\n");
-  fprintf(libvoxinDebugFile, "\nDump %s", label);
+  fprintf(libvoxinDebugFile, "%s\n", label);
 
   for (i=0; i<size; i++) {
     if (!(i%16)) {
-      fprintf(libvoxinDebugFile, "  %s", line);
+      if (i) {
+	fprintf(libvoxinDebugFile, " %s\n", line);
+      }
       memset(line, 0, sizeof(line));
-      fprintf(libvoxinDebugFile, "\n%p  ", buf+i);
+      fprintf(libvoxinDebugFile, "%p  ", buf+i);
     }
+    
     fprintf(libvoxinDebugFile, "%02x ", buf[i]);
     line[i%16] = isprint(buf[i]) ? buf[i] : '.';
+
+    if (i==size-1) {
+      if (size%16) {
+	int j;      
+	for (j=size%16; j<16; j++) {
+	  fprintf(libvoxinDebugFile, "   ");
+	}
+      }
+      
+      fprintf(libvoxinDebugFile, " %s", line);
+    }
   }
 
   fprintf(libvoxinDebugFile, "\n");
 }
 
 
-/* size_t libvoxinDebugTextWrite(const char *text, size_t len) */
-/* { */
-/*   ssize_t ret = 0; */
-/*   if (!libvoxinDebugText) */
-/* 	return -1; */
-/*   ret = write (fileno(libvoxinDebugText), text, len); */
-/*   if (libvoxinDebugFile) { */
-/* 	if (ret == -1) { */
-/* 	  int err = errno;	 */
-/* 	  fprintf (libvoxinDebugFile, "%s: %s\n", __func__, strerror(err)); */
-/* 	} else { */
-/* 	  fprintf (libvoxinDebugFile, "%s: text pos=%lu, len=%lu\n", __func__, (long unsigned int)debugTextCount, (long unsigned int)ret); */
-/* 	  debugTextCount += ret; */
-/* 	} */
-/*   } */
-/*   return debugTextCount;   */
-/* } */
+size_t libvoxinDebugTextWrite(const char *text, size_t len)
+{
+  ssize_t ret = 0;
+  if (!libvoxinDebugText)
+	return -1;
+  ret = write (fileno(libvoxinDebugText), text, len);
+  if (libvoxinDebugFile) {
+	if (ret == -1) {
+	  int err = errno;	
+	  fprintf (libvoxinDebugFile, "%s: %s\n", __func__, strerror(err));
+	} else {
+	  fprintf (libvoxinDebugFile, "%s: text pos=%lu, len=%lu\n", __func__, (long unsigned int)debugTextCount, (long unsigned int)ret);
+	  debugTextCount += ret;
+	}
+  }
+  return debugTextCount;  
+}
 
