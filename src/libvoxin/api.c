@@ -112,6 +112,7 @@ static sounds_t sounds;
 static int frequence[MSG_TTS_MAX] = {0, 11025, 22050};
 
 static int set_param(ECIHand hEngine, uint32_t msg_id, voxParam Param, int iValue);
+static bool _voxToCompositeName(vox_t *data, char *string, size_t size);
 
 static void conv_int_to_version(int src, version_t *dst) {
   if (dst) {
@@ -791,6 +792,27 @@ ECIHand eciNew(void)
 	err("LEAVE, error no voice");    
 	return NULL;
   }
+
+  // look for the default voice
+  if (api->my_config && api->my_config) {    
+    const char * name = api->my_config->voice_name;
+    if (name) {
+      int i,j;
+      for (i=0, j=-1; i < vox_list_nb; i++) {
+	char string[VOX_STR_MAX];
+	if (_voxToCompositeName(vox_list+i, string, VOX_STR_MAX)
+	    && !strcmp(string, name)) {
+	  j = i;
+	  break;
+	}
+      }
+      if (j != -1) {
+	dbg("default voice found (%s)", name);    
+	return eciNewEx(vox_list[i].id);
+      }
+    }
+  }
+  
   res = api_lock(api);
   if (res) {
 	err("LEAVE, error api lock");    
@@ -2152,6 +2174,32 @@ int voxGetVoices(vox_t *list, unsigned int *nbVoices) {
   dbg("%d voices", *nbVoices);
   
   return 0;
+}
+
+/* convert the name to lower case and add quality */
+/* Zoe + embedded-compact = zoe-embedded-compact */
+static bool _voxToCompositeName(vox_t *data, char *string, size_t size) {
+  //  ENTER();
+  int i;
+  size_t len;
+  
+  if (!data || (size<2))
+    return false;
+  
+  len = strnlen(data->name, VOX_STR_MAX-1);
+  if (len >= size)
+    return false;
+
+  for (i=0; i<len; i++) {
+    string[i] = tolower(data->name[i]);
+  }
+  string[len] = 0;
+  
+  if (*data->quality) {
+    len += snprintf(string+len, size-len, "-%s", data->quality);
+  }
+
+  return (len < size);
 }
 
 int voxToString(vox_t *data, char *string, size_t *size) {

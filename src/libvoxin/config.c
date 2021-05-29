@@ -67,6 +67,22 @@ static int config_cb(void *user, const char *section, const char *name, const ch
       if (updated) {
 	dbg("some_punctuation=%s", conf->some_punctuation ? conf->some_punctuation : "NULL");
       }
+    } else if (!strcasecmp(name, "voiceName")) {
+      bool updated = false;
+      if (conf->voice_name) {
+	if (strcmp(conf->voice_name, value)) {
+	  free(conf->voice_name);
+	  conf->voice_name = NULL;
+	  updated = true;
+	}
+      }
+      if (!conf->voice_name) {
+	conf->voice_name = strdup(value);
+	updated = true;
+      }
+      if (updated) {
+	dbg("voice_name=%s", conf->voice_name ? conf->voice_name : "NULL");
+      }
     }
   } else if (!strcasecmp(section, "viavoice")) {
     config_eci_t *eci = conf->eci;
@@ -225,6 +241,10 @@ config_error config_delete(config_t **config) {
   if (conf->some_punctuation) {
     free(conf->some_punctuation);
     conf->some_punctuation = NULL;
+  }
+  if (conf->voice_name) {
+    free(conf->voice_name);
+    conf->voice_name = NULL;
   }
   if (conf->eci) {
     err = _config_eci_delete(&conf->eci);

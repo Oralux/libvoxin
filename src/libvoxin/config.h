@@ -14,6 +14,7 @@ typedef struct {
   voxCapitalMode capital_mode;
   inote_punct_mode_t punctuation_mode;
   char *some_punctuation;
+  char *voice_name;
   char *filename;
   config_eci_t *eci;
 } config_t;
