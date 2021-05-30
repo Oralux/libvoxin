@@ -57,14 +57,23 @@ struct engine_t {
   uint32_t stop_required;
   char *output_filename;
   void *inote; // inote handle
-  inote_charset_t from_charset; // charset of the text supplied by the caller
+
+  /* 
+     from_charset: encoding of the text supplied to eciAddText().
+
+     By default, this charset is:
+     - UTF8 in SSML mode,
+     - or otherwise the charset associated to the current voice (cf
+       the charset attribute of vox_t).
+  */
+  inote_charset_t from_charset;
   inote_charset_t to_charset; // charset expected by the tts engine
   uint32_t vox_index; // index of the voice in vox_list[tts_id][]
   uint32_t voice_param[eciNumVoiceParams];
   uint32_t state_expected_lang[MAX_LANG]; // state internal buffer 
   uint8_t tlv_message_buffer[TLV_MESSAGE_LENGTH_MAX]; // tlv internal buffer
   inote_slice_t tlv_message;
-  inote_state_t state;  
+  inote_state_t state;
   uint8_t text_buffer[TEXT_LENGTH_MAX];  
 };
 
@@ -131,6 +140,7 @@ static inote_charset_t getCharset(uint32_t lang)
   if ((lang <= eciStandardItalian)
 	  || (lang == eciBrazilianPortuguese)
 	  || (lang == eciStandardFinnish)) {
+	dbg("charset=0x%x", INOTE_CHARSET_ISO_8859_1);    
 	return INOTE_CHARSET_ISO_8859_1; // 1 byte
   }
 
@@ -160,8 +170,19 @@ static inote_charset_t getCharset(uint32_t lang)
 	dbg("extended eci value:%x", lang);
 	break;
   }
+  dbg("charset=0x%x", charset);
   return charset;
 }
+
+// Update the from_charset attribute of an engine.
+// Must be called once the to_charset attribute has been set
+static void _api_updateFromCharset(struct engine_t *engine) {
+  if (engine) {
+    engine->from_charset = engine->state.ssml ? INOTE_CHARSET_UTF_8 : engine->to_charset;
+    dbg("from_charset=0x%x", engine->from_charset);
+  }
+}
+
 
 static void sound_create() {
   ENTER();
@@ -476,8 +497,7 @@ static struct engine_t *engine_create(uint32_t handle, struct api_t *api, msg_tt
 	/* state.expected_lang[1] = FRENCH; */
 	/* state.max_expected_lang = MAX_LANG; */
 	self->state.annotation = 1; // TODO
-	// input text: by default ssml/utf-8 is expected 
-	self->state.ssml = 1;
+	self->state.ssml = 0;
 	self->from_charset = self->to_charset = INOTE_CHARSET_UTF_8;
 	self->vox_index = VOX_INDEX_UNDEFINED;
   } else {
@@ -546,6 +566,7 @@ static int getCurrentLanguage(struct engine_t *engine)
   if (!res) {    
 	uint32_t voiceId = eci_res;
 	engine->to_charset = getCharset(voiceId);
+	_api_updateFromCharset(engine);
 	engine_set_vox_index(engine, voiceId);
   }    
   return res;  
@@ -947,6 +968,29 @@ static int copySlice(const inote_slice_t *src, inote_slice_t *dst, uint8_t *dst_
   return 0;
 }
 
+static inote_error _api_convertText2TLV(struct engine_t *engine, inote_slice_t *text, size_t *text_left) {
+  ENTER();
+
+  inote_error status = INOTE_ARGS_ERROR;
+  uint32_t old_ssml;
+  
+  if (!engine || !text || !text_left)
+    return INOTE_ARGS_ERROR;
+
+  old_ssml = engine->state.ssml;
+  engine_init_buffers(engine);	
+
+  libvoxinDebugDump("inote_convert_text_to_tlv:", text->buffer, text->length);
+  status = inote_convert_text_to_tlv(engine->inote, text, &(engine->state), &(engine->tlv_message), text_left);
+  if (status) {
+    err("inote_convert_text_to_tlv: ret=%d", status);
+  } else if (old_ssml != engine->state.ssml) {
+    _api_updateFromCharset(engine);
+  }
+
+  return status;
+}
+
 // replay the text to tlv conversion using the first/correct text segment
 // if skip_byte != 0 then replace the to-be-skipped byte by the space
 // character then replay the text up to the skipped byte (included)
@@ -988,13 +1032,9 @@ static int replayText(struct engine_t *engine, inote_slice_t *text, int skip_byt
     return -1;
   }
 
-  engine_init_buffers(engine);	
-
   size_t text_left2 = 0;
-  inote_error status = inote_convert_text_to_tlv(engine->inote, t, &(engine->state), &(engine->tlv_message), &text_left2);
-  if (status) {
-	err("replay inote_convert_text_to_tlv: ret=%d", status);
-	ret = -1;
+  if (!_api_convertText2TLV(engine, t, &text_left2)) {
+    ret = -1;
   }
   return ret;
 }
@@ -1026,13 +1066,9 @@ static int switchLanguage(struct engine_t *engine, inote_slice_t *text, size_t *
 	  text->buffer = s + i;
 	  text->length = left;
 	  left = 0;
-	  engine_init_buffers(engine);	
-	  inote_error status = inote_convert_text_to_tlv(engine->inote, text, &(engine->state), &(engine->tlv_message), &left);
-	  if (status) {
-		err("replay inote_convert_text_to_tlv: ret=%d", status);
-		ret = -1;
-	  }
-	  
+	  if (!_api_convertText2TLV(engine, text, &left)) {
+	    ret = -1;
+	  }	  
 	}	
   }
 
@@ -1085,21 +1121,18 @@ Boolean eciAddText(ECIHand hEngine, ECIInputText pText)
 	text.buffer = t0;
 	text.charset = engine->from_charset;
 	text.end_of_buffer = t;
-	engine_init_buffers(engine);	
 	text_left = 0;
 
-	libvoxinDebugDump("inote_convert_text_to_tlv:", text.buffer, text.length);
-	inote_error ret = inote_convert_text_to_tlv(engine->inote, &text, &(engine->state), &(engine->tlv_message), &text_left);
-	
+	inote_error ret = _api_convertText2TLV(engine, &text, &text_left);	
 	switch (ret) {
 	case INOTE_OK:
 	  break;
 	case INOTE_INVALID_MULTIBYTE:
-	  dbg("inote_convert_text_to_tlv: invalid multibyte");
+	  dbg("_api_convertText2TLV: invalid multibyte");
 	  loop = (!replayText(engine, &text, 1, &text_left));
 	  break;
 	case INOTE_INCOMPLETE_MULTIBYTE:
-	  dbg("inote_convert_text_to_tlv: incomplete multibyte");
+	  dbg("_api_convertText2TLV: incomplete multibyte");
 	  loop = (!replayText(engine, &text, 0, &text_left));
 	  break;
 	case INOTE_LANGUAGE_SWITCHING:
@@ -1494,6 +1527,7 @@ ECIHand eciNewEx(enum ECILanguageDialect Value)
 	if (eci_res != 0) {
 	  engine = engine_create(eci_res, api, vox_list[j].tts_id);
 	  engine->to_charset = getCharset(Value);
+	  _api_updateFromCharset(engine);	  
 	  engine_set_vox_index(engine, Value);
 	}
 	api_unlock(api);
@@ -1599,6 +1633,7 @@ static int set_param(ECIHand hEngine, uint32_t msg_id, voxParam Param, int iValu
   if (!process_func1(engine->api, &header, NULL, &eci_res, false, true)) {
 	if (Param == VOX_LANGUAGE_DIALECT) {
 	  engine->to_charset = getCharset(iValue);
+	  _api_updateFromCharset(engine);	  
 	  engine_set_vox_index(engine, iValue);	  
 	}
 	api_unlock(engine->api);	      

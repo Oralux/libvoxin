@@ -53,11 +53,11 @@ int main()
   eciAddText(handle," `gfa2 ");
 
   int i;
-  const char* set_mode_fmt = "`Pf%d()?-";
+  const char* set_mode_fmt = " `Pf%d()?- ";
   for (i=0; i<=2; i++) {
 	#define MAX_STRING 256
 	char set_mode[MAX_STRING];
-	snprintf(set_mode, MAX_STRING, "`Pf%d()?:;!'", i);
+	snprintf(set_mode, MAX_STRING, " `Pf%d()?:;!' ", i);
 	eciAddText(handle, set_mode);
 	snprintf(set_mode, MAX_STRING, "<speak>Punctuation Mode %d</speak>", i);
 	eciAddText(handle, set_mode);

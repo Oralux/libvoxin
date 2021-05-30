@@ -56,7 +56,7 @@ int main()
 
   eciAddText(handle," `gfa1 ");
   eciAddText(handle," `gfa2 ");
-  eciAddText(handle,"`Pf0()?-");
+  eciAddText(handle," `Pf0()?- ");
 
   /* if (eciGetAvailableLanguages(Languages, &nbLanguages)) */
   /*   return __LINE__; */
@@ -106,7 +106,7 @@ int main()
   int i;
   for (i=0; i<2;i++) {
 	// PUNC_NONE
-    eciAddText(handle,"`Pf0()?-");
+    eciAddText(handle," `Pf0()?- ");
 
 	mode = (!i) ? eciTextModeDefault : eciTextModeAlphaSpell; 
     res = eciSetParam(handle, eciTextMode, mode);
@@ -151,7 +151,7 @@ int main()
       return __LINE__;
 
 	// PUNC_ALL
-    eciAddText(handle,"`Pf1()?-");
+    eciAddText(handle," `Pf1()?- ");
 	mode = (!i) ? eciTextModeDefault : eciTextModeAllSpell; 
     res = eciSetParam(handle, eciTextMode, mode);
     eciAddText(handle,"<speak>Étape : (1).</speak>");
@@ -167,7 +167,7 @@ int main()
 	// PUNC_SOME
 	mode = (!i) ? eciTextModeDefault : eciTextModeAllSpell; 
     res = eciSetParam(handle, eciTextMode, mode);
-    eciAddText(handle,"`Pf2()?-");
+    eciAddText(handle," `Pf2()?- ");
     eciAddText(handle,"<speak>Étape : (2).</speak>");
     if (!eciInsertIndex(handle,0))
       return __LINE__;
