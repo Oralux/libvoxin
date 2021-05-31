@@ -1,5 +1,5 @@
 /*
-  Copyright 2016-2020, Gilles Casse <gcasse@oralux.org>
+  Copyright 2016-2021, Gilles Casse <gcasse@oralux.org>
 
   This is free software; you can redistribute it and/or modify it
   under the terms of the GNU Lesser General Public License as
