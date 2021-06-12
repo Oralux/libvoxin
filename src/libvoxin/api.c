@@ -89,6 +89,7 @@ struct api_t {
   voxind_version_t voxind_version[MSG_TTS_MAX]; // version of voxind and its components
   config_t *my_config;
   config_t *my_default_config;
+  bool ssml_mode; // once set the ssml mode cannot be unset (single gfa1 annotation)
 };
 
 static struct api_t my_api = {.stop_mutex=PTHREAD_MUTEX_INITIALIZER, .api_mutex=PTHREAD_MUTEX_INITIALIZER, NULL};
@@ -497,7 +498,7 @@ static struct engine_t *engine_create(uint32_t handle, struct api_t *api, msg_tt
 	/* state.expected_lang[1] = FRENCH; */
 	/* state.max_expected_lang = MAX_LANG; */
 	self->state.annotation = 1; // TODO
-	self->state.ssml = 0;
+	self->state.ssml = api->ssml_mode;
 	self->from_charset = self->to_charset = INOTE_CHARSET_UTF_8;
 	self->vox_index = VOX_INDEX_UNDEFINED;
   } else {
@@ -986,6 +987,8 @@ static inote_error _api_convertText2TLV(struct engine_t *engine, inote_slice_t *
     err("inote_convert_text_to_tlv: ret=%d", status);
   } else if (old_ssml != engine->state.ssml) {
     _api_updateFromCharset(engine);
+    if (engine->state.ssml)
+      engine->api->ssml_mode = true;
   }
 
   return status;
