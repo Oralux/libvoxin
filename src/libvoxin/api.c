@@ -1626,6 +1626,8 @@ static int set_param(ECIHand hEngine, uint32_t msg_id, voxParam Param, int iValu
 	}
   } else if (Param == VOX_CAPITALS) {
     inote_enable_capital(self->inote, (iValue == voxCapitalSoundIcon));
+    if (self->other_engine) 
+      inote_enable_capital(self->other_engine->inote, (iValue == voxCapitalSoundIcon));
   }
 
   engine = self->current_engine;
