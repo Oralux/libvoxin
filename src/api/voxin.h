@@ -1,5 +1,5 @@
 /*
-  Copyright 2016-2021, Gilles Casse <gcasse@oralux.org>
+  Copyright 2016-2022, Gilles Casse <gcasse@oralux.org>
 
   This is free software; you can redistribute it and/or modify it
   under the terms of the GNU Lesser General Public License as
@@ -40,7 +40,7 @@
 
 #define LIBVOXIN_VERSION_MAJOR 1
 #define LIBVOXIN_VERSION_MINOR 6
-#define LIBVOXIN_VERSION_PATCH 0
+#define LIBVOXIN_VERSION_PATCH 1
 
 /**
    @brief Extends ECIParam (eci.h)
