@@ -320,8 +320,37 @@ static void voxind_delete(voxind_t *self) {
   }
 }
 
+// check if the witness filename is present (proof of voice installed)
+// check it globally or relatively to the supplied rootdir
+// note: self->rfsdir used as internal buffer
+static int voxind_voice_installed(voxind_t *self, char *rootdir, char *witness_filename) {
+  ENTER();
+  FILE *fd;
+  
+  if (!self || !rootdir || !witness_filename)
+    return EINVAL;
+
+  // check global install
+  fd = fopen(witness_filename, "r");
+  if (!fd) { // check local install
+    size_t max = sizeof(self->rfsdir);
+    size_t len = snprintf(self->rfsdir, max, "%s/%s", rootdir, witness_filename);
+    if (len >= max) {
+      dbg("path too long\n");
+      return EINVAL;
+    }
+    fd = fopen(self->rfsdir, "r");
+    if (!fd) {
+      dbg("no voice installed (%s)\n", self->rfsdir);
+      return EINVAL;
+    }
+  }
+  fclose(fd);
+  return 0;
+}
+
 static voxind_t *voxind_create(msg_tts_id id, char *rootdir) {
-  dbg("ENTER id=%d", id);
+  dbg("ENTER id=%d, rootdir=%s", id, rootdir ? rootdir : "NULL");
   size_t max;
   size_t len;
   char buf[MAXBUF];
@@ -330,20 +359,6 @@ static voxind_t *voxind_create(msg_tts_id id, char *rootdir) {
   if ((id <= MSG_TTS_UNDEFINED) || (id >= MSG_TTS_MAX) || !rootdir)
     return NULL;
   
-  if (id == MSG_TTS_ECI) {
-    FILE *fd = fopen(ECI_INSTALL_WITNESS, "r");
-    if (!fd)
-      return NULL;
-    fclose(fd);
-  } else if (id == MSG_TTS_NVE) {
-    FILE *fd = fopen(NVE_INSTALL_WITNESS, "r");
-    if (!fd)
-      return NULL;
-    fclose(fd);	
-  } else {
-    return NULL;
-  }
-  
   self = calloc(1, sizeof(*self));
   if (!self)
     return NULL;
@@ -351,6 +366,11 @@ static voxind_t *voxind_create(msg_tts_id id, char *rootdir) {
   self->id = id;
   
   max = sizeof(self->rfsdir);
+
+  // check presence of voices
+  if (voxind_voice_installed(self, rootdir, (id == MSG_TTS_ECI)? ECI_INSTALL_WITNESS : NVE_INSTALL_WITNESS))
+    goto exit;
+
   len = snprintf(self->rfsdir, max, "%s/%s", rootdir, RFS);
   if (len >= max) {
     dbg("path too long\n");
