@@ -646,3 +646,14 @@ int libvoxin_call_eci(void* handle, struct msg_t *msg) {
   return res;
 }
 
+const char *libvoxin_get_rootdir(void *handle) {
+  char *rootdir = NULL;
+  libvoxin_t *self = (libvoxin_t *)handle;
+
+  if (self) {
+    rootdir = self->rootdir;
+  }
+  dbg("rootdir=%s", rootdir ? rootdir : "NULL");
+  
+  return rootdir;
+}

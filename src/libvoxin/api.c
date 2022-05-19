@@ -27,7 +27,7 @@
 #define VOICE_PARAM_UNCHANGED 0x1000
 
 #define LOCAL_CONFIG_FILE  ".config/voxin/voxin.ini"
-#define GLOBAL_CONFIG_FILE "/var/opt/oralux/voxin/voxin.ini"
+#define INSTALL_CONFIG_FILE "var/opt/oralux/voxin/voxin.ini"
 #define VOX_INDEX_UNDEFINED UINT32_MAX
 
 typedef struct {
@@ -287,15 +287,20 @@ static int api_create(struct api_t *api) {
 
   { // get user and default config
     char *home = getenv("HOME");
-    char c[30];
-    size_t size = 1 + snprintf(c, sizeof(c), "%s/%s", home, LOCAL_CONFIG_FILE);
+    char c[60]; // placeholder
+    const char *rootdir = libvoxin_get_rootdir(api->my_instance);
+    size_t size = 1 + snprintf(c, sizeof(c),
+			       "%s/%s or %s/%s",
+			       home, LOCAL_CONFIG_FILE,
+			       rootdir?rootdir:"NULL", INSTALL_CONFIG_FILE);
     char *filename = calloc(1, size);
-    if (filename) {
+    if (filename) { // check if local config
       snprintf(filename, size, "%s/%s", home, LOCAL_CONFIG_FILE);
       // obtain the user config
       config_error err = config_create(&api->my_config, filename);
-      if (err) {
-	err = config_create(&api->my_config, GLOBAL_CONFIG_FILE);
+      if (err && rootdir) { // otherwise check config in the installation directory
+	snprintf(filename, size, "%s/%s", rootdir, INSTALL_CONFIG_FILE);
+	err = config_create(&api->my_config, filename);
       }
       free(filename);
       filename = NULL;
