@@ -2,7 +2,7 @@ Source: https://github.com/Oralux/libvoxin
 
 *------------------------------------------------------------
 Files: *
-Copyright: 2016-2022 Gilles Casse
+Copyright: 2016-2023 Gilles Casse
 License: LGPL-2.1+
  .
  This is free software; you can redistribute it and/or modify it under the
@@ -19,7 +19,7 @@ License: LGPL-2.1+
 
 *------------------------------------------------------------
 Files: src/api/voxin.h, src/common/*
-Copyright: 2016-2022 Gilles Casse
+Copyright: 2016-2023 Gilles Casse
 License: LGPL-2.1+ (See above)
 License: MIT
  .
