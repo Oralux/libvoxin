@@ -40,7 +40,7 @@
 
 #define LIBVOXIN_VERSION_MAJOR 1
 #define LIBVOXIN_VERSION_MINOR 6
-#define LIBVOXIN_VERSION_PATCH 2
+#define LIBVOXIN_VERSION_PATCH 3
 
 /**
    @brief Extends ECIParam (eci.h)

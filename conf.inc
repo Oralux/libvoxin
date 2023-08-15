@@ -6,8 +6,8 @@ SRC=src/libvoxin
 LIBINOTE_URL=https://github.com/Oralux/libinote/archive
 # LIBINOTE_VERSION indicates the git tag of libinote to use; if unset, its git HEAD is chosen 
 #LIBINOTE_VERSION=
-LIBINOTE_VERSION=1.1.3
-LIBINOTE_SHA512=3ea9163dca34b22fd96e1f660c7ae9c22b4f3611cccc00eb63210a226bdd65edde0e52560957ce7cc18ed694d43efad32de33d38074fd3196f5cebf68b665a99
+LIBINOTE_VERSION=1.1.4
+LIBINOTE_SHA512=1bdaf72245bced865ffcd35af33586a374b453fff5426b14268303d9a33f6ee032541be29e787de1760bbaff9fe6f530f3ffec58e8fd6fcf1c1b8b7fb51be024
 
 INIH_URL=https://github.com/benhoyt/inih/archive
 INIH_VERSION=r51
