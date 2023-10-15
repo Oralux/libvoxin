@@ -177,6 +177,7 @@ if [ -n "$TEST" ]; then
 #		gdb -ex 'set follow-fork-mode child' -ex 'b voxind_start' ./test$TEST
 		gdb -ex 'set follow-fork-mode parent' -ex 'b voxind_start' ./test$TEST
 	elif [ -n "$GDB_VOXIND" ]; then
+	        [ "$(cat /proc/sys/kernel/yama/ptrace_scope)" != "0" ] && echo "check ptrace_scope" && exit 1
 		#sudo bash -c "echo 0 > /proc/sys/kernel/yama/ptrace_scope"
 		touch /tmp/test_voxind
 		./test$TEST &
