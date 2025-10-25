@@ -33,7 +33,7 @@ if [ -n "$WITH_DBG" ]; then
 	export STRIP=test;
 fi
 
-getArch
+getArch || exit 1
 
 [ -n "$HELP" ] && usage && exit 0
 
